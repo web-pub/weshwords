@@ -369,3 +369,10 @@ details summary { cursor: pointer; font-weight: 800; }
 .duel-score .vs { font: 700 1.3rem var(--font-h); color: var(--pink); }
 .pen-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; max-height: 42vh; overflow-y: auto; }
 .pen-list .choice { font-size: .92rem; padding: .6em .8em; }
+
+/* ---------- V01-008 : propositions de l'élève ---------- */
+.prop-links { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; margin-top: 10px; }
+.prop-links .link-btn { font-size: .82rem; }
+.prop-box { text-align: left; background: var(--bg2); border: 1px solid var(--line); border-radius: 14px; padding: 12px; margin-top: 10px; }
+.prop-box input { font-size: .95rem; padding: .55em .7em; }
+.prop-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px; border: 1px solid rgba(255, 176, 32, .45); background: rgba(255, 176, 32, .07); border-radius: 14px; margin-top: 8px; }

@@ -167,6 +167,7 @@ function renderHome() {
   $("#badgeGrid").innerHTML = badgesGrid(bl, badgesMeta.unlocked, T, esc, fmtDay);
   checkBadges(bl);
   renderPractice();
+  renderProposalsNote();
 
   // mots difficiles
   const hard = words.filter(w => (w.ko || 0) > 0).sort((a, b) => ((b.ko || 0) - (b.ok || 0) * .5) - ((a.ko || 0) - (a.ok || 0) * .5)).slice(0, 8);
@@ -288,7 +289,7 @@ function startDictee() {
   const pick = shuffle(list).sort((a, b) => ((a.dOk || 0) - (a.dKo || 0) * 2 + Math.random() * 3) - ((b.dOk || 0) - (b.dKo || 0) * 2 + Math.random() * 3)).slice(0, 10);
   holdBadges = true;
   runDictee({
-    items: pick.map(w => ({ id: w.id, en: w.en, fr: w.fr, w })),
+    items: pick.map(w => ({ id: w.id, en: w.en, fr: w.fr, altEn: w.altEn || [], w })),
     onAnswer: (it, ok) => {
       const w = it.w, upd = { dOk: (w.dOk || 0) + (ok ? 1 : 0), dKo: (w.dKo || 0) + (ok ? 0 : 1) };
       Object.assign(w, upd);
@@ -369,6 +370,55 @@ function seePenalty(d) {
     <p class="warn">${esc(T("duel.penalty"))}</p><div class="expr" style="font-size:2rem">« ${esc(d.penalty.text)} »</div>
     <button class="btn pink block" id="penDone">${esc(T("duel.done"))}</button><button class="btn ghost block" id="ovClose" style="margin-top:10px">Plus tard</button></div>`);
   $("#penDone").onclick = async () => { try { await updateDoc(doc(db, "users", uid, "duels", d.id), { penaltyDone: true }); closeOverlay(); } catch (e) { toast(errMsg(e), "err"); } };
+}
+
+/* ---------------- Propositions de l'élève (réponse alternative / correction) ---------------- */
+let proposals = [];
+onSnapshot(collection(db, "users", uid, "proposals"), s => {
+  proposals = s.docs.map(d => ({ id: d.id, ...d.data() }));
+  if (ready.w && ready.s && !quiz.active) renderHome();
+}, () => {});
+async function sendProposal(p, btn) {
+  const data = {
+    type: p.type, wordId: p.word.id, dir: p.dir || "", given: (p.given || "").slice(0, 80),
+    oldFr: p.word.fr, oldEn: p.word.en, fr: (p.fr ?? p.word.fr).slice(0, 120), en: (p.en ?? p.word.en).slice(0, 120),
+    note: (p.note || "").slice(0, 200), day: today, status: "pending", createdAt: serverTimestamp()
+  };
+  try {
+    await addDoc(collection(db, "users", uid, "proposals"), data);
+    if (btn) { btn.outerHTML = `<span class="small" style="color:var(--green-d);font-weight:800">${esc(T("prop.sent", { qui: T("duel.parent") }))}</span>`; }
+    else toast(T("prop.sent", { qui: T("duel.parent") }));
+  } catch (e) { toast(errMsg(e), "err"); }
+}
+function openFixBox(w) {
+  const box = $("#prBox");
+  if (!box) return;
+  box.innerHTML = `<div class="prop-box">
+    <div class="small" style="font-weight:800;margin-bottom:6px">${esc(T("prop.fixTitle"))}</div>
+    <div class="grid g2"><div><label class="small">🇫🇷 Français</label><input type="text" id="pxFr" value="${esc(w.fr)}"></div>
+    <div><label class="small">🇬🇧 Anglais</label><input type="text" id="pxEn" value="${esc(w.en)}"></div></div>
+    <input type="text" id="pxNote" placeholder="${esc(T("prop.notePh"))}" style="margin-top:8px">
+    <div class="row" style="justify-content:flex-end;margin-top:8px"><button type="button" class="btn sm" id="pxSend">${esc(T("prop.send"))}</button></div></div>`;
+  const send = () => {
+    const fr = $("#pxFr").value.trim(), en = $("#pxEn").value.trim();
+    if (!fr || !en || (fr === w.fr && en === w.en && !$("#pxNote").value.trim())) { toast(T("prop.nochange"), "warn"); return; }
+    sendProposal({ type: "fix", word: w, fr, en, note: $("#pxNote").value.trim() }, null);
+    box.innerHTML = "";
+    $("#prFix")?.remove();
+  };
+  box.querySelectorAll("input").forEach(el => el.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); send(); } }));
+  $("#pxSend").onclick = send;
+  $("#pxFr").focus();
+}
+function renderProposalsNote() {
+  const recent = proposals.filter(p => p.status !== "pending" && p.decidedDay && p.decidedDay >= dayKeyOffset(today, -7))
+    .sort((a, b) => (b.decidedDay || "").localeCompare(a.decidedDay || "")).slice(0, 4);
+  const pend = proposals.filter(p => p.status === "pending").length;
+  const qui = T("duel.parent");
+  $("#propZone").innerHTML = (pend ? `<p class="small muted">⏳ ${pend} proposition(s) en attente de ${esc(qui)}.</p>` : "") + recent.map(p => {
+    const what = p.type === "alt" ? `« ${esc(p.given)} » pour ${esc(p.dir === "frEn" ? p.oldFr : p.oldEn)}` : `${esc(p.fr)} = ${esc(p.en)}`;
+    return `<p class="small">${p.status === "ok" ? esc(T("prop.accepted", { qui })) : esc(T("prop.refused", { qui }))} ${what}</p>`;
+  }).join("");
 }
 
 /* ---------------- Thèmes ---------------- */
@@ -656,7 +706,7 @@ function answer(given, skipped = false, opt = {}) {
   const expected = frEn ? w.en : w.fr;
   // Accepte aussi la traduction d'un autre mot ayant exactement le même énoncé (ex. « band »)
   const promptOf = x => String(frEn ? x.fr : x.en).trim().toLowerCase();
-  const alts = words.filter(x => x.id !== w.id && promptOf(x) === promptOf(w)).map(x => frEn ? x.en : x.fr);
+  const alts = [...((frEn ? w.altEn : w.altFr) || []), ...words.filter(x => x.id !== w.id && promptOf(x) === promptOf(w)).map(x => frEn ? x.en : x.fr)];
   let res = { ok: false, accent: false };
   if ("choiceOk" in opt) res = { ok: opt.choiceOk, accent: false };
   else if (!skipped) {
@@ -724,6 +774,13 @@ function answer(given, skipped = false, opt = {}) {
   }
   $("#fbSay")?.addEventListener("click", () => speak(w.en));
   if (frEn) speak(w.en);
+  // Propositions : « ma réponse est juste aussi » / « il y a une erreur dans ce mot »
+  const canAlt = !res.ok && !skipped && !("choiceOk" in opt) && String(given || "").trim();
+  $("#qFeedback").insertAdjacentHTML("beforeend", `<div class="prop-links">
+    ${canAlt ? `<button type="button" class="link-btn" id="prAlt">${esc(T("prop.alt"))}</button>` : ""}
+    <button type="button" class="link-btn" id="prFix">${esc(T("prop.fix"))}</button></div><div id="prBox"></div>`);
+  $("#prAlt")?.addEventListener("click", () => sendProposal({ type: "alt", word: w, dir: quiz.dir, given: String(given).trim() }, $("#prAlt")));
+  $("#prFix").addEventListener("click", () => openFixBox(w));
   $("#qSkip").classList.add("hidden");
   $("#qSubmit").textContent = "Suivant →";
   renderQuizBars();

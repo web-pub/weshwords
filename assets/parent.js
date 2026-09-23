@@ -2,7 +2,7 @@
 import {
   db, $, $$, esc, T, guard, initPrivatePage, renderAppHeader, todayKey, dayKeyOffset, fmtDay, fmtTs, toast, errMsg, shuffle,
   doc, getDoc, setDoc, updateDoc, deleteDoc, addDoc, collection, query, where, onSnapshot, writeBatch, serverTimestamp,
-  arrayRemove, changeAuthPassword, PSEUDO_DOMAIN, applyContent, MOODS
+  arrayRemove, arrayUnion, changeAuthPassword, PSEUDO_DOMAIN, applyContent, MOODS
 } from "./app.js";
 import { parseVocabFile, dupKey, exportVocab, speak, computeStreak, PER_DIRECTION, DAILY_GOAL, MAX_LEVEL, DEFAULT_SETTINGS, categoriesOf } from "./words.js";
 import { SHAME_IDEAS } from "./content.js";
@@ -11,6 +11,7 @@ import { badgeStats, evaluateBadges, badgesGrid, BADGES } from "./badges.js";
 import { playDuel, buildDuelItems, duelWinner, fmtTime, DUEL_PENALTIES, hideOverlay } from "./practice.js";
 import { irregularVerbs, activeThemes, filterByThemes } from "./words.js";
 import { ocrImages, parseOcrText } from "./ocr.js";
+import { pendingFixes } from "./fixes.js";
 
 await initPrivatePage();
 const { user, profile } = await guard(["parent", "superadmin"]);
@@ -23,7 +24,7 @@ let children = [];
 let child = null;
 let words = [], sessions = [], shames = [], meta = { queue: [], lastRevealDay: "" };
 let settings = { ...DEFAULT_SETTINGS }, settingsDirty = false;
-let exams = [], weekOffset = 0, badgesUnlocked = {}, duels = [];
+let exams = [], weekOffset = 0, badgesUnlocked = {}, duels = [], proposals = [];
 let unsubs = [];
 let loaded = { shame: false, meta: false };
 let firstLoad = true;
@@ -72,18 +73,22 @@ function selectChild(c) {
   unsubs.forEach(u => u()); unsubs = [];
   child = c; words = []; sessions = []; shames = []; meta = { queue: [], lastRevealDay: "" };
   loaded = { shame: false, meta: false };
-  settings = { ...DEFAULT_SETTINGS }; settingsDirty = false; exams = []; weekOffset = 0; badgesUnlocked = {}; duels = [];
+  settings = { ...DEFAULT_SETTINGS }; settingsDirty = false; exams = []; weekOffset = 0; badgesUnlocked = {}; duels = []; proposals = [];
   renderPicker();
   $("#shTitle").textContent = T("parent.shame.title", { prenom: c.prenom || c.username });
   const base = ["users", c.uid];
   unsubs.push(onSnapshot(collection(db, ...base, "words"), s => {
     words = s.docs.map(d => ({ id: d.id, ...d.data() }));
-    renderVocab(); renderDash();
+    renderVocab(); renderDash(); renderProposals(); renderFixBanner();
     if (!settingsDirty) renderSettings();
   }, e => toast(errMsg(e), "err")));
   unsubs.push(onSnapshot(collection(db, ...base, "sessions"), s => {
     sessions = s.docs.map(d => ({ day: d.id, ...d.data() })).sort((a, b) => b.day.localeCompare(a.day));
     renderDash(); renderHist(); renderBilan();
+  }, () => {}));
+  unsubs.push(onSnapshot(collection(db, ...base, "proposals"), s => {
+    proposals = s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.createdAt?.seconds || 9e12) - (a.createdAt?.seconds || 9e12));
+    renderProposals();
   }, () => {}));
   unsubs.push(onSnapshot(collection(db, ...base, "duels"), s => {
     duels = s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.createdAt?.seconds || 9e12) - (a.createdAt?.seconds || 9e12));
@@ -219,6 +224,8 @@ function editWord(w) {
       <div class="field"><label>Nature</label><input type="text" id="ewNat" value="${esc(w.nature || "")}"></div></div>
       <div class="field"><label>Exemple</label><input type="text" id="ewEx" value="${esc(w.ex || "")}"></div>
       <div class="field"><label>Conjugaison / formes</label><input type="text" id="ewConj" value="${esc(w.conj || "")}"></div>
+      <div class="grid g2"><div class="field"><label>Autres réponses acceptées en français <span class="small muted">(séparées par /)</span></label><input type="text" id="ewAltFr" value="${esc((w.altFr || []).join(" / "))}"></div>
+      <div class="field"><label>Autres réponses acceptées en anglais <span class="small muted">(séparées par /)</span></label><input type="text" id="ewAltEn" value="${esc((w.altEn || []).join(" / "))}"></div></div>
       <div class="field"><label>Niveau (0 à 5)</label><input type="number" min="0" max="5" id="ewLvl" value="${w.level || 0}"></div>
       <button class="btn" type="submit">Enregistrer</button>
     </form>`);
@@ -228,6 +235,8 @@ function editWord(w) {
       await updateDoc(doc(wordsCol(), w.id), {
         fr: $("#ewFr").value.trim(), en: $("#ewEn").value.trim(), cat: $("#ewCat").value.trim(),
         nature: $("#ewNat").value.trim(), ex: $("#ewEx").value.trim(), conj: $("#ewConj").value.trim(),
+        altFr: $("#ewAltFr").value.split("/").map(x => x.trim()).filter(Boolean),
+        altEn: $("#ewAltEn").value.split("/").map(x => x.trim()).filter(Boolean),
         level: Math.max(0, Math.min(MAX_LEVEL, Number($("#ewLvl").value) || 0))
       });
       toast("Mot modifié ✅"); closeOverlay();
@@ -870,5 +879,86 @@ function ocrEditor() {
     $$(".panel").forEach(p => p.classList.toggle("on", p.id === "p-vocab"));
     previewImport(rows, "Photo du cours");
     $("#impPreview").scrollIntoView({ behavior: "smooth", block: "center" });
+  };
+}
+
+/* ---------------- Propositions de l'enfant ---------------- */
+function renderProposals() {
+  if (!child || !$("#propList")) return;
+  const pend = proposals.filter(p => p.status === "pending");
+  $("#propCard").classList.toggle("hidden", !pend.length);
+  $("#propName").textContent = child.prenom || child.username;
+  $("#propCount").textContent = pend.length;
+  const byId = Object.fromEntries(words.map(w => [w.id, w]));
+  $("#propList").innerHTML = pend.map(p => {
+    const w = byId[p.wordId];
+    const gone = !w ? `<span class="small muted">(mot supprimé)</span>` : "";
+    let what;
+    if (p.type === "alt") {
+      const q = p.dir === "frEn" ? p.oldFr : p.oldEn, exp = p.dir === "frEn" ? p.oldEn : p.oldFr;
+      what = `<span>${p.dir === "frEn" ? "🇫🇷→🇬🇧" : "🇬🇧→🇫🇷"} <b>${esc(q)}</b> : réponse attendue « ${esc(exp)} », ${esc(child.prenom || "")} propose aussi <b>« ${esc(p.given)} »</b> ${gone}</span>`;
+    } else {
+      const chg = [p.fr !== p.oldFr ? `🇫🇷 « ${esc(p.oldFr)} » → <b>« ${esc(p.fr)} »</b>` : "", p.en !== p.oldEn ? `🇬🇧 « ${esc(p.oldEn)} » → <b>« ${esc(p.en)} »</b>` : ""].filter(Boolean).join("<br>");
+      what = `<span>🚩 Erreur signalée : ${chg || `<b>${esc(p.oldFr)} = ${esc(p.oldEn)}</b>`}${p.note ? `<br><i class="small muted">« ${esc(p.note)} »</i>` : ""} ${gone}</span>`;
+    }
+    return `<div class="prop-row">${what}<span class="row">
+      ${w ? `<button class="btn sm" data-pok="${p.id}">✅ ${p.type === "alt" ? "Accepter" : "Corriger"}</button>` : ""}
+      <button class="btn ghost sm" data-pko="${p.id}">❌ Refuser</button></span></div>`;
+  }).join("");
+  $$("[data-pok]").forEach(b => b.onclick = () => acceptProposal(proposals.find(p => p.id === b.dataset.pok)));
+  $$("[data-pko]").forEach(b => b.onclick = () => decide(proposals.find(p => p.id === b.dataset.pko), "ko"));
+}
+const decide = (p, status) => updateDoc(doc(db, "users", child.uid, "proposals", p.id), { status, decidedDay: today }).catch(e => toast(errMsg(e), "err"));
+async function acceptProposal(p) {
+  const w = words.find(x => x.id === p.wordId);
+  if (!w) return;
+  if (p.type === "alt") {
+    const field = p.dir === "frEn" ? "altEn" : "altFr";
+    try {
+      const b = writeBatch(db);
+      b.update(doc(wordsCol(), w.id), { [field]: arrayUnion(p.given) });
+      b.update(doc(db, "users", child.uid, "proposals", p.id), { status: "ok", decidedDay: today });
+      await b.commit();
+      toast(`« ${p.given} » est maintenant accepté ✅`);
+    } catch (e) { toast(errMsg(e), "err"); }
+    return;
+  }
+  openOverlay(`<h3>🚩 Corriger le mot</h3>
+    <p class="small muted">Actuellement : ${esc(w.fr)} = ${esc(w.en)}</p>
+    <div class="grid g2"><div class="field"><label>🇫🇷 Français</label><input type="text" id="pfFr" value="${esc(p.fr)}"></div>
+    <div class="field"><label>🇬🇧 Anglais</label><input type="text" id="pfEn" value="${esc(p.en)}"></div></div>
+    <p class="small muted">Astuce : plusieurs réponses possibles → sépare-les par « / » (ex. américain / américaine).</p>
+    <button class="btn" id="pfOk">Enregistrer la correction</button>`);
+  $("#pfOk").onclick = async () => {
+    const fr = $("#pfFr").value.trim(), en = $("#pfEn").value.trim();
+    if (!fr || !en) return;
+    try {
+      const b = writeBatch(db);
+      b.update(doc(wordsCol(), w.id), { fr, en });
+      b.update(doc(db, "users", child.uid, "proposals", p.id), { status: "ok", decidedDay: today, fr, en });
+      await b.commit();
+      closeOverlay(); toast("Mot corrigé ✅");
+    } catch (e) { toast(errMsg(e), "err"); }
+  };
+}
+
+/* ---------------- Corrections du vocabulaire de départ ---------------- */
+function renderFixBanner() {
+  if (!child || !$("#fixBanner")) return;
+  const list = pendingFixes(words);
+  $("#fixBanner").classList.toggle("hidden", !list.length);
+  if (!list.length) return;
+  $("#fixBanner").innerHTML = `<b>🛠️ ${list.length} erreur(s) connue(s) dans le vocabulaire de départ</b>
+    <p class="small" style="margin:6px 0">Par exemple : ${list.slice(0, 4).map(f => `« ${esc(f.word.en)} » : ${esc(f.word.fr)} → <b>${esc(f.to)}</b>`).join(" · ")}${list.length > 4 ? " …" : ""}</p>
+    <button class="btn sm" id="fixGo">Corriger automatiquement</button>`;
+  $("#fixGo").onclick = async () => {
+    try {
+      for (let i = 0; i < list.length; i += 400) {
+        const b = writeBatch(db);
+        list.slice(i, i + 400).forEach(f => b.update(doc(wordsCol(), f.word.id), { fr: f.to }));
+        await b.commit();
+      }
+      toast(`${list.length} mot(s) corrigé(s) ✅`);
+    } catch (e) { toast(errMsg(e), "err"); }
   };
 }

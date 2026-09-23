@@ -123,7 +123,7 @@ export function runDictee({ items, onAnswer, onFinish, onQuit }) {
   function check() {
     const it = items[st.i], v = $("#dIn").value;
     if (!v.trim()) { $("#dIn").focus(); return; }
-    const r = checkAny([it.en], v, "en");
+    const r = checkAny([it.en, ...(it.altEn || [])], v, "en");
     st.answered = true;
     $("#dIn").disabled = true; $("#dIn").classList.add(r.ok ? "ok" : "ko");
     if (r.ok) st.ok++; else { st.ko++; st.wrong.push(it); }
@@ -195,7 +195,8 @@ export function buildDuelItems(pool, allWords, n = 10) {
   return pick.map((w, i) => {
     const dir = i % 2 ? "enFr" : "frEn";
     const same = allWords.filter(x => x.id !== w.id && (dir === "frEn" ? x.fr : x.en).trim().toLowerCase() === (dir === "frEn" ? w.fr : w.en).trim().toLowerCase());
-    return { id: w.id, fr: w.fr, en: w.en, dir, alts: same.map(x => dir === "frEn" ? x.en : x.fr).slice(0, 5) };
+    const own = (dir === "frEn" ? w.altEn : w.altFr) || [];
+    return { id: w.id, fr: w.fr, en: w.en, dir, alts: [...own, ...same.map(x => dir === "frEn" ? x.en : x.fr)].slice(0, 10) };
   });
 }
 /** Résultat d'un duel : "child" | "parent" | "tie" | null (pas fini) */

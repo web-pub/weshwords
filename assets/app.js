@@ -11,11 +11,11 @@ import {
 import {
   initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager,
   doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, addDoc, collection, query, where,
-  orderBy, limit, onSnapshot, writeBatch, serverTimestamp, arrayRemove, getDocFromServer
+  orderBy, limit, onSnapshot, writeBatch, serverTimestamp, arrayRemove, arrayUnion, getDocFromServer
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { DEFAULT_CONTENT, LEGAL_PAGES } from "./content.js";
 
-export const VERSION = "V01-007";
+export const VERSION = "V01-008";
 export const PROJECT = "Wesh Words";
 export const PSEUDO_DOMAIN = "weshwords.firebaseapp.com"; // e-mail technique pour les comptes sans adresse
 
@@ -42,7 +42,7 @@ export const db = _db;
 
 export {
   doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, addDoc, collection, query, where,
-  orderBy, limit, onSnapshot, writeBatch, serverTimestamp, arrayRemove, getDocFromServer,
+  orderBy, limit, onSnapshot, writeBatch, serverTimestamp, arrayRemove, arrayUnion, getDocFromServer,
   signOut, onAuthStateChanged, sendPasswordResetEmail, createUserWithEmailAndPassword
 };
 
