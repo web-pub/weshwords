@@ -1,4 +1,4 @@
-# Wesh Words — V01-007
+# Wesh Words — V01-008
 
 Révisions de vocabulaire anglais 🇫🇷 ↔ 🇬🇧 : 20 bonnes réponses par jour (10 FR→EN + 10 EN→FR), et au 20/20… le **mot de la honte**. 💀
 
@@ -40,8 +40,8 @@ assets/               CSS, JS, logo, icônes, personnage Margaux (margaux-*.webp
 1. Décompresser le ZIP sur le PC (clic droit → Extraire tout).
 2. Sur https://github.com/web-pub/weshwords → **Add file** → **Upload files**.
 3. Ouvrir le dossier décompressé, **sélectionner tout son contenu** (Ctrl + A : les pages HTML, `sw.js`, `favicon.ico`… **et le dossier `assets`**) et le glisser dans la page GitHub.
-   Les fichiers doivent arriver **à la racine** du dépôt (pas dans un sous-dossier « WeshWords-V01-007 »).
-4. En bas : message « Wesh Words V01-007 » → **Commit changes**.
+   Les fichiers doivent arriver **à la racine** du dépôt (pas dans un sous-dossier « WeshWords-V01-008 »).
+4. En bas : message « Wesh Words V01-008 » → **Commit changes**.
 5. Première fois seulement : **Settings** → **Pages** → Source « Deploy from a branch » → Branch **main** / **(root)** → Save.
 6. Attendre 1 à 2 minutes. Adresse du site : `https://web-pub.github.io/weshwords/`
 
@@ -55,7 +55,7 @@ git clone https://github.com/web-pub/weshwords.git
 cd weshwords
 # décompresser le ZIP ici (fichiers à la racine + dossier assets/)
 git add -A
-git commit -m "Wesh Words V01-007"
+git commit -m "Wesh Words V01-008"
 git push origin main
 ```
 
@@ -70,7 +70,7 @@ Ouvrir **`https://web-pub.github.io/weshwords/diagnostic.html`**. Elle teste et 
 |---|---|
 | Site en ligne, dossier `assets` présent | renvoyer le dossier `assets` à la racine du dépôt |
 | Base Firestore créée | étape A.3 |
-| Règles publiées **et à jour** (V01-007) | étape A.4 |
+| Règles publiées **et à jour** (V01-008) | étape A.4 |
 | Méthode E-mail/Mot de passe active | étape A.1 |
 | Super Admin installé | ouvrir `connexion.html` → Installation initiale |
 | Application installable | recharger la page une fois |
@@ -100,7 +100,7 @@ Astuce : après une mise à jour, si l'ancienne version s'affiche encore, rechar
 | Objectif du jour | 20 **bonnes** réponses : 10 🇫🇷→🇬🇧 et 10 🇬🇧→🇫🇷 |
 | Erreur | ne compte pas, fait **baisser** le niveau du mot (0 à 5) et le mot revient 3 questions plus tard |
 | Choix des mots | pondéré : niveaux bas, mots ratés et jamais vus sortent plus souvent |
-| Réponses | insensible à la casse, articles facultatifs (a/an/the/to, le/la/les…), variantes séparées par « / », accents tolérés en français (avec remarque) |
+| Réponses | insensible aux majuscules/minuscules, articles facultatifs (a/an/the/to, le/la/les…), variantes séparées par « / », accents tolérés en français (avec remarque) |
 | Série | nombre de jours consécutifs à 20/20 |
 | Aides (V01-002) | 💡 indice (1re lettre de chaque mot + nombre de lettres), puis 🔢 choix multiple. Réussi avec aide = compte pour les 20, **le mot ne monte pas de niveau**. Activable/désactivable par le parent. |
 | QCM automatique (V01-002) | pour les longues phrases (par défaut ≥ 4 mots) : choix multiple d'office, compte normalement. « ✍️ Je préfère écrire » reste possible. |
@@ -113,6 +113,8 @@ Astuce : après une mise à jour, si l'ancienne version s'affiche encore, rechar
 | Duel (V01-006) | 10 mots identiques pour Maman et Margaux, chrono. Meilleur score gagne (égalité : le plus rapide). Le gagnant choisit une expression anglaise que la perdante doit placer dans une phrase ; « C'est fait ✅ ». |
 | Dates de déblocage (V01-006) | une expression de la honte peut porter une date « pas avant le… » : elle reste en file mais n'est révélée qu'à partir de cette date (la suivante disponible passe devant). |
 | Photo du cours (V01-007) | espace parent → Vocabulaire → 📷 Photo du cours : la liste du cahier est lue dans le navigateur (Tesseract.js, rien n'est envoyé ni stocké), les paires FR/EN sont proposées dans un tableau modifiable (⇄ inverser, cocher/décocher), puis passent par l'import habituel avec détection des doublons. |
+| Propositions (V01-008) | après une réponse, l'élève peut proposer « ✋ Ma réponse est juste aussi » (réponse alternative) ou « 🚩 Il y a une erreur dans ce mot » (correction FR/EN). Le parent valide ou refuse dans son tableau de bord ; une réponse acceptée est ensuite toujours comptée juste. Réponses alternatives aussi modifiables dans ✏️ Modifier le mot. |
+| Corrections du vocabulaire de départ (V01-008) | les 32 adjectifs de nationalité n'avaient pas de traduction française (« American = American ») : corrigés dans le fichier de départ, et bouton « 🛠️ Corriger automatiquement » dans Vocabulaire pour les mots déjà importés. « ice cream » accepte aussi « glace ». |
 | Mot de la honte | 1 révélation max par jour, uniquement après le 20/20, dans l'ordre de la file du parent. Jamais visible par l'élève avant révélation (règles Firestore). Ne consomme aucune question et ne touche pas aux niveaux. |
 
 ## 6. Données Firestore
@@ -124,7 +126,8 @@ usernames/{utilisateur}        { email, uid }
 secrets/{uid}                  { username, email, password }   ← Super Admin uniquement
 demandes/{id}                  { nom, prenom, gsm, email, statut }
 users/{uid}                    { prenom, nom, username, email, role, parentUid, birth, gsm }
-users/{uid}/words/{id}         { fr, en, cat, nature, ex, conj, level, ok, ko, seen, lastSeen, lastKo, vLevel, vOk, vKo, dOk, dKo }
+users/{uid}/proposals/{id}     { type: alt|fix, wordId, dir, given, oldFr, oldEn, fr, en, note, status, decidedDay }
+users/{uid}/words/{id}         { fr, en, altFr[], altEn[], cat, nature, ex, conj, level, ok, ko, seen, lastSeen, lastKo, vLevel, vOk, vKo, dOk, dKo }
 users/{uid}/sessions/{AAAA-MM-JJ} { frEn, enFr, attempts, errors, completed, wrong[], helped, qcm, bonus, exam, mastered[], verbs, verbsOk, dictee, dicteeOk }
 users/{uid}/shame/{id}         { expression, phrase, honte, revealed, revealedDay }
 users/{uid}/exams/{id}         { day, themes[], dir, total, ok, ko, score, helped, wrong[], durationSec }

@@ -1,6 +1,6 @@
 // =====================================================================
 //  Projet : Wesh Words (Firebase « weshwords »)
-//  Version du site : V01-007
+//  Version du site : V01-008
 //  Règles Firestore — © Hélène Laruelle — Tous droits réservés
 // ---------------------------------------------------------------------
 //  Rôles : superadmin (config/app.superAdminUid) · parent · enfant
@@ -74,7 +74,7 @@ service cloud.firestore {
 
     // ---------- Version des règles (utilisé par diagnostic.html) ----------
     match /rulesinfo/{v} {
-      allow get: if v == 'V01-007';
+      allow get: if v == 'V01-008';
     }
 
     // ---------- Profils ----------
@@ -115,6 +115,13 @@ service cloud.firestore {
         allow read: if isSelf(uid) || canManage(uid);
         allow create, update: if isSelf(uid) || isSuper();
         allow delete: if isSuper();
+      }
+
+      // --- Propositions de l'élève (réponse alternative / correction) : validées par le parent
+      match /proposals/{pid} {
+        allow read: if isSelf(uid) || canManage(uid);
+        allow create: if isSelf(uid) && request.resource.data.status == 'pending';
+        allow update, delete: if canManage(uid);
       }
 
       // --- Contrôles blancs (résultats)

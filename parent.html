@@ -43,6 +43,11 @@
 
       <!-- TABLEAU DE BORD -->
       <section class="panel on" id="p-dash">
+        <div class="card hidden" id="propCard" style="margin-bottom:16px">
+          <h3>✋ Propositions de <span id="propName"></span> <span class="chip w" id="propCount"></span></h3>
+          <p class="small muted">Réponses que ton enfant estime justes, ou erreurs qu'il a repérées dans le vocabulaire. Rien n'est modifié sans ta validation.</p>
+          <div id="propList"></div>
+        </div>
         <div class="grid g4 keep2">
           <div class="stat"><div class="v" id="dToday">0/20</div><div class="l">🎯 aujourd'hui</div></div>
           <div class="stat"><div class="v" id="dStreak">0</div><div class="l">🔥 jours de série</div></div>
@@ -130,6 +135,7 @@
           </div>
         </div>
 
+        <div class="note warn hidden" id="fixBanner" style="margin-bottom:16px"></div>
         <div class="card">
           <div class="row between">
             <h3 style="margin:0">📚 Liste de vocabulaire <span class="chip" id="vCount"></span></h3>
