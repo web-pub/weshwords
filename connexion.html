@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Connexion — Wesh Words</title>
+  <meta name="theme-color" content="#EEF4FF">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="favicon.ico" sizes="any">
+  <link rel="icon" href="assets/favicon-32.png" type="image/png">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <header class="site-head">
+    <div class="wrap">
+      <a class="logo" href="index.html"><span id="logoMark"></span><span data-t="site.title">Wesh Words</span></a>
+    </div>
+  </header>
+
+  <main class="wrap narrow" style="padding-top:34px">
+    <!-- Installation initiale (uniquement si aucun Super Admin n'existe encore) -->
+    <section class="card hidden" id="setupCard">
+      <h2>🛠️ Installation initiale</h2>
+      <p class="muted">Aucun compte Super Admin n'existe encore sur ce projet Firebase. Crée le tien : il aura tous les droits (comptes, contenus, mots de passe).</p>
+      <form id="setupForm" autocomplete="off">
+        <div class="grid g2">
+          <div class="field"><label>Prénom <span class="req">*</span></label><input type="text" id="suPrenom" required></div>
+          <div class="field"><label>Nom <span class="req">*</span></label><input type="text" id="suNom" required></div>
+        </div>
+        <div class="field"><label>Adresse e-mail (réelle) <span class="req">*</span></label><input type="email" id="suEmail" required></div>
+        <div class="grid g2">
+          <div class="field"><label>Utilisateur <span class="req">*</span></label><input type="text" id="suUser" required></div>
+          <div class="field"><label>Date de naissance</label><input type="date" id="suBirth"></div>
+        </div>
+        <div class="field"><label>Mot de passe <span class="req">*</span></label><input type="password" id="suPwd" required minlength="6"></div>
+        <p class="small muted">* Champs obligatoires</p>
+        <button class="btn block" type="submit">Créer le compte Super Admin</button>
+      </form>
+      <p class="small center" style="margin-top:12px">Un souci ? <a href="diagnostic.html">🩺 Lancer le diagnostic de mise en ligne</a></p>
+    </section>
+
+    <section class="card" id="loginCard">
+      <div class="login-head">
+        <img class="mascot" src="assets/margaux-joyeuse.webp" alt="Margaux joyeuse">
+        <div><h1 style="font-size:2rem" data-t="login.title">Connexion</h1>
+        <p class="muted" data-t="login.subtitle"></p></div>
+      </div>
+      <form id="loginForm">
+        <div class="field">
+          <label for="lgUser" data-t="login.user">Utilisateur</label>
+          <input type="text" id="lgUser" autocomplete="username" autocapitalize="none" spellcheck="false" data-tp="login.user.ph" required>
+        </div>
+        <div class="field">
+          <label for="lgPwd" data-t="login.pwd">Mot de passe</label>
+          <input type="password" id="lgPwd" autocomplete="current-password" required>
+        </div>
+        <button class="btn block big" type="submit" id="lgBtn" data-t="login.btn">Se connecter</button>
+        <p class="center" style="margin-top:14px"><a href="#" id="lgForgot" data-t="login.forgot"></a></p>
+        <p class="small muted center hidden" id="lgForgotHelp" data-t="login.forgot.help"></p>
+      </form>
+    </section>
+
+    <section class="card" id="joinCard">
+      <h2 data-t="join.title">Pas encore membre ? Devenez membre !</h2>
+      <p class="muted" data-t="join.text"></p>
+      <form id="joinForm">
+        <div class="grid g2">
+          <div class="field"><label><span data-t="join.nom">Nom</span> <span class="req">*</span></label><input type="text" id="jNom" required maxlength="80"></div>
+          <div class="field"><label><span data-t="join.prenom">Prénom</span> <span class="req">*</span></label><input type="text" id="jPrenom" required maxlength="80"></div>
+        </div>
+        <div class="grid g2">
+          <div class="field"><label><span data-t="join.gsm">GSM</span> <span class="req">*</span></label><input type="tel" id="jGsm" required maxlength="30"></div>
+          <div class="field"><label><span data-t="join.email">E-mail</span> <span class="req">*</span></label><input type="email" id="jEmail" required maxlength="120"></div>
+        </div>
+        <p class="small muted">* Champs obligatoires</p>
+        <button class="btn ghost block" type="submit" data-t="join.btn">Envoyer ma demande</button>
+      </form>
+      <p class="note hidden" id="joinOk" data-t="join.ok"></p>
+    </section>
+  </main>
+
+  <footer class="site-foot" id="footer"></footer>
+  <script type="module" src="assets/connexion.js"></script>
+</body>
+</html>

@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Espace parent — Wesh Words</title>
+  <meta name="theme-color" content="#EEF4FF">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="favicon.ico" sizes="any">
+  <link rel="icon" href="assets/favicon-32.png" type="image/png">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="stylesheet" href="assets/style.css">
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" defer></script>
+</head>
+<body>
+  <header class="app-head"><div class="wrap" id="appHead"></div></header>
+  <div class="loader" id="loader"><div><div class="spin"></div>Chargement…</div></div>
+
+  <main class="wrap hidden" id="main" style="padding-top:20px;padding-bottom:40px">
+    <div class="row between">
+      <div class="row" style="flex-wrap:nowrap"><img class="mascot" src="assets/margaux-sure.webp" alt="" style="width:78px"><h2 id="welcome" style="margin:0"></h2></div>
+      <div class="row" id="childPicker"></div>
+    </div>
+
+    <!-- Aucun enfant -->
+    <section class="card hidden" id="noChild" style="margin-top:16px">
+      <h3>👧 Crée le compte de ton enfant</h3>
+      <p class="muted">Ton enfant se connectera avec son <b>utilisateur</b> et son <b>mot de passe</b>. L'adresse e-mail est facultative.</p>
+      <div id="childFormHost"></div>
+    </section>
+
+    <div id="childZone" class="hidden">
+      <nav class="tabs" id="tabs">
+        <button class="tab on" data-tab="dash">📊 Tableau de bord</button>
+        <button class="tab" data-tab="bilan">📅 Bilan</button>
+        <button class="tab" data-tab="vocab">📚 Vocabulaire</button>
+        <button class="tab" data-tab="shame">💀 Mots de la honte</button>
+        <button class="tab" data-tab="duel">⚔️ Duel</button>
+        <button class="tab" data-tab="hist">🕓 Historique</button>
+        <button class="tab" data-tab="settings">🎛️ Réglages</button>
+        <button class="tab" data-tab="account">⚙️ Comptes</button>
+      </nav>
+
+      <!-- TABLEAU DE BORD -->
+      <section class="panel on" id="p-dash">
+        <div class="grid g4 keep2">
+          <div class="stat"><div class="v" id="dToday">0/20</div><div class="l">🎯 aujourd'hui</div></div>
+          <div class="stat"><div class="v" id="dStreak">0</div><div class="l">🔥 jours de série</div></div>
+          <div class="stat"><div class="v" id="dMaster">0</div><div class="l">⭐ mots maîtrisés (niv. 5)</div></div>
+          <div class="stat"><div class="v" id="dWords">0</div><div class="l">📚 mots au total</div></div>
+        </div>
+        <div class="grid g2" style="margin-top:16px">
+          <div class="card">
+            <h3>📈 7 derniers jours</h3>
+            <div class="hbars" id="dBars"></div>
+            <p class="small muted">Barre = bonnes réponses du jour (objectif 20) · rouge = erreurs</p>
+          </div>
+          <div class="card">
+            <h3>📊 Répartition des niveaux</h3>
+            <div id="dLevels"></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>🧠 Mots les plus difficiles</h3>
+          <div id="dHard"></div>
+        </div>
+        <div class="card">
+          <h3>🔤 Verbes irréguliers &amp; 🎧 Dictée</h3>
+          <div id="dPractice"></div>
+        </div>
+        <div class="card">
+          <div class="row between"><h3 style="margin:0">🏆 Badges de <span id="bgName"></span></h3><span class="chip g" id="bgCount"></span></div>
+          <div id="bgGrid" style="margin-top:12px"></div>
+        </div>
+      </section>
+
+      <!-- BILAN DE LA SEMAINE -->
+      <section class="panel" id="p-bilan">
+        <div class="row between no-print" style="margin-bottom:12px">
+          <div class="row">
+            <button class="btn ghost sm" id="bPrev">◀ Semaine précédente</button>
+            <button class="btn ghost sm" id="bNext">Semaine suivante ▶</button>
+          </div>
+          <div class="row">
+            <button class="btn soft sm" id="bCopy">📋 Copier le texte</button>
+            <button class="btn soft sm" id="bMail">✉️ Envoyer par e-mail</button>
+            <button class="btn sm" id="bPrint">🖨️ Imprimer / PDF</button>
+          </div>
+        </div>
+        <div id="bilanBody"></div>
+      </section>
+
+      <!-- VOCABULAIRE -->
+      <section class="panel" id="p-vocab">
+        <div class="grid g2">
+          <div class="card">
+            <h3>➕ Ajouter un mot</h3>
+            <form id="addWord" autocomplete="off">
+              <div class="grid g2">
+                <div class="field"><label>Français <span class="req">*</span></label><input type="text" id="awFr" required></div>
+                <div class="field"><label>Anglais <span class="req">*</span></label><input type="text" id="awEn" required></div>
+              </div>
+              <div class="grid g2">
+                <div class="field"><label>Catégorie</label><input type="text" id="awCat" list="catList"></div>
+                <div class="field"><label>Nature</label>
+                  <select id="awNat"><option value="">—</option><option>nom</option><option>verbe</option><option>adjectif</option><option>expression</option><option>mot / expression</option></select></div>
+              </div>
+              <div class="field"><label>Exemple</label><input type="text" id="awEx"></div>
+              <div class="field"><label>Conjugaison / formes irrégulières</label><input type="text" id="awConj" placeholder="ex. go — went — gone"></div>
+              <p class="small muted">* Champs obligatoires · Plusieurs réponses acceptées : sépare-les par « / »</p>
+              <button class="btn" type="submit">Ajouter</button>
+            </form>
+            <datalist id="catList"></datalist>
+          </div>
+          <div class="card">
+            <h3>📥 Importer / 📤 Exporter</h3>
+            <p class="muted small">Fichiers acceptés : .xlsx, .xls, .csv — colonnes <b>fr</b> et <b>en</b> (+ facultatif : categorie, nature, examples, note, irregular, conjugation). Les doublons sont détectés automatiquement.</p>
+            <div class="field"><input type="file" id="impFile" accept=".xlsx,.xls,.csv"></div>
+            <div class="row" style="margin-bottom:10px">
+              <label class="btn" for="ocrFile" style="margin:0">📷 Photo du cours</label>
+              <input type="file" id="ocrFile" accept="image/*" capture="environment" multiple class="hidden">
+              <span class="small muted">Photographie la liste de vocabulaire du cahier : les mots sont reconnus automatiquement.</span>
+            </div>
+            <div id="impPreview"></div>
+            <hr class="sep">
+            <div class="row">
+              <button class="btn soft" id="btnSeed">📦 Vocabulaire de départ (1 029 mots)</button>
+              <button class="btn soft" id="btnExport">📤 Exporter en Excel</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="row between">
+            <h3 style="margin:0">📚 Liste de vocabulaire <span class="chip" id="vCount"></span></h3>
+            <div class="row">
+              <input type="search" id="vSearch" placeholder="Rechercher…" style="width:200px">
+              <select id="vCat" style="width:200px"><option value="">Toutes les catégories</option></select>
+              <select id="vLvl" style="width:150px"><option value="">Tous niveaux</option><option value="0">Niveau 0</option><option value="1">Niveau 1</option><option value="2">Niveau 2</option><option value="3">Niveau 3</option><option value="4">Niveau 4</option><option value="5">Niveau 5</option></select>
+            </div>
+          </div>
+          <div class="table-wrap" style="margin-top:12px">
+            <table><thead><tr><th>Français</th><th>Anglais</th><th>Catégorie</th><th>Niveau</th><th>✅/❌</th><th></th></tr></thead><tbody id="vBody"></tbody></table>
+          </div>
+          <div class="pager" id="vPager"></div>
+          <details style="margin-top:16px"><summary class="muted">Zone de maintenance</summary>
+            <div class="row" style="margin-top:10px">
+              <button class="btn ghost sm" id="btnResetLvls">Remettre tous les niveaux à 0</button>
+              <button class="btn danger sm" id="btnDelFiltered">Supprimer les mots filtrés</button>
+            </div>
+          </details>
+        </div>
+      </section>
+
+      <!-- MOTS DE LA HONTE -->
+      <section class="panel" id="p-shame">
+        <div class="card">
+          <h3 id="shTitle"></h3>
+          <p class="muted" data-t="parent.shame.help"></p>
+          <form id="addShame" class="grid g3" style="align-items:end" autocomplete="off">
+            <div class="field"><label>Expression <span class="req">*</span></label><input type="text" id="asExpr" required placeholder="wesh"></div>
+            <div class="field" style="grid-column:span 2"><label>Phrase que tu vas placer</label><input type="text" id="asPhrase" placeholder="Wesh {prenom}, t'as vu le nouveau mot d'anglais ?"></div>
+            <div class="field"><label>Honte</label><div class="skull-pick" id="asHonte"></div></div>
+            <div class="field"><label>Pas avant le <span class="small muted">(facultatif)</span></label><input type="date" id="asDate"></div>
+            <div><button class="btn" type="submit">Ajouter à la file</button></div>
+          </form>
+          <p class="small muted">Astuce : <code>{prenom}</code> dans la phrase est remplacé par le prénom de ton enfant.</p>
+          <div class="row" style="margin-top:8px">
+            <button class="btn soft sm" id="btnIdeas">💡 Ajouter 20 idées toutes prêtes</button>
+            <button class="btn soft sm" id="btnShuffle">🎲 Mélanger l'ordre (surprise)</button>
+            <label class="check small"><input type="checkbox" id="chkHide"> Mode surprise : me cacher les expressions en attente</label>
+          </div>
+        </div>
+        <div class="card">
+          <h3>⏳ En attente <span class="chip p" id="shPendingCount"></span></h3>
+          <p class="small muted">Après le prochain 20/20, c'est la première de la liste <b>disponible ce jour-là</b> qui est révélée (les expressions datées attendent leur date). Une seule révélation par jour.</p>
+          <div class="table-wrap"><table><thead><tr><th>#</th><th>Expression</th><th>Phrase</th><th>Honte</th><th>Date</th><th></th></tr></thead><tbody id="shPending"></tbody></table></div>
+        </div>
+        <div class="card">
+          <h3>🔓 Déjà révélées <span class="chip" id="shDoneCount"></span></h3>
+          <div class="table-wrap"><table><thead><tr><th>Expression</th><th>Phrase</th><th>Honte</th><th>Révélée le</th><th></th></tr></thead><tbody id="shDone"></tbody></table></div>
+        </div>
+      </section>
+
+      <!-- DUEL -->
+      <section class="panel" id="p-duel">
+        <div class="card">
+          <div class="row between">
+            <h3 style="margin:0">⚔️ Duel <span id="duTally" class="chip p"></span></h3>
+            <button class="btn pink" id="btnDuelNew">⚔️ Défier <span id="duChildName"></span></button>
+          </div>
+          <p class="muted small" data-t="duel.help" style="margin-top:8px"></p>
+        </div>
+        <div class="card">
+          <h3>📜 Duels</h3>
+          <div id="duList"></div>
+        </div>
+      </section>
+
+      <!-- HISTORIQUE -->
+      <section class="panel" id="p-hist">
+        <div class="card">
+          <h3>🕓 Historique des sessions</h3>
+          <div class="table-wrap"><table><thead><tr><th>Date</th><th>🇫🇷→🇬🇧</th><th>🇬🇧→🇫🇷</th><th>Tentatives</th><th>Erreurs</th><th>Réussite</th><th>Avec aide</th><th>Bonus</th><th>Statut</th><th></th></tr></thead><tbody id="hBody"></tbody></table></div>
+        </div>
+        <div class="card">
+          <h3>📝 Contrôles blancs</h3>
+          <div class="table-wrap"><table><thead><tr><th>Date</th><th>Thèmes</th><th>Score</th><th>Avec aide</th><th>Durée</th><th></th></tr></thead><tbody id="xBody"></tbody></table></div>
+        </div>
+      </section>
+
+      <!-- RÉGLAGES -->
+      <section class="panel" id="p-settings">
+        <div class="card">
+          <h3>🎯 Thèmes à réviser</h3>
+          <p class="muted small">Idéal avant un contrôle : limite les révisions à un ou plusieurs chapitres.</p>
+          <div class="field">
+            <label class="check"><input type="radio" name="thMode" value="free"> Libre : <span id="stChildName"></span> choisit elle-même ses thèmes</label>
+            <label class="check"><input type="radio" name="thMode" value="lock"> Imposés par moi</label>
+          </div>
+          <div id="stLockZone">
+            <div class="row" style="margin-bottom:8px">
+              <button class="btn ghost sm" id="stAll" type="button">Tout cocher</button>
+              <button class="btn ghost sm" id="stNone" type="button">Tout décocher</button>
+              <label class="small" style="margin:0 0 0 auto">Jusqu'au (facultatif)</label>
+              <input type="date" id="stUntil" style="width:180px">
+            </div>
+            <div class="theme-list" id="stThemes"></div>
+          </div>
+          <p class="small muted" id="stChildChoice" style="margin-top:10px"></p>
+        </div>
+        <div class="card">
+          <h3>🆘 Aides pendant le quiz</h3>
+          <label class="check"><input type="checkbox" id="stHints"> Autoriser les aides (💡 indice : 1re lettre + nombre de lettres, puis 🔢 choix multiple)</label>
+          <p class="small muted" style="margin:4px 0 12px 26px">Un mot réussi avec une aide compte pour les 20, mais ne monte pas de niveau.</p>
+          <label class="check"><input type="checkbox" id="stAutoQcm"> Choix multiple automatique pour les longues phrases</label>
+          <div class="row" style="margin:8px 0 0 26px">
+            <label class="small" style="margin:0">À partir de</label>
+            <input type="number" id="stMinWords" min="2" max="12" style="width:90px">
+            <span class="small muted">mots dans la réponse (comptent normalement, le mot monte de niveau)</span>
+          </div>
+        </div>
+        <button class="btn" id="stSave">💾 Enregistrer les réglages</button>
+      </section>
+
+      <!-- COMPTES -->
+      <section class="panel" id="p-account">
+        <div class="grid g2">
+          <div class="card">
+            <h3>👧 Compte de <span id="acChildName"></span></h3>
+            <p class="muted small" id="acChildInfo"></p>
+            <h4 style="margin-top:14px">Changer son mot de passe</h4>
+            <form id="childPwdForm">
+              <div class="field"><label>Mot de passe actuel de l'enfant</label><input type="password" id="cpOld" required></div>
+              <div class="field"><label>Nouveau mot de passe</label><input type="password" id="cpNew" required minlength="6"></div>
+              <button class="btn soft" type="submit">Enregistrer</button>
+            </form>
+          </div>
+          <div class="card">
+            <h3>➕ Ajouter un autre enfant</h3>
+            <div id="childFormHost2"></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>🔒 Mon mot de passe</h3>
+          <form id="myPwdForm" class="grid g3" style="align-items:end">
+            <div class="field"><label>Mot de passe actuel</label><input type="password" id="mpOld" required></div>
+            <div class="field"><label>Nouveau mot de passe</label><input type="password" id="mpNew" required minlength="6"></div>
+            <div class="field"><button class="btn soft" type="submit">Changer</button></div>
+          </form>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <div class="overlay hidden" id="overlay"><div class="inner card" id="overlayInner" style="max-width:640px"></div></div>
+  <script type="module" src="assets/parent.js"></script>
+</body>
+</html>

@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Super Admin — Wesh Words</title>
+  <meta name="theme-color" content="#EEF4FF">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="favicon.ico" sizes="any">
+  <link rel="icon" href="assets/favicon-32.png" type="image/png">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <header class="app-head"><div class="wrap" id="appHead"></div></header>
+  <div class="loader" id="loader"><div><div class="spin"></div>Chargement…</div></div>
+
+  <main class="wrap hidden" id="main" style="padding-top:20px;padding-bottom:40px">
+    <nav class="tabs" id="tabs">
+      <button class="tab on" data-tab="members">👥 Membres</button>
+      <button class="tab" data-tab="pwd">🔑 Mots de passe</button>
+      <button class="tab" data-tab="req">📨 Demandes <span id="reqCount"></span></button>
+      <button class="tab" data-tab="content">✏️ Contenus du site</button>
+      <button class="tab" data-tab="legal">⚖️ Pages légales</button>
+      <button class="tab" data-tab="me">⚙️ Mon compte</button>
+    </nav>
+
+    <!-- MEMBRES -->
+    <section class="panel on" id="p-members">
+      <div class="grid g4" style="margin-bottom:16px">
+        <div class="stat"><div class="v" id="sParents">0</div><div class="l">Parents</div></div>
+        <div class="stat"><div class="v" id="sKids">0</div><div class="l">Élèves</div></div>
+        <div class="stat"><div class="v" id="sReq">0</div><div class="l">Demandes en attente</div></div>
+        <div class="stat"><div class="v js-ver"></div><div class="l">Version du site</div></div>
+      </div>
+      <div class="card">
+        <h3>👥 Tous les membres</h3>
+        <div class="table-wrap"><table><thead><tr><th>Nom</th><th>Utilisateur</th><th>Rôle</th><th>Parent lié</th><th>E-mail</th><th>Créé le</th><th></th></tr></thead><tbody id="mBody"></tbody></table></div>
+      </div>
+      <div class="card">
+        <h3>➕ Créer un membre</h3>
+        <div id="memberFormHost"></div>
+      </div>
+    </section>
+
+    <!-- MOTS DE PASSE -->
+    <section class="panel" id="p-pwd">
+      <div class="card">
+        <h3>🔑 Mots de passe (Super Admin uniquement)</h3>
+        <p class="note warn small">⚠️ Ces mots de passe sont stockés en clair dans Firestore (collection <code>secrets</code>, lisible uniquement par le Super Admin). Risque connu et accepté. Si un membre change son mot de passe hors de Wesh Words (lien e-mail), la valeur affichée ici ne sera plus à jour.</p>
+        <div class="table-wrap"><table><thead><tr><th>Nom</th><th>Utilisateur</th><th>Rôle</th><th>E-mail de connexion</th><th>Mot de passe</th><th>Modifié le</th><th></th></tr></thead><tbody id="pwBody"></tbody></table></div>
+      </div>
+    </section>
+
+    <!-- DEMANDES -->
+    <section class="panel" id="p-req">
+      <div class="card">
+        <h3>📨 Demandes « Devenez membre ! »</h3>
+        <div class="table-wrap"><table><thead><tr><th>Date</th><th>Nom</th><th>Prénom</th><th>GSM</th><th>E-mail</th><th>Statut</th><th></th></tr></thead><tbody id="rqBody"></tbody></table></div>
+      </div>
+    </section>
+
+    <!-- CONTENUS -->
+    <section class="panel" id="p-content">
+      <div class="card">
+        <div class="row between">
+          <h3 style="margin:0">✏️ Contenus du site</h3>
+          <button class="btn" id="btnSaveContent">💾 Enregistrer les contenus</button>
+        </div>
+        <p class="muted small">Tous les textes du site sont modifiables ici. Variables utilisables : <code>{prenom}</code>, <code>{annee}</code>, <code>{owner}</code>, <code>{site}</code>.</p>
+        <div id="contentForm"></div>
+      </div>
+    </section>
+
+    <!-- LÉGAL -->
+    <section class="panel" id="p-legal">
+      <div class="card">
+        <div class="row between">
+          <h3 style="margin:0">⚖️ Pages légales</h3>
+          <button class="btn" id="btnSaveLegal">💾 Enregistrer les pages légales</button>
+        </div>
+        <p class="muted small">Contenu en HTML simple (&lt;h2&gt;, &lt;p&gt;, &lt;ul&gt;&lt;li&gt;, &lt;a&gt;…). Chaque page est accessible depuis le pied de page du site.</p>
+        <div id="legalForm"></div>
+      </div>
+    </section>
+
+    <!-- MON COMPTE -->
+    <section class="panel" id="p-me">
+      <div class="card">
+        <h3>🔒 Mon mot de passe</h3>
+        <form id="myPwdForm" class="grid g3" style="align-items:end">
+          <div class="field"><label>Mot de passe actuel</label><input type="password" id="mpOld" required></div>
+          <div class="field"><label>Nouveau mot de passe</label><input type="password" id="mpNew" required minlength="6"></div>
+          <div class="field"><button class="btn soft" type="submit">Changer</button></div>
+        </form>
+      </div>
+      <div class="card">
+        <h3>ℹ️ Informations techniques</h3>
+        <p class="small muted">Projet Firebase : <b>weshwords</b> · Dépôt GitHub : <b>web-pub/weshwords</b> · Version : <b class="js-ver"></b></p>
+      </div>
+    </section>
+  </main>
+
+  <div class="overlay hidden" id="overlay"><div class="inner card" id="overlayInner" style="max-width:560px"></div></div>
+  <script type="module" src="assets/admin.js"></script>
+</body>
+</html>

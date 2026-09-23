@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Mon espace — Wesh Words</title>
+  <meta name="theme-color" content="#EEF4FF">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="favicon.ico" sizes="any">
+  <link rel="icon" href="assets/favicon-32.png" type="image/png">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <header class="app-head"><div class="wrap" id="appHead"></div></header>
+  <div class="loader" id="loader"><div><div class="spin"></div>Chargement…</div></div>
+
+  <main class="wrap hidden" id="main" style="padding-top:20px;padding-bottom:40px">
+    <!-- ACCUEIL ÉLÈVE -->
+    <section id="vHome">
+      <div class="grid g2">
+        <div class="card center">
+          <img id="homeArt" class="home-art" src="assets/scene-ensemble.webp" alt="Margaux">
+          <h2 id="hello"></h2>
+          <p class="muted" data-t="eleve.goal"></p>
+          <div class="ring" id="ring" style="margin:18px auto"><div><div class="n" id="ringN">0</div><div class="d">/ 20</div></div></div>
+          <div class="bars" id="homeBars"></div>
+          <div class="theme-bar" id="themeBar"></div>
+          <div id="homeAction"></div>
+        </div>
+        <div class="stack">
+          <div class="grid g2 keep2">
+            <div class="stat"><div class="v" id="stStreak">0</div><div class="l" data-t="eleve.st.streak">🔥 jours de série</div></div>
+            <div class="stat"><div class="v" id="stMaster">0</div><div class="l" data-t="eleve.st.master">⭐ mots maîtrisés</div></div>
+            <div class="stat"><div class="v" id="stWords">0</div><div class="l" data-t="eleve.st.words">📚 mots au total</div></div>
+            <div class="stat"><div class="v" id="stShame">0</div><div class="l" data-t="eleve.st.shame">💀 hontes débloquées</div></div>
+          </div>
+          <div class="card">
+            <h3 data-t="eleve.cal">📅 Mes 4 dernières semaines</h3>
+            <div class="days" id="days"></div>
+            <p class="small muted" style="margin-top:8px" data-t="eleve.cal.legend">Vert = 20/20 · Orange = commencé</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <h3 data-t="practice.title"></h3>
+        <p class="small muted" data-t="practice.help"></p>
+        <div class="row">
+          <button class="btn soft" id="btnVerbs"></button>
+          <button class="btn soft" id="btnDictee" data-t="dictee.btn"></button>
+          <button class="btn pink" id="btnDuel" data-t="duel.btn"></button>
+        </div>
+        <div id="duelZone" style="margin-top:14px"></div>
+      </div>
+
+      <div class="card">
+        <div class="row between"><h3 style="margin:0" data-t="badges.title"></h3><span class="chip g" id="badgeCount"></span></div>
+        <div id="badgeGrid" style="margin-top:12px"></div>
+      </div>
+
+      <div class="card">
+        <h3 data-t="shame.collection"></h3>
+        <div id="shameList"></div>
+      </div>
+
+      <div class="card">
+        <h3 data-t="eleve.hard">🧠 Les mots qui me résistent</h3>
+        <div id="hardList"></div>
+      </div>
+    </section>
+
+    <!-- QUIZ -->
+    <section id="vQuiz" class="hidden">
+      <div class="quiz">
+        <div class="row between" style="margin-bottom:12px">
+          <button class="btn ghost sm" id="qBack" data-t="quiz.pause">← Pause</button>
+          <span class="chip" id="qMode"></span>
+        </div>
+        <div class="bars" id="qBars"></div>
+        <div class="suspense" id="qSuspense"></div>
+        <div class="card">
+          <img class="q-mood" id="qMood" src="assets/margaux-reflechie.webp" alt="">
+          <div class="dir" id="qDir"></div>
+          <div class="prompt" id="qPrompt"></div>
+          <div class="prompt-meta" id="qMeta"></div>
+          <form id="qForm" autocomplete="off">
+            <div class="hint hidden" id="qHint"></div>
+            <input type="text" class="answer" id="qAnswer" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="Ta réponse…" data-tp="quiz.ph">
+            <div class="choices hidden" id="qChoices"></div>
+            <div class="feedback" id="qFeedback"></div>
+            <div class="row" style="justify-content:center">
+              <button type="button" class="btn soft" id="qHelp"></button>
+              <button type="button" class="btn ghost" id="qSkip" data-t="quiz.skip"></button>
+              <button type="submit" class="btn" id="qSubmit">Valider ✔</button>
+            </div>
+          </form>
+        </div>
+        <p class="small muted center" style="margin-top:10px" data-t="quiz.tip">Astuce : touche Entrée pour valider puis passer au mot suivant.</p>
+      </div>
+    </section>
+  </main>
+
+  <div class="overlay hidden" id="overlay"><div class="inner" id="overlayInner"></div></div>
+  <script type="module" src="assets/eleve.js"></script>
+</body>
+</html>

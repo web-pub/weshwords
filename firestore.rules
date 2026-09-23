@@ -1,0 +1,179 @@
+// =====================================================================
+//  Projet : Wesh Words (Firebase « weshwords »)
+//  Version du site : V01-007
+//  Règles Firestore — © Hélène Laruelle — Tous droits réservés
+// ---------------------------------------------------------------------
+//  Rôles : superadmin (config/app.superAdminUid) · parent · enfant
+//  Authentification : Firebase Authentication (e-mail + mot de passe)
+// =====================================================================
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- Fonctions ----------
+    function signedIn() { return request.auth != null; }
+    function isSelf(uid) { return signedIn() && request.auth.uid == uid; }
+    function cfgPath() { return /databases/$(database)/documents/config/app; }
+    function userPath(uid) { return /databases/$(database)/documents/users/$(uid); }
+    function isSuper() { return signedIn() && get(cfgPath()).data.superAdminUid == request.auth.uid; }
+    function myRole() { return get(userPath(request.auth.uid)).data.role; }
+    function isParentOf(childUid) { return signedIn() && get(userPath(childUid)).data.parentUid == request.auth.uid; }
+    function canManage(childUid) { return isSuper() || isParentOf(childUid); }
+    function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
+    // Adresse(s) autorisée(s) à faire l'installation initiale (compte Super Admin).
+    // Empêche un inconnu de « prendre la place » avant l'installation. À modifier si besoin.
+    function canInstall() { return request.auth.token.email in ['helene2406@gmail.com']; }
+
+    // ---------- Configuration (identifie le Super Admin) ----------
+    match /config/app {
+      allow read: if true;
+      allow create: if signedIn()
+        && canInstall()
+        && !exists(cfgPath())
+        && request.resource.data.superAdminUid == request.auth.uid;
+      allow update, delete: if isSuper();
+    }
+
+    // ---------- Contenus éditables du site (public en lecture) ----------
+    match /content/{docId} {
+      allow read: if true;
+      allow write: if isSuper();
+    }
+
+    // ---------- Annuaire utilisateur → e-mail (connexion par identifiant) ----------
+    match /usernames/{name} {
+      allow get: if true;
+      allow list: if isSuper();
+      allow create: if signedIn() && request.resource.data.uid is string && (
+           isSuper()
+        || getAfter(userPath(request.resource.data.uid)).data.parentUid == request.auth.uid
+        || (request.resource.data.uid == request.auth.uid
+            && getAfter(cfgPath()).data.superAdminUid == request.auth.uid)
+      );
+      allow update, delete: if isSuper();
+    }
+
+    // ---------- Mots de passe en clair (Super Admin uniquement en lecture) ----------
+    match /secrets/{uid} {
+      allow read, delete: if isSuper();
+      allow create, update: if isSuper()
+        || isSelf(uid)
+        || (signedIn() && getAfter(userPath(uid)).data.parentUid == request.auth.uid);
+    }
+
+    // ---------- Demandes « Devenez membre ! » ----------
+    match /demandes/{id} {
+      allow create: if request.resource.data.keys().hasOnly(['nom', 'prenom', 'gsm', 'email', 'statut', 'createdAt'])
+        && request.resource.data.nom is string && request.resource.data.nom.size() > 0 && request.resource.data.nom.size() <= 80
+        && request.resource.data.prenom is string && request.resource.data.prenom.size() > 0 && request.resource.data.prenom.size() <= 80
+        && request.resource.data.gsm is string && request.resource.data.gsm.size() > 0 && request.resource.data.gsm.size() <= 30
+        && request.resource.data.email is string && request.resource.data.email.size() > 3 && request.resource.data.email.size() <= 120
+        && request.resource.data.statut == 'nouvelle';
+      allow read, update, delete: if isSuper();
+    }
+
+    // ---------- Version des règles (utilisé par diagnostic.html) ----------
+    match /rulesinfo/{v} {
+      allow get: if v == 'V01-007';
+    }
+
+    // ---------- Profils ----------
+    match /users/{uid} {
+      allow get: if isSelf(uid) || isSuper()
+        || (signedIn() && resource.data.parentUid == request.auth.uid);
+      allow list: if isSuper()
+        || (signedIn() && resource.data.parentUid == request.auth.uid);
+
+      allow create: if isSuper()
+        // un parent crée le compte de son enfant
+        || (signedIn()
+            && request.resource.data.role == 'enfant'
+            && request.resource.data.parentUid == request.auth.uid
+            && myRole() == 'parent')
+        // installation initiale du Super Admin
+        || (isSelf(uid)
+            && request.resource.data.role == 'superadmin'
+            && getAfter(cfgPath()).data.superAdminUid == request.auth.uid);
+
+      allow update: if isSuper()
+        || (isSelf(uid) && changed().hasOnly(['prenom', 'nom', 'birth', 'gsm']))
+        || (signedIn() && resource.data.parentUid == request.auth.uid
+            && changed().hasOnly(['prenom', 'nom', 'birth', 'gsm']));
+      allow delete: if isSuper();
+
+      // --- Vocabulaire de l'élève
+      match /words/{wid} {
+        allow read: if isSelf(uid) || canManage(uid);
+        allow create, delete: if canManage(uid);
+        allow update: if canManage(uid)
+          || (isSelf(uid) && changed().hasOnly(['level', 'ok', 'ko', 'seen', 'lastSeen', 'lastKo',
+                                                'vLevel', 'vOk', 'vKo', 'vLast', 'dOk', 'dKo']));
+      }
+
+      // --- Sessions quotidiennes (une par jour : AAAA-MM-JJ)
+      match /sessions/{day} {
+        allow read: if isSelf(uid) || canManage(uid);
+        allow create, update: if isSelf(uid) || isSuper();
+        allow delete: if isSuper();
+      }
+
+      // --- Contrôles blancs (résultats)
+      match /exams/{eid} {
+        allow read: if isSelf(uid) || canManage(uid);
+        allow create: if isSelf(uid);
+        allow delete: if canManage(uid);
+      }
+
+      // --- Duels parent / enfant (chacun n'écrit que son propre résultat)
+      match /duels/{did} {
+        allow read: if isSelf(uid) || canManage(uid);
+        allow create: if (isSelf(uid) || canManage(uid))
+          && request.resource.data.child == null && request.resource.data.parent == null;
+        allow update: if (isSelf(uid) && changed().hasOnly(['child', 'status', 'winner', 'penalty', 'penaltyDone'])
+                          && (resource.data.child == null || !changed().hasAny(['child'])))
+                      || (canManage(uid) && changed().hasOnly(['parent', 'status', 'winner', 'penalty', 'penaltyDone'])
+                          && (resource.data.parent == null || !changed().hasAny(['parent'])));
+        allow delete: if canManage(uid);
+      }
+
+      // --- File d'attente des mots de la honte (queue + dates « pas avant le »)
+      match /meta/{mid} {
+        allow read: if isSelf(uid) || canManage(uid);
+        allow create, update, delete: if canManage(uid);
+        // l'élève choisit ses propres thèmes (si le parent ne les impose pas)
+        allow create: if isSelf(uid) && mid == 'settings'
+          && request.resource.data.keys().hasOnly(['childThemes'])
+          && request.resource.data.childThemes is list;
+        allow update: if isSelf(uid) && mid == 'settings'
+          && changed().hasOnly(['childThemes'])
+          && request.resource.data.childThemes is list;
+        // l'élève enregistre ses badges débloqués
+        allow create, update: if isSelf(uid) && mid == 'badges'
+          && request.resource.data.keys().hasOnly(['unlocked'])
+          && request.resource.data.unlocked is map;
+        // l'élève retire UNE expression de la file (une fois par jour)
+        allow update: if isSelf(uid) && mid == 'shame'
+          && changed().hasOnly(['queue', 'lastRevealDay'])
+          && resource.data.queue.size() > 0
+          && request.resource.data.queue.size() == resource.data.queue.size() - 1
+          && resource.data.queue.hasAll(request.resource.data.queue)
+          && request.resource.data.lastRevealDay is string
+          && request.resource.data.lastRevealDay != resource.data.lastRevealDay;
+      }
+
+      // --- Mots de la honte : invisibles pour l'élève tant qu'ils ne sont pas révélés
+      match /shame/{sid} {
+        allow read: if canManage(uid) || (isSelf(uid) && resource.data.revealed == true);
+        allow create, delete: if canManage(uid);
+        allow update: if canManage(uid)
+          || (isSelf(uid)
+              && resource.data.revealed == false
+              && request.resource.data.revealed == true
+              && changed().hasOnly(['revealed', 'revealedAt', 'revealedDay'])
+              && sid in get(/databases/$(database)/documents/users/$(uid)/meta/shame).data.queue
+              && get(/databases/$(database)/documents/users/$(uid)/meta/shame).data.get('dates', {}).get(sid, '') <= request.resource.data.revealedDay
+              && get(/databases/$(database)/documents/users/$(uid)/sessions/$(request.resource.data.revealedDay)).data.completed == true);
+      }
+    }
+  }
+}

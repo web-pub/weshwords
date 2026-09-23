@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Wesh Words — le vocabulaire anglais, version gênante</title>
+  <meta name="description" content="Wesh Words : 20 mots d'anglais par jour, 10 FR→EN et 10 EN→FR. Et au 20/20, le mot de la honte.">
+  <meta name="theme-color" content="#EEF4FF">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="favicon.ico" sizes="any">
+  <link rel="icon" href="assets/favicon-32.png" type="image/png">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <header class="site-head">
+    <div class="wrap">
+      <a class="logo" href="index.html"><span id="logoMark"></span><span data-t="site.title">Wesh Words</span></a>
+      <a class="btn sm" href="connexion.html" data-t="home.cta">Se connecter</a>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="wrap hero-grid">
+        <div>
+          <span class="kicker" data-t="home.hero.kicker"></span>
+          <h1 class="grad-text" data-t="home.hero.title"></h1>
+          <p class="lead" data-t="home.hero.text"></p>
+          <p class="muted" data-t="site.tagline"></p>
+          <div class="row" style="margin-top:22px">
+            <a class="btn big" href="connexion.html" data-t="home.cta">Se connecter</a>
+          </div>
+        </div>
+        <div class="hero-art">
+          <img class="photo" src="assets/margaux-hero.webp" alt="Margaux, la mascotte de Wesh Words" width="900" height="900">
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="wrap shame-demo">
+        <img class="mascot lg" src="assets/margaux-malicieuse.webp" alt="Margaux malicieuse" loading="lazy">
+        <div class="shame-card">
+          <div class="small muted" data-t="shame.unlock"></div>
+          <div style="margin-top:10px"><span class="alert" data-t="shame.max"></span></div>
+          <div class="expr" data-t="home.shame.expr">« WESH »</div>
+          <p class="warn" data-t="home.shame.demo"></p>
+          <p class="warned" data-t="shame.warned"></p>
+          <div class="phrase-box">
+            <div class="small muted" data-t="shame.phraseLabel"></div>
+            <div class="q" data-t="home.shame.phrase">« Wesh, t'as vu le nouveau mot d'anglais ? »</div>
+            <div><span class="small muted" data-t="shame.levelLabel"></span> <span class="honte-bar">█████ <span data-t="shame.l5"></span></span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="wrap grid g4">
+        <div class="card feature"><h3 data-t="home.f1.title"></h3><p data-t="home.f1.text"></p></div>
+        <div class="card feature"><h3 data-t="home.f2.title"></h3><p data-t="home.f2.text"></p></div>
+        <div class="card feature"><h3 data-t="home.f3.title"></h3><p data-t="home.f3.text"></p></div>
+        <div class="card feature"><h3 data-t="home.f4.title"></h3><p data-t="home.f4.text"></p></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-foot" id="footer"></footer>
+
+  <script type="module">
+    import { initPublicPage, logoMark, $ } from "./assets/app.js";
+    $("#logoMark").innerHTML = logoMark(34);
+    initPublicPage();
+  </script>
+</body>
+</html>

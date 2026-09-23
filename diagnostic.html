@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Diagnostic de mise en ligne — Wesh Words</title>
+  <meta name="theme-color" content="#EEF4FF">
+  <meta name="robots" content="noindex">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="favicon.ico" sizes="any">
+  <link rel="icon" href="assets/favicon-32.png" type="image/png">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <header class="site-head">
+    <div class="wrap">
+      <a class="logo" href="index.html"><span id="logoMark"></span><span data-t="site.title">Wesh Words</span></a>
+      <a class="btn sm" href="connexion.html" data-t="home.cta">Se connecter</a>
+    </div>
+  </header>
+  <main class="wrap" style="max-width:860px;padding-top:30px">
+    <div class="card">
+      <div class="login-head">
+        <img class="mascot" src="assets/margaux-reflechie.webp" alt="">
+        <div>
+          <h1 style="font-size:1.9rem;margin-bottom:6px">🩺 Diagnostic de mise en ligne</h1>
+          <p class="muted" style="margin:0">Cette page vérifie que GitHub Pages et Firebase sont bien configurés. Aucune donnée personnelle n'est lue.</p>
+        </div>
+      </div>
+      <div class="row" style="margin-top:14px"><button class="btn" id="btnRun">🔄 Relancer les tests</button><span class="small muted" id="diagInfo"></span></div>
+    </div>
+    <div class="card" id="diagList"></div>
+  </main>
+  <footer class="site-foot" id="footer"></footer>
+  <script type="module" src="assets/diagnostic.js"></script>
+</body>
+</html>

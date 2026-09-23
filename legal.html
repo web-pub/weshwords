@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Informations légales — Wesh Words</title>
+  <meta name="theme-color" content="#EEF4FF">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="favicon.ico" sizes="any">
+  <link rel="icon" href="assets/favicon-32.png" type="image/png">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <header class="site-head">
+    <div class="wrap">
+      <a class="logo" href="index.html"><span id="logoMark"></span><span data-t="site.title">Wesh Words</span></a>
+      <a class="btn sm" href="connexion.html" data-t="home.cta">Se connecter</a>
+    </div>
+  </header>
+  <main class="wrap narrow" style="max-width:820px;padding-top:34px">
+    <div class="tabs" id="legalTabs"></div>
+    <article class="card legal-body">
+      <h1 id="lgTitle" style="font-size:2rem"></h1>
+      <div id="lgBody"></div>
+      <p class="small muted" id="lgContact" style="margin-top:20px"></p>
+    </article>
+  </main>
+  <footer class="site-foot" id="footer"></footer>
+  <script type="module">
+    import { initPublicPage, logoMark, $, T, esc } from "./assets/app.js";
+    import { LEGAL_PAGES } from "./assets/content.js";
+    $("#logoMark").innerHTML = logoMark(34);
+    await initPublicPage();
+    const id = new URLSearchParams(location.search).get("p");
+    const page = LEGAL_PAGES.find(p => p.id === id) || LEGAL_PAGES[0];
+    $("#legalTabs").innerHTML = LEGAL_PAGES.map(p =>
+      `<a class="tab ${p.id === page.id ? "on" : ""}" style="text-decoration:none" href="legal.html?p=${p.id}">${esc(T(`legal.${p.id}.title`))}</a>`).join("");
+    $("#lgTitle").textContent = T(`legal.${page.id}.title`);
+    $("#lgBody").innerHTML = T(`legal.${page.id}.body`);
+    document.title = T(`legal.${page.id}.title`) + " — " + T("site.title");
+    const mail = T("site.contact");
+    $("#lgContact").innerHTML = `Responsable du contenu : ${esc(T("site.owner"))}` + (mail ? ` — Contact : <a href="mailto:${esc(mail)}">${esc(mail)}</a>` : "");
+  </script>
+</body>
+</html>
