@@ -1,0 +1,300 @@
+/* =========================================================
+   Wesh Words — contenus par défaut (tous modifiables dans
+   l'espace Super Admin → onglet « Contenus du site »)
+   Variables disponibles : {prenom} {annee} {owner} {site}
+   ========================================================= */
+export const DEFAULT_CONTENT = [
+  // --- Général
+  { g: "Général", key: "site.title", label: "Nom du site", value: "Wesh Words" },
+  { g: "Général", key: "site.tagline", label: "Slogan", value: "Le vocabulaire anglais… avec un soupçon de honte parentale." },
+  { g: "Général", key: "site.owner", label: "Responsable du contenu (nom et prénom)", value: "Hélène Laruelle" },
+  { g: "Général", key: "site.contact", label: "E-mail de contact (pages légales)", value: "" },
+
+  // --- Accueil
+  { g: "Accueil", key: "home.hero.kicker", label: "Petit titre", value: "Révisions d'anglais · 🇫🇷 ↔ 🇬🇧" },
+  { g: "Accueil", key: "home.hero.title", label: "Grand titre", value: "20 mots par jour. Zéro excuse." },
+  { g: "Accueil", key: "home.hero.text", label: "Texte d'accroche", ml: 1, value: "10 🇫🇷→🇬🇧, 10 🇬🇧→🇫🇷. Une erreur ne compte pas. Et au 20/20, une récompense se débloque… Elle est gênante. Très gênante." },
+  { g: "Accueil", key: "home.cta", label: "Bouton principal", value: "Se connecter" },
+  { g: "Accueil", key: "home.f1.title", label: "Atout 1 – titre", value: "🎯 20 réussites, pas une de moins" },
+  { g: "Accueil", key: "home.f1.text", label: "Atout 1 – texte", ml: 1, value: "Seules les bonnes réponses comptent. Une erreur ? Le mot redescend d'un niveau et revient plus souvent." },
+  { g: "Accueil", key: "home.f2.title", label: "Atout 2 – titre", value: "🔁 Les mots difficiles reviennent" },
+  { g: "Accueil", key: "home.f2.text", label: "Atout 2 – texte", ml: 1, value: "Chaque mot a un niveau de 0 à 5. Plus il est bas, plus il sort. Les mots maîtrisés se font discrets." },
+  { g: "Accueil", key: "home.f3.title", label: "Atout 3 – titre", value: "🔥 Une série à ne pas casser" },
+  { g: "Accueil", key: "home.f3.text", label: "Atout 3 – texte", ml: 1, value: "Chaque journée réussie allonge la série. Le suivi est synchronisé entre tous tes appareils." },
+  { g: "Accueil", key: "home.f4.title", label: "Atout 4 – titre", value: "💀 Le mot de la honte" },
+  { g: "Accueil", key: "home.f4.text", label: "Atout 4 – texte", ml: 1, value: "Après le 20/20, découvre l'expression que ton parent va essayer de placer demain. Tu auras été prévenue." },
+  { g: "Accueil", key: "home.shame.demo", label: "Encadré démo – texte", ml: 1, value: "Ton parent va probablement essayer de placer cette expression demain." },
+
+  // --- Connexion
+  { g: "Connexion", key: "login.title", label: "Titre", value: "Connexion" },
+  { g: "Connexion", key: "login.subtitle", label: "Sous-titre", value: "Tes 20 mots t'attendent. 👀" },
+  { g: "Connexion", key: "login.user", label: "Libellé utilisateur", value: "Utilisateur" },
+  { g: "Connexion", key: "login.user.ph", label: "Exemple utilisateur", value: "ex. margaux.h" },
+  { g: "Connexion", key: "login.pwd", label: "Libellé mot de passe", value: "Mot de passe" },
+  { g: "Connexion", key: "login.btn", label: "Bouton", value: "Se connecter" },
+  { g: "Connexion", key: "login.forgot", label: "Lien oubli", value: "Mot de passe oublié ?" },
+  { g: "Connexion", key: "login.forgot.help", label: "Aide oubli", ml: 1, value: "Compte parent : indique ton adresse e-mail ci-dessus, tu recevras un lien de réinitialisation. Compte élève : demande à ton parent 😉" },
+  { g: "Connexion", key: "join.title", label: "Bloc membre – titre", value: "Pas encore membre ? Devenez membre !" },
+  { g: "Connexion", key: "join.text", label: "Bloc membre – texte", ml: 1, value: "Laisse tes coordonnées : nous créons ton accès et te recontactons rapidement." },
+  { g: "Connexion", key: "join.btn", label: "Bloc membre – bouton", value: "Envoyer ma demande" },
+  { g: "Connexion", key: "join.ok", label: "Bloc membre – confirmation", ml: 1, value: "Merci ! Ta demande a bien été envoyée. On revient vers toi très vite. 💚💙" },
+
+  // --- Espace élève
+  { g: "Espace élève", key: "eleve.hello", label: "Bonjour", value: "Salut {prenom} 👋" },
+  { g: "Espace élève", key: "eleve.goal", label: "Objectif", value: "Objectif du jour : 20 bonnes réponses" },
+  { g: "Espace élève", key: "eleve.start", label: "Bouton démarrer", value: "C'est parti ! 🚀" },
+  { g: "Espace élève", key: "eleve.continue", label: "Bouton reprendre", value: "Continuer ma session" },
+  { g: "Espace élève", key: "eleve.done", label: "Session terminée", value: "Mission du jour accomplie ✅" },
+  { g: "Espace élève", key: "eleve.done.text", label: "Session terminée – texte", ml: 1, value: "Reviens demain pour garder ta série. Et prépare-toi mentalement." },
+  { g: "Espace élève", key: "eleve.extra", label: "Bouton entraînement libre", value: "S'entraîner encore (bonus)" },
+  { g: "Espace élève", key: "eleve.empty", label: "Pas de vocabulaire", ml: 1, value: "Ton parent n'a pas encore ajouté de vocabulaire. Profites-en… ça ne va pas durer. 😏" },
+  { g: "Quiz", key: "quiz.ok", label: "Messages bonne réponse (séparés par |)", value: "Bien joué ! ✅|Masterclass ! 🎓|Propre ! ✨|Validé ✅|Trop forte ! 💪|Easy 😎|Ça, c'est fait ✔️" },
+  { g: "Quiz", key: "quiz.ko", label: "Mauvaise réponse", value: "Raté… celle-là ne compte pas. La bonne réponse :" },
+  { g: "Quiz", key: "quiz.accent", label: "Juste mais sans accent", value: "Juste ! Petit détail d'accent :" },
+  { g: "Quiz", key: "quiz.skip", label: "Bouton je ne sais pas", value: "Je ne sais pas 🤷" },
+  { g: "Quiz", key: "quiz.s5", label: "Suspense – plus que 3 à 5 ({n} = nombre)", value: "Plus que {n} mots ! 👀" },
+  { g: "Quiz", key: "quiz.s2", label: "Suspense – plus que 2", ml: 1, value: "🎯 Plus que 2 mots ! Tu veux vraiment savoir ce que Maman devra dire demain ? 👀" },
+  { g: "Quiz", key: "quiz.s1", label: "Suspense – dernier mot", value: "Dernier mot. Pas de pression. (Si, un peu.) 😈" },
+  { g: "Aides & thèmes", key: "quiz.hint", label: "Bouton indice", value: "💡 Indice" },
+  { g: "Aides & thèmes", key: "quiz.qcm", label: "Bouton choix multiple", value: "🔢 Choix multiple" },
+  { g: "Aides & thèmes", key: "quiz.write", label: "Bouton repasser à l'écrit", value: "✍️ Je préfère écrire" },
+  { g: "Aides & thèmes", key: "quiz.qcmIntro", label: "Consigne QCM", value: "Choisis la bonne traduction :" },
+  { g: "Aides & thèmes", key: "quiz.hintLabel", label: "Libellé indice", value: "Indice :" },
+  { g: "Aides & thèmes", key: "quiz.hinted", label: "Réussi avec aide", ml: 1, value: "💡 Réussi avec une aide : ça compte pour tes 20, mais le mot ne monte pas de niveau." },
+  { g: "Aides & thèmes", key: "eleve.themes", label: "Libellé thèmes", value: "🎯 Thèmes :" },
+  { g: "Aides & thèmes", key: "eleve.themes.all", label: "Tous les thèmes", value: "tous les thèmes" },
+  { g: "Aides & thèmes", key: "eleve.themes.btn", label: "Bouton choisir", value: "Choisir mes thèmes" },
+  { g: "Aides & thèmes", key: "eleve.themes.locked", label: "Thèmes imposés", value: "🔒 Choisis par ton parent" },
+  { g: "Aides & thèmes", key: "eleve.themes.help", label: "Aide choix des thèmes", ml: 1, value: "Coche les thèmes à réviser (par ex. le chapitre de ton prochain contrôle). Rien de coché = tout le vocabulaire." },
+  { g: "Contrôle blanc", key: "exam.btn", label: "Bouton accueil", value: "📝 Réviser un contrôle" },
+  { g: "Contrôle blanc", key: "exam.title", label: "Titre", value: "📝 Réviser un contrôle" },
+  { g: "Contrôle blanc", key: "exam.help", label: "Explication", ml: 1, value: "Choisis le ou les chapitres du contrôle : tous les mots passent une fois, et tu obtiens un score final. Tes bonnes réponses comptent aussi pour tes 20 du jour." },
+  { g: "Contrôle blanc", key: "exam.start", label: "Bouton lancer", value: "C'est parti 📝" },
+  { g: "Contrôle blanc", key: "exam.mode", label: "Étiquette pendant le quiz", value: "📝 Contrôle blanc" },
+  { g: "Contrôle blanc", key: "exam.r90", label: "Résultat ≥ 90 %", value: "Prête pour le contrôle ! 💪" },
+  { g: "Contrôle blanc", key: "exam.r70", label: "Résultat 70-89 %", value: "Presque prête ! Un petit tour sur tes erreurs et c'est bon." },
+  { g: "Contrôle blanc", key: "exam.r50", label: "Résultat 50-69 %", value: "Ça vient… mais il faut encore réviser." },
+  { g: "Contrôle blanc", key: "exam.r0", label: "Résultat < 50 %", value: "Sérieusement ?! On s'y remet 😅" },
+  { g: "Contrôle blanc", key: "exam.retry", label: "Bouton rattrapage", value: "🔁 Revoir mes erreurs" },
+  { g: "Contrôle blanc", key: "exam.daily", label: "20 du jour atteints", ml: 1, value: "🎯 Tes 20 du jour sont faits ! La récompense t'attend à la fin du contrôle." },
+  { g: "Contrôle blanc", key: "exam.quit", label: "Confirmation quitter", value: "Quitter le contrôle ? Ton score ne sera pas enregistré." },
+  { g: "Bilan de la semaine", key: "bilan.title", label: "Titre", value: "📅 Bilan de la semaine" },
+  { g: "Bilan de la semaine", key: "bilan.r5", label: "5 à 7 jours réussis", value: "Semaine au top ! 🔥 Bravo {prenom} !" },
+  { g: "Bilan de la semaine", key: "bilan.r3", label: "3 à 4 jours réussis", value: "Belle régularité, on continue comme ça 💪" },
+  { g: "Bilan de la semaine", key: "bilan.r1", label: "1 à 2 jours réussis", value: "Semaine timide… on relance la machine ?" },
+  { g: "Bilan de la semaine", key: "bilan.r0", label: "Aucun jour réussi", value: "Semaine blanche. Sérieusement ?! 😅" },
+  { g: "Badges", key: "badges.title", label: "Titre de la collection", value: "🏆 Mes badges" },
+  { g: "Badges", key: "badges.new", label: "Nouveau badge", value: "🏆 NOUVEAU BADGE !" },
+  { g: "Badges", key: "badges.ok", label: "Bouton fermer", value: "Trop bien !" },
+  { g: "Badges", key: "badge.premier.t", label: "premier – titre", value: "Premier pas" },
+  { g: "Badges", key: "badge.premier.d", label: "premier – condition", value: "Réussir ton tout premier 20/20." },
+  { g: "Badges", key: "badge.serie3.t", label: "serie3 – titre", value: "Ça chauffe" },
+  { g: "Badges", key: "badge.serie3.d", label: "serie3 – condition", value: "3 jours de suite à 20/20." },
+  { g: "Badges", key: "badge.serie7.t", label: "serie7 – titre", value: "Une semaine en feu" },
+  { g: "Badges", key: "badge.serie7.d", label: "serie7 – condition", value: "7 jours de suite à 20/20." },
+  { g: "Badges", key: "badge.serie14.t", label: "serie14 – titre", value: "Inarrêtable" },
+  { g: "Badges", key: "badge.serie14.d", label: "serie14 – condition", value: "14 jours de suite à 20/20." },
+  { g: "Badges", key: "badge.serie30.t", label: "serie30 – titre", value: "Reine de la série" },
+  { g: "Badges", key: "badge.serie30.d", label: "serie30 – condition", value: "30 jours de suite à 20/20. Respect." },
+  { g: "Badges", key: "badge.jours10.t", label: "jours10 – titre", value: "Habituée" },
+  { g: "Badges", key: "badge.jours10.d", label: "jours10 – condition", value: "10 journées à 20/20 au total." },
+  { g: "Badges", key: "badge.jours50.t", label: "jours50 – titre", value: "Vétérane" },
+  { g: "Badges", key: "badge.jours50.d", label: "jours50 – condition", value: "50 journées à 20/20 au total." },
+  { g: "Badges", key: "badge.semaine.t", label: "semaine – titre", value: "Semaine parfaite" },
+  { g: "Badges", key: "badge.semaine.d", label: "semaine – condition", value: "Du lundi au dimanche, 7 jours sur 7." },
+  { g: "Badges", key: "badge.weekend.t", label: "weekend – titre", value: "Même le week-end" },
+  { g: "Badges", key: "badge.weekend.d", label: "weekend – condition", value: "20/20 le samedi ET le dimanche." },
+  { g: "Badges", key: "badge.parfait.t", label: "parfait – titre", value: "Zéro faute" },
+  { g: "Badges", key: "badge.parfait.d", label: "parfait – condition", value: "Une session du jour sans aucune erreur." },
+  { g: "Badges", key: "badge.parfait5.t", label: "parfait5 – titre", value: "Diamant" },
+  { g: "Badges", key: "badge.parfait5.d", label: "parfait5 – condition", value: "5 sessions du jour sans aucune erreur." },
+  { g: "Badges", key: "badge.sansaide.t", label: "sansaide – titre", value: "Sans filet" },
+  { g: "Badges", key: "badge.sansaide.d", label: "sansaide – condition", value: "5 sessions du jour réussies sans aucune aide." },
+  { g: "Badges", key: "badge.mots25.t", label: "mots25 – titre", value: "25 mots maîtrisés" },
+  { g: "Badges", key: "badge.mots25.d", label: "mots25 – condition", value: "25 mots au niveau maximal." },
+  { g: "Badges", key: "badge.mots100.t", label: "mots100 – titre", value: "100 mots maîtrisés" },
+  { g: "Badges", key: "badge.mots100.d", label: "mots100 – condition", value: "100 mots au niveau maximal." },
+  { g: "Badges", key: "badge.mots250.t", label: "mots250 – titre", value: "250 mots maîtrisés" },
+  { g: "Badges", key: "badge.mots250.d", label: "mots250 – condition", value: "250 mots au niveau maximal." },
+  { g: "Badges", key: "badge.mots500.t", label: "mots500 – titre", value: "500 mots maîtrisés" },
+  { g: "Badges", key: "badge.mots500.d", label: "mots500 – condition", value: "500 mots au niveau maximal. Masterclass." },
+  { g: "Badges", key: "badge.explo.t", label: "explo – titre", value: "Exploratrice" },
+  { g: "Badges", key: "badge.explo.d", label: "explo – condition", value: "Des mots révisés dans 10 thèmes différents." },
+  { g: "Badges", key: "badge.controle.t", label: "controle – titre", value: "Première révision" },
+  { g: "Badges", key: "badge.controle.d", label: "controle – condition", value: "Terminer un contrôle blanc." },
+  { g: "Badges", key: "badge.controle90.t", label: "controle90 – titre", value: "Prête pour le contrôle" },
+  { g: "Badges", key: "badge.controle90.d", label: "controle90 – condition", value: "90 % ou plus à un contrôle blanc (10 mots minimum)." },
+  { g: "Badges", key: "badge.controle100.t", label: "controle100 – titre", value: "Sans-faute au contrôle" },
+  { g: "Badges", key: "badge.controle100.d", label: "controle100 – condition", value: "100 % à un contrôle blanc (10 mots minimum)." },
+  { g: "Badges", key: "badge.bonus50.t", label: "bonus50 – titre", value: "Rab de vocabulaire" },
+  { g: "Badges", key: "badge.bonus50.d", label: "bonus50 – condition", value: "50 bonnes réponses en entraînement bonus." },
+  { g: "Badges", key: "badge.honte5.t", label: "honte5 – titre", value: "Blindée" },
+  { g: "Badges", key: "badge.honte5.d", label: "honte5 – condition", value: "5 mots de la honte débloqués. Tu as survécu." },
+  { g: "Badges", key: "badge.honte20.t", label: "honte20 – titre", value: "Immunisée à la honte" },
+  { g: "Badges", key: "badge.honte20.d", label: "honte20 – condition", value: "20 mots de la honte débloqués. Plus rien ne t'atteint." },
+  { g: "Entraînements", key: "practice.title", label: "Titre du bloc", value: "🎮 Autres entraînements" },
+  { g: "Entraînements", key: "practice.help", label: "Sous-titre", value: "Pour varier les plaisirs. Ça ne remplace pas tes 20 du jour 😉" },
+  { g: "Entraînements", key: "practice.quit", label: "Bouton quitter", value: "Quitter" },
+  { g: "Entraînements", key: "verbs.btn", label: "Bouton verbes", value: "🔤 Verbes irréguliers" },
+  { g: "Entraînements", key: "verbs.title", label: "Titre verbes", value: "Verbes irréguliers" },
+  { g: "Entraînements", key: "verbs.prompt", label: "Consigne", value: "Donne les formes du verbe :" },
+  { g: "Entraînements", key: "verbs.mode1", label: "Mode 1", value: "🇫🇷 → les 3 formes" },
+  { g: "Entraînements", key: "verbs.mode2", label: "Mode 2", value: "Base donnée → prétérit + participe passé" },
+  { g: "Entraînements", key: "verbs.ok", label: "Bonne réponse", value: "Parfait ! ✅" },
+  { g: "Entraînements", key: "verbs.ko", label: "Mauvaise réponse", value: "Presque… les 3 formes étaient :" },
+  { g: "Entraînements", key: "verbs.none", label: "Aucun verbe", ml: 1, value: "Aucun verbe irrégulier dans le vocabulaire pour l'instant (colonne « conjugation » du fichier Excel)." },
+  { g: "Entraînements", key: "dictee.btn", label: "Bouton dictée", value: "🎧 Dictée audio" },
+  { g: "Entraînements", key: "dictee.title", label: "Titre dictée", value: "Dictée" },
+  { g: "Entraînements", key: "dictee.prompt", label: "Consigne", value: "Écoute bien et écris le mot en anglais." },
+  { g: "Entraînements", key: "dictee.replay", label: "Bouton réécouter", value: "Réécouter" },
+  { g: "Entraînements", key: "dictee.slow", label: "Bouton lentement", value: "Lentement" },
+  { g: "Entraînements", key: "dictee.ph", label: "Exemple de saisie", value: "Écris ce que tu entends…" },
+  { g: "Entraînements", key: "dictee.ok", label: "Bonne réponse", value: "Bien entendu ! 👂✅" },
+  { g: "Entraînements", key: "dictee.ko", label: "Mauvaise réponse", value: "Pas tout à fait… c'était :" },
+  { g: "Entraînements", key: "dictee.nosound", label: "Pas d'audio", ml: 1, value: "Ton navigateur ne sait pas lire l'anglais à voix haute. Essaie avec Chrome, Edge ou Safari." },
+  { g: "Duel", key: "duel.btn", label: "Bouton défier", value: "⚔️ Défier Maman" },
+  { g: "Duel", key: "duel.title", label: "Titre", value: "Duel" },
+  { g: "Duel", key: "duel.parent", label: "Nom du parent dans les duels", value: "Maman" },
+  { g: "Duel", key: "duel.help", label: "Explication", ml: 1, value: "10 mots, les mêmes pour vous deux. Le meilleur score gagne (égalité : le plus rapide). La perdante doit placer dans une phrase l'expression anglaise choisie par la gagnante 😈" },
+  { g: "Duel", key: "duel.challenge", label: "Défi reçu", value: "⚔️ {qui} te défie !" },
+  { g: "Duel", key: "duel.wait", label: "En attente", value: "⏳ En attente de {qui}…" },
+  { g: "Duel", key: "duel.win", label: "Victoire", value: "🏆 Victoire !" },
+  { g: "Duel", key: "duel.lose", label: "Défaite", value: "😬 Défaite…" },
+  { g: "Duel", key: "duel.tie", label: "Égalité", value: "🤝 Égalité parfaite !" },
+  { g: "Duel", key: "duel.choose", label: "Choisir le gage", ml: 1, value: "😈 Choisis l'expression anglaise que {qui} devra placer dans une phrase aujourd'hui :" },
+  { g: "Duel", key: "duel.penalty", label: "Gage reçu", ml: 1, value: "😈 Gage : tu dois placer cette expression anglaise dans une phrase aujourd'hui :" },
+  { g: "Duel", key: "duel.penalty.other", label: "Gage donné", value: "😈 {qui} doit placer :" },
+  { g: "Duel", key: "duel.done", label: "Bouton gage fait", value: "C'est fait ✅" },
+  { g: "Duel", key: "duel.quit", label: "Confirmation abandon", value: "Abandonner le duel ? Ton score ne sera pas enregistré." },
+  { g: "Mot de la honte", key: "shame.waitdate", label: "Expression réservée à une date", value: "🔒 Une expression est gardée en réserve pour le {date}… 👀" },
+  { g: "Accueil", key: "home.shame.expr", label: "Encadré démo – expression", value: "« WESH »" },
+  { g: "Accueil", key: "home.shame.phrase", label: "Encadré démo – phrase", value: "« Wesh, t'as vu le nouveau mot d'anglais ? »" },
+  { g: "Connexion", key: "join.nom", label: "Bloc membre – libellé nom", value: "Nom" },
+  { g: "Connexion", key: "join.prenom", label: "Bloc membre – libellé prénom", value: "Prénom" },
+  { g: "Connexion", key: "join.gsm", label: "Bloc membre – libellé GSM", value: "GSM" },
+  { g: "Connexion", key: "join.email", label: "Bloc membre – libellé e-mail", value: "E-mail" },
+  { g: "Espace élève", key: "eleve.st.streak", label: "Statistique série", value: "🔥 jours de série" },
+  { g: "Espace élève", key: "eleve.st.master", label: "Statistique maîtrisés", value: "⭐ mots maîtrisés" },
+  { g: "Espace élève", key: "eleve.st.words", label: "Statistique total", value: "📚 mots au total" },
+  { g: "Espace élève", key: "eleve.st.shame", label: "Statistique hontes", value: "💀 hontes débloquées" },
+  { g: "Espace élève", key: "eleve.cal", label: "Titre calendrier", value: "📅 Mes 4 dernières semaines" },
+  { g: "Espace élève", key: "eleve.cal.legend", label: "Légende calendrier", value: "Vert = 20/20 · Orange = commencé" },
+  { g: "Espace élève", key: "eleve.hard", label: "Titre mots difficiles", value: "🧠 Les mots qui me résistent" },
+  { g: "Espace élève", key: "eleve.hard.none", label: "Aucun mot difficile", value: "Aucun mot difficile pour l'instant. 😎" },
+  { g: "Espace élève", key: "eleve.review", label: "Bouton revoir la honte", value: "💀 Revoir le mot de la honte du jour" },
+  { g: "Quiz", key: "quiz.pause", label: "Bouton pause", value: "← Pause" },
+  { g: "Quiz", key: "quiz.ph", label: "Champ réponse (exemple)", value: "Ta réponse…" },
+  { g: "Quiz", key: "quiz.tip", label: "Astuce clavier", value: "Astuce : touche Entrée pour valider puis passer au mot suivant." },
+  { g: "Quiz", key: "quiz.mode.daily", label: "Étiquette mission", value: "🎯 Mission du jour" },
+  { g: "Quiz", key: "quiz.mode.bonus", label: "Étiquette bonus", value: "💪 Entraînement bonus" },
+  { g: "Fin de session", key: "end.title", label: "Titre 20/20", value: "🎉 DINGUERIE !" },
+  { g: "Fin de session", key: "end.reward", label: "Récompense", value: "🎁 RÉCOMPENSE DÉBLOQUÉE" },
+  { g: "Fin de session", key: "end.btn", label: "Bouton voir", value: "VOIR LE MOT DE LA HONTE →" },
+  { g: "Fin de session", key: "end.noreward", label: "Pas de récompense en réserve", ml: 1, value: "Aucun mot de la honte en réserve aujourd'hui… Maman est à court d'idées. Pour l'instant. 😏" },
+  { g: "Mot de la honte", key: "shame.unlock", label: "Déblocage", value: "🔓 NOUVEAU MOT DE LA HONTE" },
+  { g: "Mot de la honte", key: "shame.max", label: "Alerte (honte 5-6)", value: "⚠️ NIVEAU DE HONTE MAXIMAL" },
+  { g: "Mot de la honte", key: "shame.high", label: "Alerte (honte 3-4)", value: "⚠️ Attention : niveau de honte élevé" },
+  { g: "Mot de la honte", key: "shame.low", label: "Alerte (honte 1-2)", value: "⚠️ Léger risque de gêne" },
+  { g: "Mot de la honte", key: "shame.warning", label: "Avertissement", ml: 1, value: "Ton parent va probablement essayer de placer cette expression demain." },
+  { g: "Mot de la honte", key: "shame.warned", label: "Prévenue", value: "💀 Tu as été prévenue." },
+  { g: "Mot de la honte", key: "shame.phraseBtn", label: "Bouton phrase", value: "👉 VOIR LA PHRASE" },
+  { g: "Mot de la honte", key: "shame.phraseLabel", label: "Libellé phrase", value: "Phrase proposée :" },
+  { g: "Mot de la honte", key: "shame.levelLabel", label: "Libellé niveau", value: "Niveau de honte :" },
+  { g: "Mot de la honte", key: "shame.l1", label: "Niveau 1", value: "LÉGER MALAISE" },
+  { g: "Mot de la honte", key: "shame.l2", label: "Niveau 2", value: "GÊNANT" },
+  { g: "Mot de la honte", key: "shame.l3", label: "Niveau 3", value: "TRÈS GÊNANT" },
+  { g: "Mot de la honte", key: "shame.l4", label: "Niveau 4", value: "HONTE ÉLEVÉE" },
+  { g: "Mot de la honte", key: "shame.l5", label: "Niveau 5", value: "MAXIMUM" },
+  { g: "Mot de la honte", key: "shame.l6", label: "Niveau 6", value: "AU-DELÀ DU MAXIMUM" },
+  { g: "Mot de la honte", key: "shame.collection", label: "Titre collection", value: "💀 Ma collection de hontes" },
+  { g: "Mot de la honte", key: "shame.collection.empty", label: "Collection vide", value: "Rien pour l'instant. Profite du calme avant la tempête." },
+
+  // --- Espace parent
+  { g: "Espace parent", key: "parent.welcome", label: "Bienvenue", value: "Bonjour {prenom} 👋" },
+  { g: "Espace parent", key: "parent.shame.title", label: "Titre expressions", value: "💬 Mes expressions pour {prenom}" },
+  { g: "Espace parent", key: "parent.shame.help", label: "Aide expressions", ml: 1, value: "Prépare tes expressions à l'avance : Wesh Words en révèle une après chaque journée réussie (20/20). Elles ne comptent dans aucune question et ne touchent jamais aux niveaux des mots." },
+
+  // --- Footer
+  { g: "Pied de page", key: "footer.l1", label: "Ligne 1", value: "© {annee} Hélène Laruelle — Tous droits réservés. Toute copie du site ou de son code est interdite." },
+  { g: "Pied de page", key: "footer.l2", label: "Ligne 2", value: "Site développé par Hélène Laruelle." },
+  { g: "Pied de page", key: "footer.l3", label: "Ligne 3", value: "Contenu sous la responsabilité de {owner}" }
+];
+
+/* Suggestions d'expressions de la honte (espace parent → « Ajouter des idées ») */
+export const SHAME_IDEAS = [
+  { expression: "wesh", honte: 5, phrase: "Wesh {prenom}, t'as vu le nouveau mot d'anglais ?" },
+  { expression: "c'est une dinguerie", honte: 4, phrase: "Ce gratin, franchement, c'est une dinguerie." },
+  { expression: "six seven", honte: 6, phrase: "Tu as eu combien ? Six seven ? 6-7 !" },
+  { expression: "masterclass", honte: 3, phrase: "Ton rangement de chambre ? Masterclass." },
+  { expression: "sah", honte: 4, phrase: "Sah, tu as vraiment fait tes 20 mots ?" },
+  { expression: "askip", honte: 3, phrase: "Askip il va pleuvoir demain." },
+  { expression: "le seum", honte: 4, phrase: "J'ai le seum, il n'y a plus de chocolat." },
+  { expression: "en scred", honte: 4, phrase: "J'ai mangé un biscuit en scred." },
+  { expression: "c'est carré", honte: 3, phrase: "Le planning de la semaine ? C'est carré." },
+  { expression: "frère", honte: 5, phrase: "Frère, range tes chaussures." },
+  { expression: "oklm", honte: 4, phrase: "Ce soir, pizza oklm devant la télé." },
+  { expression: "cringe", honte: 5, phrase: "Ma façon de danser ? Même pas cringe." },
+  { expression: "flex", honte: 4, phrase: "Je flex avec mes nouvelles pantoufles." },
+  { expression: "t'es en PLS", honte: 4, phrase: "Tu es en PLS après ton entraînement ?" },
+  { expression: "ça passe crème", honte: 3, phrase: "Tes légumes ? Ça passe crème." },
+  { expression: "zinzin", honte: 3, phrase: "Ce prix est complètement zinzin." },
+  { expression: "c'est chaud", honte: 3, phrase: "Ton contrôle demain ? C'est chaud." },
+  { expression: "le sang", honte: 5, phrase: "Merci le sang pour la vaisselle." },
+  { expression: "trop le bail", honte: 5, phrase: "Aller au supermarché ce samedi, c'est trop le bail." },
+  { expression: "ratio", honte: 6, phrase: "Tu refuses la soupe ? Ratio." }
+];
+
+const P = (t) => `<p>${t}</p>`;
+export const LEGAL_PAGES = [
+  {
+    id: "securisation", title: "Sécurisation",
+    body: `<h2>Comment vos données sont protégées</h2>
+${P("Wesh Words repose sur les services Google Firebase : l'authentification (Firebase Authentication, identifiant + mot de passe) et la base de données (Cloud Firestore). Toutes les communications sont chiffrées (HTTPS/TLS).")}
+${P("Des règles de sécurité Firestore vérifient l'identité de la personne connectée à chaque lecture ou écriture : un élève n'accède qu'à ses propres révisions, un parent uniquement aux données des enfants qui lui sont liés, et seule l'administratrice du site accède à la gestion globale.")}
+${P("Les mots de passe sont masqués par défaut à la saisie. Nous vous recommandons de choisir un mot de passe personnel et de ne pas le communiquer.")}
+${P("En cas de doute sur la sécurité de votre compte, contactez-nous sans délai : nous pourrons réinitialiser l'accès.")}`
+  },
+  {
+    id: "confidentialite", title: "Déclaration de confidentialité",
+    body: `<h2>Données collectées</h2>
+${P("Nous collectons uniquement les données nécessaires au fonctionnement du service : prénom, nom, identifiant, adresse e-mail (facultative pour les élèves), date de naissance (facultative), vocabulaire, résultats des sessions de révision et expressions préparées par le parent.")}
+<h2>Finalités</h2>
+${P("Ces données servent exclusivement à organiser les révisions, à suivre la progression et à synchroniser l'application entre les appareils. Elles ne sont ni vendues, ni louées, ni utilisées à des fins publicitaires.")}
+<h2>Mineurs</h2>
+${P("Les comptes élèves sont créés et gérés par un parent ou un représentant légal, qui consent au traitement des données de l'enfant.")}
+<h2>Conservation et droits</h2>
+${P("Les données sont conservées tant que le compte est actif, puis supprimées sur demande. Conformément au RGPD, vous disposez d'un droit d'accès, de rectification, d'effacement, de limitation, d'opposition et de portabilité. Vous pouvez également introduire une réclamation auprès de l'Autorité de protection des données (www.autoriteprotectiondonnees.be).")}`
+  },
+  {
+    id: "ethique", title: "Business Ethics & Governance",
+    body: `<h2>Nos engagements</h2>
+${P("Wesh Words est un projet familial et éducatif. Il n'affiche aucune publicité, ne pratique aucun profilage commercial et ne revend aucune donnée.")}
+${P("La mécanique de récompense est volontairement humoristique et bienveillante : elle valorise l'effort sans jamais humilier, et les expressions « de la honte » restent entièrement séparées du travail scolaire.")}
+${P("Les décisions relatives au site (contenus, accès, évolutions) sont prises par sa responsable, dans le respect de la législation belge et européenne.")}`
+  },
+  {
+    id: "cookies", title: "Politique en matière de cookies",
+    body: `<h2>Cookies et stockage local</h2>
+${P("Wesh Words n'utilise aucun cookie publicitaire ni traceur de mesure d'audience.")}
+${P("L'application utilise uniquement le stockage technique du navigateur (IndexedDB / stockage local) nécessaire à la connexion (session Firebase) et au fonctionnement hors connexion (cache des données). Ces éléments sont strictement nécessaires et ne requièrent pas de consentement.")}
+${P("Vous pouvez les supprimer à tout moment depuis les réglages de votre navigateur ; vous devrez alors vous reconnecter.")}`
+  },
+  {
+    id: "responsabilite", title: "Limitation de responsabilité",
+    body: `<h2>Limitation de responsabilité</h2>
+${P("Wesh Words est un outil d'aide à la révision. Malgré le soin apporté, des erreurs de traduction ou d'orthographe peuvent subsister dans le vocabulaire : en cas de doute, la référence reste le cours et l'enseignant.")}
+${P("Le service est fourni en l'état. La responsable du site ne peut être tenue responsable d'une indisponibilité temporaire, d'une perte de données due à un tiers (hébergeur, réseau) ou d'une mauvaise utilisation des identifiants.")}
+${P("Les expressions humoristiques sont choisies par les parents, sous leur seule responsabilité.")}`
+  },
+  {
+    id: "mentions", title: "Mentions légales / RGPD / CGV",
+    body: `<h2>Mentions légales</h2>
+${P("Site : Wesh Words — Conception et développement : Hélène Laruelle, Jehay (Belgique).")}
+${P("Hébergement : GitHub Pages (GitHub Inc.) — Données : Google Firebase (Google Ireland Ltd.).")}
+<h2>RGPD</h2>
+${P("Le responsable du traitement est la personne responsable du contenu mentionnée en pied de page. Voir la Déclaration de confidentialité pour le détail des traitements et de vos droits.")}
+<h2>Conditions générales d'utilisation</h2>
+${P("L'accès à Wesh Words est gratuit et réservé aux personnes disposant d'un compte créé par l'administratrice ou par un parent. Toute copie, reproduction ou réutilisation du site ou de son code est interdite sans autorisation écrite.")}
+${P("Droit applicable : droit belge. Tribunaux compétents : arrondissement judiciaire de Liège.")}`
+  }
+];
