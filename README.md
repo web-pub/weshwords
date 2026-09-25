@@ -1,4 +1,4 @@
-# Wesh Words — V01-008
+# Wesh Words — V02-001
 
 Révisions de vocabulaire anglais 🇫🇷 ↔ 🇬🇧 : 20 bonnes réponses par jour (10 FR→EN + 10 EN→FR), et au 20/20… le **mot de la honte**. 💀
 
@@ -40,8 +40,8 @@ assets/               CSS, JS, logo, icônes, personnage Margaux (margaux-*.webp
 1. Décompresser le ZIP sur le PC (clic droit → Extraire tout).
 2. Sur https://github.com/web-pub/weshwords → **Add file** → **Upload files**.
 3. Ouvrir le dossier décompressé, **sélectionner tout son contenu** (Ctrl + A : les pages HTML, `sw.js`, `favicon.ico`… **et le dossier `assets`**) et le glisser dans la page GitHub.
-   Les fichiers doivent arriver **à la racine** du dépôt (pas dans un sous-dossier « WeshWords-V01-008 »).
-4. En bas : message « Wesh Words V01-008 » → **Commit changes**.
+   Les fichiers doivent arriver **à la racine** du dépôt (pas dans un sous-dossier « WeshWords-V02-001 »).
+4. En bas : message « Wesh Words V02-001 » → **Commit changes**.
 5. Première fois seulement : **Settings** → **Pages** → Source « Deploy from a branch » → Branch **main** / **(root)** → Save.
 6. Attendre 1 à 2 minutes. Adresse du site : `https://web-pub.github.io/weshwords/`
 
@@ -55,7 +55,7 @@ git clone https://github.com/web-pub/weshwords.git
 cd weshwords
 # décompresser le ZIP ici (fichiers à la racine + dossier assets/)
 git add -A
-git commit -m "Wesh Words V01-008"
+git commit -m "Wesh Words V02-001"
 git push origin main
 ```
 
@@ -70,7 +70,7 @@ Ouvrir **`https://web-pub.github.io/weshwords/diagnostic.html`**. Elle teste et 
 |---|---|
 | Site en ligne, dossier `assets` présent | renvoyer le dossier `assets` à la racine du dépôt |
 | Base Firestore créée | étape A.3 |
-| Règles publiées **et à jour** (V01-008) | étape A.4 |
+| Règles publiées **et à jour** (V02-001) | étape A.4 |
 | Méthode E-mail/Mot de passe active | étape A.1 |
 | Super Admin installé | ouvrir `connexion.html` → Installation initiale |
 | Application installable | recharger la page une fois |
@@ -115,6 +115,12 @@ Astuce : après une mise à jour, si l'ancienne version s'affiche encore, rechar
 | Photo du cours (V01-007) | espace parent → Vocabulaire → 📷 Photo du cours : la liste du cahier est lue dans le navigateur (Tesseract.js, rien n'est envoyé ni stocké), les paires FR/EN sont proposées dans un tableau modifiable (⇄ inverser, cocher/décocher), puis passent par l'import habituel avec détection des doublons. |
 | Propositions (V01-008) | après une réponse, l'élève peut proposer « ✋ Ma réponse est juste aussi » (réponse alternative) ou « 🚩 Il y a une erreur dans ce mot » (correction FR/EN). Le parent valide ou refuse dans son tableau de bord ; une réponse acceptée est ensuite toujours comptée juste. Réponses alternatives aussi modifiables dans ✏️ Modifier le mot. |
 | Corrections du vocabulaire de départ (V01-008) | les 32 adjectifs de nationalité n'avaient pas de traduction française (« American = American ») : corrigés dans le fichier de départ, et bouton « 🛠️ Corriger automatiquement » dans Vocabulaire pour les mots déjà importés. « ice cream » accepte aussi « glace ». |
+| Séries de 20 & points (V02-001) | la 1re série de 20 du jour est obligatoire ; ensuite « 🔁 Nouvelle série de 20 » autant de fois que voulu, toujours par blocs complets de 20 (10 + 10). Chaque série rapporte des points : 100, −5 par erreur, −2 par aide, +20 si zéro faute (minimum 10). Espace parent : séries et points par série dans le Tableau de bord, l'Historique et le Bilan. |
+| Puzzle Margaux (V02-001) | une image de Margaux « wesh » découpée en 12 morceaux (4 × 3). Chaque série de 20 réussie à plus de 90 % (2 erreurs maximum) fait gagner 1 morceau. Puzzle complet → une nouvelle image commence (6 images). |
+| Préparer le CE1D (V02-001) | espace élève → 📚 : Mathématiques (5 thèmes), Français (5), Sciences (6), Anglais – langues modernes (4, avec écoute audio). Environ 460 questions originales dans l'esprit des épreuves externes (QCM, vrai/faux, réponse numérique ou courte), dont 45 générateurs d'exercices de calcul aléatoires. Séries de 10, explication après chaque réponse, résultats et erreurs visibles par le parent. |
+| Réponses (V02-001) | espaces, apostrophes, tirets et caractères spéciaux ignorés (« ice-cream » = « icecream », « I'm » = « im »). |
+| Import (V02-001) | étape « associer les colonnes » : chaque colonne du fichier est reliée à un champ (Français, Anglais, Catégorie…), avec aperçu. Bouton 🗑️ « Tout supprimer et recommencer à zéro » (taper SUPPRIMER). |
+| Verbes irréguliers (V02-001) | bouton « 🔤 Liste des verbes irréguliers (113) » : ajoute la liste de référence (nature « verbe irrégulier »). Dans le quiz, un mot du vocabulaire qui contient un verbe irrégulier (« to keep in touch ») affiche ses 3 formes après la réponse. |
 | Mot de la honte | 1 révélation max par jour, uniquement après le 20/20, dans l'ordre de la file du parent. Jamais visible par l'élève avant révélation (règles Firestore). Ne consomme aucune question et ne touche pas aux niveaux. |
 
 ## 6. Données Firestore
@@ -128,12 +134,15 @@ demandes/{id}                  { nom, prenom, gsm, email, statut }
 users/{uid}                    { prenom, nom, username, email, role, parentUid, birth, gsm }
 users/{uid}/proposals/{id}     { type: alt|fix, wordId, dir, given, oldFr, oldEn, fr, en, note, status, decidedDay }
 users/{uid}/words/{id}         { fr, en, altFr[], altEn[], cat, nature, ex, conj, level, ok, ko, seen, lastSeen, lastKo, vLevel, vOk, vKo, dOk, dKo }
-users/{uid}/sessions/{AAAA-MM-JJ} { frEn, enFr, attempts, errors, completed, wrong[], helped, qcm, bonus, exam, mastered[], verbs, verbsOk, dictee, dicteeOk }
+users/{uid}/sessions/{AAAA-MM-JJ} { frEn, enFr, attempts, errors, completed, wrong[], helped, qcm, bonus, exam, mastered[], verbs, verbsOk, dictee, dicteeOk,
+                                 series[{n, attempts, errors, helped, acc, points}], cur }
 users/{uid}/shame/{id}         { expression, phrase, honte, revealed, revealedDay }
 users/{uid}/exams/{id}         { day, themes[], dir, total, ok, ko, score, helped, wrong[], durationSec }
 users/{uid}/meta/shame         { queue: [ids], lastRevealDay, dates: { id: AAAA-MM-JJ } }
 users/{uid}/duels/{id}         { createdBy, day, items[], child{score,total,timeMs}, parent{…}, winner, penalty{text,for}, penaltyDone }
 users/{uid}/meta/badges        { unlocked: { idBadge: AAAA-MM-JJ } }
+users/{uid}/meta/puzzle        { pieces, log[{day, n, points}] }                      ← V02-001
+users/{uid}/ce1d/{id}          { subject, theme, themeName, day, ok, total, score, wrong[], seen[], durationSec }   ← V02-001
 users/{uid}/meta/settings      { hints, autoQcm, qcmMinWords, themes[], themesLocked, themesUntil, childThemes[] }
 ```
 

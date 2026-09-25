@@ -1,6 +1,6 @@
 // =====================================================================
 //  Projet : Wesh Words (Firebase « weshwords »)
-//  Version du site : V01-008
+//  Version du site : V02-001
 //  Règles Firestore — © Hélène Laruelle — Tous droits réservés
 // ---------------------------------------------------------------------
 //  Rôles : superadmin (config/app.superAdminUid) · parent · enfant
@@ -74,7 +74,7 @@ service cloud.firestore {
 
     // ---------- Version des règles (utilisé par diagnostic.html) ----------
     match /rulesinfo/{v} {
-      allow get: if v == 'V01-008';
+      allow get: if v == 'V02-001';
     }
 
     // ---------- Profils ----------
@@ -131,6 +131,13 @@ service cloud.firestore {
         allow delete: if canManage(uid);
       }
 
+      // --- Préparation CE1D (V02-001) : résultats des séries d'exercices
+      match /ce1d/{rid} {
+        allow read: if isSelf(uid) || canManage(uid);
+        allow create: if isSelf(uid);
+        allow delete: if canManage(uid);
+      }
+
       // --- Duels parent / enfant (chacun n'écrit que son propre résultat)
       match /duels/{did} {
         allow read: if isSelf(uid) || canManage(uid);
@@ -158,6 +165,13 @@ service cloud.firestore {
         allow create, update: if isSelf(uid) && mid == 'badges'
           && request.resource.data.keys().hasOnly(['unlocked'])
           && request.resource.data.unlocked is map;
+        // l'élève enregistre ses morceaux de puzzle (V02-001) : le compteur ne peut que monter d'un
+        allow create: if isSelf(uid) && mid == 'puzzle'
+          && request.resource.data.keys().hasOnly(['pieces', 'log'])
+          && request.resource.data.pieces == 1;
+        allow update: if isSelf(uid) && mid == 'puzzle'
+          && changed().hasOnly(['pieces', 'log'])
+          && request.resource.data.pieces == resource.data.pieces + 1;
         // l'élève retire UNE expression de la file (une fois par jour)
         allow update: if isSelf(uid) && mid == 'shame'
           && changed().hasOnly(['queue', 'lastRevealDay'])

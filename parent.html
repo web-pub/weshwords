@@ -56,6 +56,20 @@
         </div>
         <div class="grid g2" style="margin-top:16px">
           <div class="card">
+            <h3>🔁 Séries &amp; points</h3>
+            <div id="dSeries"></div>
+          </div>
+          <div class="card">
+            <h3>🧩 Puzzle de <span class="pzName"></span></h3>
+            <div id="dPuzzle"></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>📚 Préparation CE1D</h3>
+          <div id="dCe1d"></div>
+        </div>
+        <div class="grid g2" style="margin-top:16px">
+          <div class="card">
             <h3>📈 7 derniers jours</h3>
             <div class="hbars" id="dBars"></div>
             <p class="small muted">Barre = bonnes réponses du jour (objectif 20) · rouge = erreurs</p>
@@ -119,7 +133,7 @@
           </div>
           <div class="card">
             <h3>📥 Importer / 📤 Exporter</h3>
-            <p class="muted small">Fichiers acceptés : .xlsx, .xls, .csv — colonnes <b>fr</b> et <b>en</b> (+ facultatif : categorie, nature, examples, note, irregular, conjugation). Les doublons sont détectés automatiquement.</p>
+            <p class="muted small">Fichiers acceptés : .xlsx, .xls, .csv. Après le choix du fichier, tu indiques à quoi correspond chaque colonne (français, anglais, catégorie…). Les doublons sont détectés automatiquement.</p>
             <div class="field"><input type="file" id="impFile" accept=".xlsx,.xls,.csv"></div>
             <div class="row" style="margin-bottom:10px">
               <label class="btn" for="ocrFile" style="margin:0">📷 Photo du cours</label>
@@ -130,8 +144,12 @@
             <hr class="sep">
             <div class="row">
               <button class="btn soft" id="btnSeed">📦 Vocabulaire de départ (1 029 mots)</button>
+              <button class="btn soft" id="btnIrr">🔤 Liste des verbes irréguliers (113)</button>
               <button class="btn soft" id="btnExport">📤 Exporter en Excel</button>
             </div>
+            <hr class="sep">
+            <button class="btn danger sm" id="btnWipe">🗑️ Tout supprimer et recommencer à zéro</button>
+            <p class="small muted" style="margin-top:6px">Supprime tout le vocabulaire (pas les sessions, badges ni hontes). Utile si un import s'est mal passé.</p>
           </div>
         </div>
 
@@ -207,7 +225,7 @@
       <section class="panel" id="p-hist">
         <div class="card">
           <h3>🕓 Historique des sessions</h3>
-          <div class="table-wrap"><table><thead><tr><th>Date</th><th>🇫🇷→🇬🇧</th><th>🇬🇧→🇫🇷</th><th>Tentatives</th><th>Erreurs</th><th>Réussite</th><th>Avec aide</th><th>Bonus</th><th>Statut</th><th></th></tr></thead><tbody id="hBody"></tbody></table></div>
+          <div class="table-wrap"><table><thead><tr><th>Date</th><th>🇫🇷→🇬🇧</th><th>🇬🇧→🇫🇷</th><th>Tentatives</th><th>Erreurs</th><th>Réussite</th><th>Avec aide</th><th>Séries</th><th>Points par série</th><th>Statut</th><th></th></tr></thead><tbody id="hBody"></tbody></table></div>
         </div>
         <div class="card">
           <h3>📝 Contrôles blancs</h3>
