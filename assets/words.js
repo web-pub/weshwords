@@ -121,6 +121,7 @@ export function computeStreak(completedDays /* Set de 'YYYY-MM-DD' */, today, of
 
 /* ---------------- Import ---------------- */
 const HEADER_MAP = {
+  niveau: ["niveau", "level", "annee", "année", "niveau scolaire"],
   fr: ["fr", "francais", "français", "french", "mot fr", "mot francais", "mot français"],
   en: ["en", "anglais", "english", "mot en", "mot anglais", "traduction"],
   cat: ["categorie", "catégorie", "theme", "thème", "category", "chapitre", "unite", "unité"],
@@ -130,6 +131,16 @@ const HEADER_MAP = {
   irr: ["irregular", "irrégulier", "irregulier"],
   conj: ["conjugation", "conjugaison", "formes"]
 };
+/** Niveaux scolaires reconnus pour le vocabulaire (V03-004) : 2e, 4e, 6e (fin de rhéto) */
+export const NIVEAUX = [2, 4, 6];
+export const DEFAULT_NIVEAU = 2;
+/** Lit un niveau depuis une cellule de fichier ("2", "2e", "niveau 4"…) → 2/4/6, ou null si absent/invalide */
+export function parseNiveau(v) {
+  const m = String(v ?? "").match(/\d+/);
+  if (!m) return null;
+  const n = Number(m[0]);
+  return NIVEAUX.includes(n) ? n : null;
+}
 function keyOf(h) {
   const n = stripAccents(String(h || "").trim().toLowerCase());
   for (const [k, list] of Object.entries(HEADER_MAP)) if (list.map(x => stripAccents(x)).includes(n)) return k;
@@ -141,7 +152,8 @@ export function cleanRow(o) {
     fr: String(o.fr ?? "").trim(), en: String(o.en ?? "").trim(),
     cat: String(o.cat ?? "").trim(), nature: String(o.nature ?? "").trim(),
     ex: String(o.ex ?? "").trim(), note: String(o.note ?? "").replace(/Source : PDF « [^»]*»/g, "").replace(/^\s*\|\s*|\s*\|\s*$/g, "").trim(),
-    irr: /^(oui|yes|true|1|x)$/i.test(String(o.irr ?? "").trim()), conj: String(o.conj ?? "").trim()
+    irr: /^(oui|yes|true|1|x)$/i.test(String(o.irr ?? "").trim()), conj: String(o.conj ?? "").trim(),
+    niveau: parseNiveau(o.niveau)
   };
   if (JUNK_EXAMPLE.test(w.ex)) w.ex = "";
   return w;
@@ -169,7 +181,7 @@ export async function parseVocabFile(file) {
 }
 /* ---------- Import en 2 temps : lecture brute puis choix des colonnes (V02-001) ---------- */
 export const IMPORT_FIELDS = [
-  ["", "— ignorer —"], ["fr", "🇫🇷 Français"], ["en", "🇬🇧 Anglais"], ["cat", "Catégorie / thème"],
+  ["", "— ignorer —"], ["niveau", "Niveau (2 / 4 / 6)"], ["fr", "🇫🇷 Français"], ["en", "🇬🇧 Anglais"], ["cat", "Catégorie / thème"],
   ["nature", "Nature"], ["ex", "Exemple"], ["note", "Note"], ["conj", "Formes (verbe irrégulier)"], ["irr", "Irrégulier (oui/non)"]
 ];
 /** Mêmes colonnes, libellé « Néerlandais » à la place d'« Anglais » (V03-002) */
@@ -207,12 +219,12 @@ export function dupKey(w) {
 export function exportVocab(words, filename = "WeshWords-vocabulaire.xlsx") {
   if (!window.XLSX) throw new Error("Module Excel non chargé.");
   const data = words.map(w => ({
-    categorie: w.cat || "", fr: w.fr, en: w.en, nature: w.nature || "", examples: w.ex || "",
+    niveau: w.niveau ?? DEFAULT_NIVEAU, categorie: w.cat || "", fr: w.fr, en: w.en, nature: w.nature || "", examples: w.ex || "",
     note: w.note || "", irregular: w.irr ? "oui" : "non", conjugation: w.conj || "",
-    niveau: w.level ?? 0, reussites: w.ok || 0, erreurs: w.ko || 0
+    progression: w.level ?? 0, reussites: w.ok || 0, erreurs: w.ko || 0
   }));
   const ws = window.XLSX.utils.json_to_sheet(data);
-  ws["!cols"] = [{ wch: 22 }, { wch: 30 }, { wch: 30 }, { wch: 16 }, { wch: 34 }, { wch: 20 }, { wch: 9 }, { wch: 30 }, { wch: 7 }, { wch: 9 }, { wch: 8 }];
+  ws["!cols"] = [{ wch: 7 }, { wch: 22 }, { wch: 30 }, { wch: 30 }, { wch: 16 }, { wch: 34 }, { wch: 20 }, { wch: 9 }, { wch: 30 }, { wch: 10 }, { wch: 9 }, { wch: 8 }];
   const wb = window.XLSX.utils.book_new();
   window.XLSX.utils.book_append_sheet(wb, ws, "Vocabulaire");
   window.XLSX.writeFile(wb, filename);
@@ -288,7 +300,14 @@ export function buildChoices(word, dir, pool, n = 4) {
   for (let i = list.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [list[i], list[j]] = [list[j], list[i]]; }
   return list;
 }
-export const DEFAULT_SETTINGS = { hints: true, autoQcm: true, qcmMinWords: 4, themes: [], themesLocked: false, themesUntil: "", childThemes: [] };
+/** Matières activées par défaut (V03-004) : tout activé tant que le parent n'a rien décoché,
+    pour ne rien changer aux comptes existants. Niveaux de langue : 2e/4e/6e (fin de rhéto), 2 par défaut. */
+export const DEFAULT_SUBJECTS = { en: true, nl: true, math: true, francais: true, sciences: true };
+export const DEFAULT_LEVELS = { en: DEFAULT_NIVEAU, nl: DEFAULT_NIVEAU };
+export const DEFAULT_SETTINGS = {
+  hints: true, autoQcm: true, qcmMinWords: 4, themes: [], themesLocked: false, themesUntil: "", childThemes: [],
+  subjects: { ...DEFAULT_SUBJECTS }, levels: { ...DEFAULT_LEVELS }
+};
 /** Thèmes actifs : imposés par le parent (jusqu'à une date éventuelle) sinon choisis par l'élève */
 export function activeThemes(settings, today) {
   const s = { ...DEFAULT_SETTINGS, ...(settings || {}) };

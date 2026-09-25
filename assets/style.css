@@ -402,3 +402,42 @@ details summary { cursor: pointer; font-weight: 800; }
 .ce1d-question { font: 700 1.12rem var(--font-h); margin: 6px 0 14px; line-height: 1.4; }
 .ce1d-ex { background: rgba(255, 210, 122, .15); border-radius: 12px; padding: 10px 12px; margin-top: 10px; font-size: .92rem; text-align: left; }
 .ce1d-q .answer { max-width: 320px; }
+
+/* ---------- Cartes mentales & Flashcards (V03-005) ---------- */
+.mindmap-wrap { position: relative; width: min(94vw, 560px); height: min(94vw, 560px); margin: 10px auto; }
+.mindmap-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.mindmap-svg line { stroke: var(--line); stroke-width: 2; }
+.mindmap-center {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: 116px; height: 116px; border-radius: 50%; background: var(--grad); color: #fff;
+  display: grid; place-items: center; text-align: center; font: 800 .85rem var(--font); padding: 6px;
+  box-shadow: var(--shadow); z-index: 2; line-height: 1.15;
+}
+.mindmap-center .ic { font-size: 1.7rem; display: block; margin-bottom: 2px; }
+.mindmap-node {
+  position: absolute; transform: translate(-50%, -50%); border: 1.5px solid var(--line); background: var(--card);
+  border-radius: 50%; display: grid; place-items: center; text-align: center; cursor: pointer; z-index: 2;
+  font: 700 .8rem var(--font); padding: 6px; box-shadow: var(--shadow); transition: transform .12s, border-color .12s;
+  color: var(--text); line-height: 1.15;
+}
+.mindmap-node:hover { border-color: var(--blue); transform: translate(-50%, -50%) scale(1.06); }
+.mindmap-node .n { display: block; font-size: .72rem; color: var(--muted); font-weight: 800; margin-top: 2px; }
+.mindmap-legend { text-align: center; margin-top: 6px; }
+
+.flashcard-zone { max-width: 480px; margin: 0 auto; }
+.flashcard-track { height: 6px; background: var(--line); border-radius: 99px; overflow: hidden; margin-bottom: 14px; }
+.flashcard-track i { display: block; height: 100%; background: var(--grad); }
+.flashcard { perspective: 1400px; height: 280px; cursor: pointer; }
+.flashcard-inner {
+  position: relative; width: 100%; height: 100%; transition: transform .45s; transform-style: preserve-3d;
+}
+.flashcard.flip .flashcard-inner { transform: rotateY(180deg); }
+.flashcard-face {
+  position: absolute; inset: 0; backface-visibility: hidden; border-radius: 20px; border: 1.5px solid var(--line);
+  background: var(--bg2); display: grid; place-items: center; text-align: center; padding: 20px; box-shadow: var(--shadow);
+  font: 700 1.15rem var(--font); line-height: 1.4; overflow-y: auto;
+}
+.flashcard-face.back { transform: rotateY(180deg); background: var(--card2); }
+.flashcard-face .small { margin-top: 10px; }
+.flashcard-hint { text-align: center; color: var(--muted); margin-top: 8px; }
+.flashcard-nav { display: flex; justify-content: center; gap: 10px; margin-top: 14px; }

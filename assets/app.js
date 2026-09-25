@@ -15,7 +15,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { DEFAULT_CONTENT, LEGAL_PAGES } from "./content.js";
 
-export const VERSION = "V03-002";
+export const VERSION = "V03-006";
 export const PROJECT = "Wesh Words";
 export const PSEUDO_DOMAIN = "weshwords.firebaseapp.com"; // e-mail technique pour les comptes sans adresse
 

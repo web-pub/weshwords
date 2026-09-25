@@ -82,7 +82,13 @@ export function checkCe1d(it, given) {
   if (it.t === "qcm") return given === it.a;
   if (it.t === "vf") return given === it.a;
   if (it.t === "num") {
-    const s = String(given ?? "").trim().replace(/\s/g, "").replace(",", ".").replace(/[^\d.\-\/]/g, "");
+    // Normalise le signe moins typographique (− / –) en tiret ASCII AVANT de nettoyer,
+    // sinon « −6 » perdait son signe et était compté comme 6 (V03-006).
+    // On ne garde que le nombre en tête de chaîne plutôt que de tout nettoyer puis coller les
+    // chiffres restants : sinon « 60 cm3 » (unité tapée avec un chiffre) devenait 603 (V03-006).
+    const cleaned = String(given ?? "").trim().replace(/[−–]/g, "-").replace(/\s+/g, "").replace(",", ".");
+    const m = cleaned.match(/^-?\d+(?:\.\d+)?(?:\/\d+)?/);
+    const s = m ? m[0] : "";
     let v;
     if (/^-?\d+\/\d+$/.test(s)) { const [a, b] = s.split("/").map(Number); v = a / b; } else v = parseFloat(s);
     if (!isFinite(v)) return false;

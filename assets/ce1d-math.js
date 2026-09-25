@@ -21,10 +21,31 @@ const pt = (x, y) => `(${F(x)} ; ${F(y)})`;
 const r2 = x => Math.round(x * 1e6) / 1e6;
 /** fraction en texte avec signe moins typographique */
 const FR = (n, d) => frac(n, d).replace("-", "−");
-/** QCM de générateur : bonne réponse en premier, distracteurs sans doublon */
+/** nombre affiché avec exactement 3 décimales (F() en a au plus 2, ce qui cachait le chiffre
+    à arrondir dans les questions d'arrondi et affichait parfois un nombre déjà arrondi — V03-006) */
+const F3 = x => (x < 0 ? "−" : "") + Math.abs(x).toFixed(3).replace(".", ",");
+/** valeur numérique d'un choix de QCM (nombre ou fraction), NaN si ce n'est pas un nombre
+    (ex. « x² + 6x + 9 » ou « (3 ; −2) ») — sert à détecter les doublons « écrits différemment »
+    comme 6/4 et 3/2, qui passaient à travers la comparaison texte (V03-006) */
+function numVal(s) {
+  const t = String(s).replace(/[−–]/g, "-").trim();
+  if (/^-?\d+\/\d+$/.test(t)) { const [n, d] = t.split("/").map(Number); return n / d; }
+  const n = Number(t.replace(",", "."));
+  return Number.isFinite(n) ? n : NaN;
+}
+/** QCM de générateur : bonne réponse en premier, distracteurs sans doublon
+    (ni en texte, ni en valeur numérique quand les choix sont des nombres/fractions) */
 function qcm(q, good, bad, ex, extra = {}) {
+  const seen = new Set([numVal(good)]);
   const c = [good];
-  for (const b of bad) if (c.length < 4 && !c.includes(b)) c.push(b);
+  for (const b of bad) {
+    if (c.length >= 4) break;
+    if (c.includes(b)) continue;
+    const v = numVal(b);
+    if (!Number.isNaN(v) && seen.has(v)) continue;
+    c.push(b);
+    seen.add(v);
+  }
   return { t: "qcm", q, c, a: 0, ex, ...extra };
 }
 /** terme « ax » : 1x → x, −1x → −x */
@@ -150,10 +171,10 @@ const nombres = {
       const x = k / 1000;
       if (pick([true, false])) {
         const r = Math.round(k / 10) / 100, m = k % 10;
-        return { t: "num", q: `Arrondis ${F(x)} au centième.`, a: r, ex: `Le chiffre des millièmes est ${m} : ${m >= 5 ? "5 ou plus, on augmente le chiffre des centièmes d'une unité" : "moins de 5, on garde le chiffre des centièmes"}. Résultat : ${F(r)}.` };
+        return { t: "num", q: `Arrondis ${F3(x)} au centième.`, a: r, ex: `Le chiffre des millièmes est ${m} : ${m >= 5 ? "5 ou plus, on augmente le chiffre des centièmes d'une unité" : "moins de 5, on garde le chiffre des centièmes"}. Résultat : ${F(r)}.` };
       }
       const r = Math.round(k / 100) / 10, m = Math.floor(k / 10) % 10;
-      return { t: "num", q: `Arrondis ${F(x)} au dixième.`, a: r, ex: `Le chiffre des centièmes est ${m} : ${m >= 5 ? "5 ou plus, on augmente le chiffre des dixièmes d'une unité" : "moins de 5, on garde le chiffre des dixièmes"}. Résultat : ${F(r)}.` };
+      return { t: "num", q: `Arrondis ${F3(x)} au dixième.`, a: r, ex: `Le chiffre des centièmes est ${m} : ${m >= 5 ? "5 ou plus, on augmente le chiffre des dixièmes d'une unité" : "moins de 5, on garde le chiffre des dixièmes"}. Résultat : ${F(r)}.` };
     }
   ]
 };

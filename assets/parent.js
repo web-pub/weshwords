@@ -7,7 +7,7 @@ import {
   arrayRemove, arrayUnion, changeAuthPassword, PSEUDO_DOMAIN, applyContent, MOODS,
   updateMemberInfo, changeMemberEmailUsername
 } from "./app.js";
-import { parseVocabFile, readSheet, guessMapping, rowsFromMapping, IMPORT_FIELDS, IMPORT_FIELDS_NL, dupKey, exportVocab, speak, computeStreak, PER_DIRECTION, DAILY_GOAL, MAX_LEVEL, DEFAULT_SETTINGS, categoriesOf } from "./words.js";
+import { parseVocabFile, readSheet, guessMapping, rowsFromMapping, IMPORT_FIELDS, IMPORT_FIELDS_NL, dupKey, exportVocab, speak, computeStreak, PER_DIRECTION, DAILY_GOAL, MAX_LEVEL, DEFAULT_SETTINGS, categoriesOf, NIVEAUX, DEFAULT_NIVEAU } from "./words.js";
 import { SHAME_IDEAS } from "./content.js";
 import { mountMemberForm } from "./member-form.js";
 import { findIrregular, IRREGULAR_VERBS } from "./irregular-verbs.js";
@@ -37,15 +37,21 @@ let unsubs = [];
 let loaded = { shame: false, meta: false };
 let firstLoad = true;
 
-/* ---------------- Enfants ---------------- */
-const childQuery = isSuper
-  ? query(collection(db, "users"), where("role", "==", "enfant"))
-  : query(collection(db, "users"), where("parentUid", "==", user.uid));
-onSnapshot(childQuery, snap => {
-  children = snap.docs.map(d => ({ uid: d.id, ...d.data() })).sort((a, b) => (a.prenom || "").localeCompare(b.prenom || ""));
+/* ---------------- Enfants ----------------
+   Chaque parent (y compris le Super Admin dans son propre espace parent) ne voit QUE ses
+   propres enfants. Le Super Admin peut consulter le bilan d'un autre enfant uniquement
+   depuis Super Admin → Membres → 📊, qui ouvre cette page avec ?child=<uid> (V03-003). */
+const wantedChildUid = new URLSearchParams(location.search).get("child");
+const adminSingleView = isSuper && !!wantedChildUid;
+
+function onChildrenLoaded(list) {
+  children = list.sort((a, b) => (a.prenom || "").localeCompare(b.prenom || ""));
   $("#loader").classList.add("hidden");
   $("#main").classList.remove("hidden");
   if (!children.length) {
+    if (adminSingleView) {
+      $("#noChild").innerHTML = `<h3>😕 Élève introuvable</h3><p class="muted">Ce compte élève n'existe plus ou n'est plus rattaché à un parent.</p>`;
+    }
     $("#noChild").classList.remove("hidden");
     $("#childZone").classList.add("hidden");
     $("#childPicker").innerHTML = "";
@@ -53,13 +59,22 @@ onSnapshot(childQuery, snap => {
   }
   $("#noChild").classList.add("hidden");
   $("#childZone").classList.remove("hidden");
-  const wanted = new URLSearchParams(location.search).get("child");
   const keep = child && children.find(c => c.uid === child.uid);
-  const pick = keep || (firstLoad && children.find(c => c.uid === wanted)) || children[0];
+  const pick = keep || (firstLoad && children.find(c => c.uid === wantedChildUid)) || children[0];
   firstLoad = false;
   renderPicker();
   if (!child || child.uid !== pick.uid) selectChild(pick); else { child = pick; renderAccount(); }
-}, e => { $("#loader").classList.add("hidden"); $("#main").classList.remove("hidden"); toast(errMsg(e), "err"); });
+}
+if (adminSingleView) {
+  onSnapshot(doc(db, "users", wantedChildUid), s => {
+    onChildrenLoaded(s.exists() && s.data().role === "enfant" ? [{ uid: s.id, ...s.data() }] : []);
+  }, e => { $("#loader").classList.add("hidden"); $("#main").classList.remove("hidden"); toast(errMsg(e), "err"); });
+} else {
+  const childQuery = query(collection(db, "users"), where("parentUid", "==", user.uid));
+  onSnapshot(childQuery, snap => {
+    onChildrenLoaded(snap.docs.map(d => ({ uid: d.id, ...d.data() })));
+  }, e => { $("#loader").classList.add("hidden"); $("#main").classList.remove("hidden"); toast(errMsg(e), "err"); });
+}
 
 function renderPicker() {
   $("#childPicker").innerHTML = children.length > 1
@@ -273,7 +288,7 @@ function editWord(w) {
 
 $("#addWord").addEventListener("submit", async ev => {
   ev.preventDefault();
-  const w = { fr: $("#awFr").value.trim(), en: $("#awEn").value.trim(), cat: $("#awCat").value.trim(), nature: $("#awNat").value, ex: $("#awEx").value.trim(), conj: $("#awConj").value.trim(), note: "", irr: !!$("#awConj").value.trim() };
+  const w = { fr: $("#awFr").value.trim(), en: $("#awEn").value.trim(), cat: $("#awCat").value.trim(), nature: $("#awNat").value, ex: $("#awEx").value.trim(), conj: $("#awConj").value.trim(), note: "", irr: !!$("#awConj").value.trim(), niveau: settings.levels?.en || DEFAULT_NIVEAU };
   if (!w.fr || !w.en) return;
   const keys = new Set(words.map(dupKey));
   if (keys.has(dupKey(w))) { toast("Ce mot existe déjà dans la liste.", "warn"); return; }
@@ -293,15 +308,17 @@ async function writeWords(list, lang = "en") {
   const previewId = lang === "nl" ? "impPreviewNl" : "impPreview";
   for (let i = 0; i < list.length; i += 400) {
     const b = writeBatch(db);
-    list.slice(i, i + 400).forEach(w => b.set(doc(wordsCol(lang)), { ...w, level: 0, ok: 0, ko: 0, seen: 0, createdAt: serverTimestamp() }));
+    list.slice(i, i + 400).forEach(w => b.set(doc(wordsCol(lang)), { ...w, niveau: w.niveau ?? DEFAULT_NIVEAU, level: 0, ok: 0, ko: 0, seen: 0, createdAt: serverTimestamp() }));
     await b.commit();
     done += Math.min(400, list.length - i);
     $("#" + previewId).innerHTML = `<p class="note">Import en cours… ${done} / ${list.length}</p>`;
   }
 }
-/** Vérification automatique (V03-002) : relit chaque ligne à importer et signale ce qui semble louche
+/** Vérification automatique (V03-002, revue V03-003) : relit chaque ligne à importer et signale ce qui semble louche
     (colonnes inversées, mot vide, langue qui ne correspond pas…) — un assistant intégré au site, pas un
-    service d'IA externe payant (Wesh Words n'a pas de serveur pour garder une clé API en sécurité). */
+    service d'IA externe payant (Wesh Words n'a pas de serveur pour garder une clé API en sécurité).
+    Les mots « OK » s'importent directement ; les mots « à vérifier » sont mis de côté, affichés en entier
+    (pas juste les premiers de la liste), pour que le parent les regarde un par un avant de les importer. */
 function previewImport(rows, sourceLabel, lang = "en") {
   const previewId = lang === "nl" ? "impPreviewNl" : "impPreview";
   const fileId = lang === "nl" ? "impFileNl" : "impFile";
@@ -315,25 +332,45 @@ function previewImport(rows, sourceLabel, lang = "en") {
     if (existing.has(k) || seen.has(k)) dups.push(r); else { seen.add(k); fresh.push(r); }
   });
   const checked = checkBatch(fresh, lang);
-  const sum = summarizeChecks(checked);
-  $("#" + previewId).innerHTML = `
-    <div class="note">
-      <b>${esc(sourceLabel)}</b> : ${rows.length} ligne(s) lue(s) — <b style="color:var(--green)">${fresh.length} nouveau(x)</b>, ${dups.length} doublon(s) ignoré(s).
-      ${fresh.length ? (sum.warn
-        ? `<p class="small" style="color:var(--warn);font-weight:700">🤖 Vérification automatique : ${sum.warn} mot(s) à vérifier (survole le ⚠️ pour voir pourquoi).</p>`
-        : `<p class="small" style="color:var(--green-d)">🤖 Vérification automatique : rien à signaler.</p>`) : ""}
-      ${fresh.length ? `<div class="table-wrap" style="margin:10px 0;max-height:220px"><table><thead><tr><th></th><th>Français</th><th>${esc(targetLabel)}</th><th>Catégorie</th></tr></thead><tbody>${
-        checked.slice(0, 30).map(w => `<tr><td>${w._check.level === "warn" ? `<span title="${esc(w._check.reasons.join(" — "))}">⚠️</span>` : "✅"}</td><td>${esc(w.fr)}</td><td>${esc(w.en)}</td><td class="small">${esc(w.cat)}</td></tr>`).join("")}
-        ${fresh.length > 30 ? `<tr><td colspan="4" class="muted small">… et ${fresh.length - 30} autre(s)</td></tr>` : ""}</tbody></table></div>
-        <button class="btn sm" id="impGo">Importer ${fresh.length} mot(s)</button>` : ""}
-      <button class="btn ghost sm" id="impCancel">Annuler</button>
-    </div>`;
-  $("#impCancel").onclick = () => { $("#" + previewId).innerHTML = ""; const f = $("#" + fileId); if (f) f.value = ""; };
-  $("#impGo")?.addEventListener("click", async () => {
-    if (sum.warn && !confirm(`🤖 ${sum.warn} mot(s) semblent suspects (colonnes peut-être inversées, doublon…). Importer quand même les ${fresh.length} mot(s) ?`)) return;
-    try { await writeWords(fresh, lang); toast(`${fresh.length} mot(s) importé(s) ✅`); $("#" + previewId).innerHTML = ""; const f = $("#" + fileId); if (f) f.value = ""; }
-    catch (e) { toast(errMsg(e), "err"); }
-  });
+  const ok = checked.filter(w => w._check.level !== "warn");
+  const warn = checked.filter(w => w._check.level === "warn");
+  const render = () => {
+    $("#" + previewId).innerHTML = `
+      <div class="note">
+        <b>${esc(sourceLabel)}</b> : ${rows.length} ligne(s) lue(s) — <b style="color:var(--green)">${fresh.length} nouveau(x)</b>, ${dups.length} doublon(s) ignoré(s).
+        ${!fresh.length ? "" : `
+          <p class="small">🤖 Vérification automatique : <b style="color:var(--green-d)">${ok.length} mot(s) OK</b>${warn.length ? `, <b style="color:var(--warn)">${warn.length} mot(s) à vérifier</b>` : ""}.</p>
+          ${ok.length ? `<button class="btn sm" id="impGoOk">✅ Importer les ${ok.length} mot(s) OK</button>` : ""}
+          ${warn.length ? `
+            <p class="small" style="color:var(--warn);font-weight:700;margin-top:10px">⚠️ ${warn.length} mot(s) semblent suspects — à vérifier avant import (colonnes peut-être inversées, doublon, mot vide…) :</p>
+            <div class="table-wrap" style="margin:6px 0;max-height:320px"><table><thead><tr><th>Français</th><th>${esc(targetLabel)}</th><th>Catégorie</th><th>Pourquoi ?</th></tr></thead><tbody>${
+              warn.map(w => `<tr><td>${esc(w.fr)}</td><td>${esc(w.en)}</td><td class="small">${esc(w.cat)}</td><td class="small" style="color:var(--warn)">${esc(w._check.reasons.join(" — "))}</td></tr>`).join("")
+            }</tbody></table></div>
+            <button class="btn sm ghost" id="impGoWarn">⚠️ Importer quand même les ${warn.length} mot(s) à vérifier</button>` : ""}
+        `}
+        <button class="btn ghost sm" id="impCancel">${fresh.length ? "Fermer" : "Annuler"}</button>
+      </div>`;
+    $("#impCancel").onclick = () => { $("#" + previewId).innerHTML = ""; const f = $("#" + fileId); if (f) f.value = ""; };
+    $("#impGoOk")?.addEventListener("click", async () => {
+      try {
+        await writeWords(ok.map(({ _check, ...w }) => w), lang);
+        toast(`${ok.length} mot(s) importé(s) ✅`);
+        ok.length = 0;
+        render();
+      } catch (e) { toast(errMsg(e), "err"); }
+    });
+    $("#impGoWarn")?.addEventListener("click", async () => {
+      if (!confirm(`🤖 Ces ${warn.length} mot(s) semblent suspects. Les importer quand même ?`)) return;
+      try {
+        await writeWords(warn.map(({ _check, ...w }) => w), lang);
+        toast(`${warn.length} mot(s) importé(s) ✅`);
+        warn.length = 0;
+        render();
+        const f = $("#" + fileId); if (f && !ok.length) f.value = "";
+      } catch (e) { toast(errMsg(e), "err"); }
+    });
+  };
+  render();
 }
 $("#impFile").addEventListener("change", async () => {
   const f = $("#impFile").files[0];
@@ -482,7 +519,7 @@ function editWordNl(w) {
 
 $("#addWordNl")?.addEventListener("submit", async ev => {
   ev.preventDefault();
-  const w = { fr: $("#nwFr").value.trim(), en: $("#nwNl").value.trim(), cat: $("#nwCat").value.trim(), nature: $("#nwNat").value, ex: $("#nwEx").value.trim(), conj: $("#nwConj").value.trim(), note: "", irr: !!$("#nwConj").value.trim() };
+  const w = { fr: $("#nwFr").value.trim(), en: $("#nwNl").value.trim(), cat: $("#nwCat").value.trim(), nature: $("#nwNat").value, ex: $("#nwEx").value.trim(), conj: $("#nwConj").value.trim(), note: "", irr: !!$("#nwConj").value.trim(), niveau: settings.levels?.nl || DEFAULT_NIVEAU };
   if (!w.fr || !w.en) return;
   const keys = new Set(wordsNl.map(dupKey));
   if (keys.has(dupKey(w))) { toast("Ce mot existe déjà dans la liste.", "warn"); return; }
@@ -505,7 +542,7 @@ $("#btnSeedNl")?.addEventListener("click", async () => {
   try {
     const raw = await (await fetch("assets/vocab-neerlandais.json")).json();
     const rows = raw.map(r => ({ fr: r.fr, en: r.en, cat: r.c || "", nature: r.n || "", ex: r.x || "", note: r.o || "", irr: !!r.i, conj: r.g || "" }));
-    previewImport(rows, "Vocabulaire néerlandais CE1D A1-A2 (1500 mots)", "nl");
+    previewImport(rows, `Vocabulaire néerlandais CE1D A1-A2 (${rows.length} mots)`, "nl");
   } catch (e) { toast(errMsg(e), "err"); }
 });
 $("#btnIrrNl")?.addEventListener("click", () => {
@@ -835,6 +872,12 @@ function renderChildChoice() {
 function renderSettings() {
   if (!child) return;
   $("#stChildName").textContent = child.prenom || child.username;
+  $("#stChildName2").textContent = child.prenom || child.username;
+  const su = { en: true, nl: true, math: true, francais: true, sciences: true, ...(settings.subjects || {}) };
+  $("#stSubEn").checked = su.en; $("#stSubNl").checked = su.nl; $("#stSubMath").checked = su.math;
+  $("#stSubFr").checked = su.francais; $("#stSubSci").checked = su.sciences;
+  $("#stLvlEn").value = String(settings.levels?.en || DEFAULT_NIVEAU);
+  $("#stLvlNl").value = String(settings.levels?.nl || DEFAULT_NIVEAU);
   const lock = !!settings.themesLocked;
   $$('input[name="thMode"]').forEach(r => r.checked = (r.value === (lock ? "lock" : "free")));
   $("#stLockZone").classList.toggle("hidden", !lock);
@@ -862,7 +905,15 @@ $("#stSave").onclick = async () => {
   const data = {
     themesLocked: lock, themes, themesUntil: lock ? ($("#stUntil").value || "") : "",
     hints: $("#stHints").checked, autoQcm: $("#stAutoQcm").checked,
-    qcmMinWords: Math.max(2, Math.min(12, Number($("#stMinWords").value) || 4))
+    qcmMinWords: Math.max(2, Math.min(12, Number($("#stMinWords").value) || 4)),
+    subjects: {
+      en: $("#stSubEn").checked, nl: $("#stSubNl").checked, math: $("#stSubMath").checked,
+      francais: $("#stSubFr").checked, sciences: $("#stSubSci").checked
+    },
+    levels: {
+      en: NIVEAUX.includes(Number($("#stLvlEn").value)) ? Number($("#stLvlEn").value) : DEFAULT_NIVEAU,
+      nl: NIVEAUX.includes(Number($("#stLvlNl").value)) ? Number($("#stLvlNl").value) : DEFAULT_NIVEAU
+    }
   };
   try {
     await setDoc(doc(db, "users", child.uid, "meta", "settings"), data, { merge: true });

@@ -6,17 +6,17 @@
 export const DEFAULT_CONTENT = [
   // --- Général
   { g: "Général", key: "site.title", label: "Nom du site", value: "Wesh Words" },
-  { g: "Général", key: "site.tagline", label: "Slogan", value: "Le vocabulaire anglais… avec un soupçon de honte parentale." },
+  { g: "Général", key: "site.tagline", label: "Slogan", value: "L'appli de révision pour le CE1D : anglais, néerlandais, maths, français, sciences… avec un soupçon de honte parentale." },
   { g: "Général", key: "site.owner", label: "Responsable du contenu (nom et prénom)", value: "Hélène Laruelle" },
   { g: "Général", key: "site.contact", label: "E-mail de contact (pages légales)", value: "" },
 
   // --- Accueil
-  { g: "Accueil", key: "home.hero.kicker", label: "Petit titre", value: "Révisions d'anglais · 🇫🇷 ↔ 🇬🇧" },
-  { g: "Accueil", key: "home.hero.title", label: "Grand titre", value: "20 mots par jour. Zéro excuse." },
-  { g: "Accueil", key: "home.hero.text", label: "Texte d'accroche", ml: 1, value: "10 🇫🇷→🇬🇧, 10 🇬🇧→🇫🇷. Une erreur ne compte pas. Et au 20/20, une récompense se débloque… Elle est gênante. Très gênante." },
+  { g: "Accueil", key: "home.hero.kicker", label: "Petit titre", value: "Prépare le CE1D · 🇬🇧 🇳🇱 📐 📖 🔬" },
+  { g: "Accueil", key: "home.hero.title", label: "Grand titre", value: "5 minutes de libre ? Une série de révision, pas une vidéo débile." },
+  { g: "Accueil", key: "home.hero.text", label: "Texte d'accroche", ml: 1, value: "Anglais, néerlandais, mathématiques, français, sciences : des séries courtes et gamifiées, pensées pour réviser même entre deux occupations. Et au 20/20 en anglais, une récompense se débloque… Elle est gênante. Très gênante." },
   { g: "Accueil", key: "home.cta", label: "Bouton principal", value: "Se connecter" },
-  { g: "Accueil", key: "home.f1.title", label: "Atout 1 – titre", value: "🎯 20 réussites, pas une de moins" },
-  { g: "Accueil", key: "home.f1.text", label: "Atout 1 – texte", ml: 1, value: "Seules les bonnes réponses comptent. Une erreur ? Le mot redescend d'un niveau et revient plus souvent." },
+  { g: "Accueil", key: "home.f1.title", label: "Atout 1 – titre", value: "📚 Toutes les matières du CE1D" },
+  { g: "Accueil", key: "home.f1.text", label: "Atout 1 – texte", ml: 1, value: "Anglais, néerlandais, mathématiques, français et sciences réunis au même endroit. Le parent choisit les matières et le niveau (2e, 4e ou 6e) à étudier." },
   { g: "Accueil", key: "home.f2.title", label: "Atout 2 – titre", value: "🔁 Les mots difficiles reviennent" },
   { g: "Accueil", key: "home.f2.text", label: "Atout 2 – texte", ml: 1, value: "Chaque mot a un niveau de 0 à 5. Plus il est bas, plus il sort. Les mots maîtrisés se font discrets." },
   { g: "Accueil", key: "home.f3.title", label: "Atout 3 – titre", value: "🔥 Une série à ne pas casser" },

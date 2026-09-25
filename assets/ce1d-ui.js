@@ -23,11 +23,13 @@ export function ce1dStats(results) {
   return by;
 }
 
-/** Carte « Préparer le CE1D » de l'accueil élève */
-export function renderCe1dCard(el, results, onSave) {
+/** Carte « Préparer le CE1D » de l'accueil élève.
+    enabledIds (V03-004) : liste des ids de matières à afficher (choisies par le parent) — null/absent = toutes. */
+export function renderCe1dCard(el, results, onSave, enabledIds = null) {
   const st = ce1dStats(results);
+  const subs = enabledIds ? SUBJECTS.filter(s => enabledIds.includes(s.id)) : SUBJECTS;
   el.innerHTML = `<p class="small muted">${esc(T("ce1d.help"))}</p>
-    <div class="ce1d-subjects">${SUBJECTS.map(s => {
+    <div class="ce1d-subjects">${subs.map(s => {
       const b = st[s.id];
       const pct = b ? Math.round(b.ok / Math.max(1, b.total) * 100) : null;
       return `<button class="ce1d-sub" data-sub="${s.id}"><span class="ic">${s.icon}</span><b>${esc(s.name)}</b>

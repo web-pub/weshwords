@@ -7,12 +7,14 @@ import { shuffle } from "./app.js";
 import { findIrregular, IRREGULAR_VERBS } from "./irregular-verbs.js";
 import { accuracy, seriesPoints, earnsPiece, puzzleState, puzzleGrid, pieceOrderIndex, PIECES } from "./rewards.js";
 import { renderCe1dCard } from "./ce1d-ui.js";
+import { renderStudyCard } from "./study.js";
 import { badgeStats, evaluateBadges, badgesGrid } from "./badges.js";
 import { runVerbs, runDictee, playDuel, buildDuelItems, duelWinner, fmtTime, DUEL_PENALTIES } from "./practice.js";
 import { irregularVerbs, wordCount } from "./words.js";
 import {
   checkAnswer, pickWord, nextDirection, computeStreak, speak, PER_DIRECTION, DAILY_GOAL, MAX_LEVEL,
-  isLong, hintPattern, buildChoices, DEFAULT_SETTINGS, activeThemes, filterByThemes, categoriesOf
+  isLong, hintPattern, buildChoices, DEFAULT_SETTINGS, activeThemes, filterByThemes, categoriesOf,
+  DEFAULT_SUBJECTS, DEFAULT_LEVELS, DEFAULT_NIVEAU
 } from "./words.js";
 
 await initPrivatePage();
@@ -22,6 +24,7 @@ const uid = user.uid;
 const today = todayKey();
 const vars = { prenom: profile.prenom || profile.username };
 
+let wordsRaw = [], wordsNlRaw = [];
 let words = [];
 let sessions = {};
 let revealed = [];
@@ -36,6 +39,23 @@ let wordsNl = [], sessionsNl = {}, readyNl = { w: false, s: false };
 let holdBadges = false; // pas de pop-up de badge pendant un écran de fin
 let exams = [], badgesMeta = { unlocked: {} }, badgesLoaded = { m: false, x: false }, badgeQueue = [];
 const pool = () => filterByThemes(words, activeThemes(settings, today).list);
+
+/* ---------------- Matières & niveaux (V03-004) : réglages choisis par le parent ---------------- */
+function subjectsOf() { return { ...DEFAULT_SUBJECTS, ...(settings.subjects || {}) }; }
+function levelsOf() { return { ...DEFAULT_LEVELS, ...(settings.levels || {}) }; }
+/** Recalcule words/wordsNl (filtrés par niveau choisi) à partir des listes brutes — appelé
+    à chaque nouvelle liste de mots ET à chaque changement de réglages (le niveau peut changer
+    sans que Firestore repousse une nouvelle liste de mots). */
+function applyLevelFilter() {
+  const lv = levelsOf();
+  words = wordsRaw.filter(w => (w.niveau || DEFAULT_NIVEAU) === (lv.en || DEFAULT_NIVEAU));
+  wordsNl = wordsNlRaw.filter(w => (w.niveau || DEFAULT_NIVEAU) === (lv.nl || DEFAULT_NIVEAU));
+}
+/** Carte « Cartes mentales & Flashcards » (V03-005) : reconstruite à chaque changement de mots/matières/niveaux */
+function refreshStudy() {
+  if (!$("#studyZone")) return;
+  renderStudyCard($("#studyZone"), { subjects: subjectsOf(), words, wordsNl });
+}
 
 const emptySession = () => ({ day: today, frEn: 0, enFr: 0, attempts: 0, errors: 0, completed: false, wrong: [], bonus: 0 });
 const sess = () => sessions[today] || (sessions[today] = emptySession());
@@ -54,7 +74,8 @@ function saveSessionNl() {
 
 /* ---------------- Flux temps réel ---------------- */
 onSnapshot(collection(db, "users", uid, "words"), snap => {
-  words = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  wordsRaw = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  applyLevelFilter();
   ready.w = true; boot();
 }, e => { toast(errMsg(e), "err"); ready.w = true; boot(); });
 
@@ -73,7 +94,8 @@ onSnapshot(collection(db, "users", uid, "sessions"), snap => {
 }, e => { toast(errMsg(e), "err"); ready.s = true; boot(); });
 
 onSnapshot(collection(db, "users", uid, "wordsNl"), snap => {
-  wordsNl = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  wordsNlRaw = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  applyLevelFilter();
   readyNl.w = true;
   if (ready.w && ready.s && !quiz.active) renderNl();
 }, () => { readyNl.w = true; });
@@ -104,7 +126,10 @@ onSnapshot(doc(db, "users", uid, "meta", "shame"), s => {
 
 onSnapshot(doc(db, "users", uid, "meta", "settings"), s => {
   settings = { ...DEFAULT_SETTINGS, ...(s.exists() ? s.data() : {}) };
+  applyLevelFilter();
   if (ready.w && ready.s) renderHome();
+  if (readyNl.w && readyNl.s && !quiz.active) renderNl();
+  refreshCe1d();
 }, () => {});
 
 onSnapshot(collection(db, "users", uid, "exams"), s => {
@@ -133,11 +158,20 @@ onSnapshot(doc(db, "users", uid, "meta", "puzzle"), s => {
 /* ---------------- Préparer le CE1D (V02-001) ---------------- */
 let ce1dResults = [];
 const saveCe1d = res => addDoc(collection(db, "users", uid, "ce1d"), { ...res, day: today, createdAt: serverTimestamp() });
+/** Filtre les matières CE1D affichées selon les matières choisies par le parent (V03-004) ;
+    masque toute la carte si aucune matière CE1D n'est activée. */
+function refreshCe1d() {
+  if (!$("#ce1dZone")) return;
+  const su = subjectsOf();
+  const ids = ["math", "francais", "sciences", "langues"].filter(id => id === "langues" ? su.en : su[id]);
+  $("#ce1dCard")?.classList.toggle("hidden", !ids.length);
+  if (ids.length) renderCe1dCard($("#ce1dZone"), ce1dResults, saveCe1d, ids);
+}
 onSnapshot(collection(db, "users", uid, "ce1d"), s => {
   ce1dResults = s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.createdAt?.seconds || 9e12) - (a.createdAt?.seconds || 9e12));
-  if ($("#ce1dZone")) renderCe1dCard($("#ce1dZone"), ce1dResults, saveCe1d);
+  refreshCe1d();
 }, () => {});
-renderCe1dCard($("#ce1dZone"), ce1dResults, saveCe1d);
+refreshCe1d();
 
 function boot() {
   if (!ready.w || !ready.s) return;
@@ -165,6 +199,10 @@ const todayShame = () => revealed.find(r => r.revealedDay === today);
 
 function renderHome() {
   if (quiz.active) return;
+  const suEn = subjectsOf().en;
+  $("#englishZone")?.classList.toggle("hidden", !suEn);
+  $("#englishZone2")?.classList.toggle("hidden", !suEn);
+  $("#englishZone3")?.classList.toggle("hidden", !suEn);
   const s = sess();
   const total = Math.min(DAILY_GOAL, (s.frEn || 0) + (s.enFr || 0));
   $("#hello").textContent = T("eleve.hello", vars);
@@ -173,7 +211,8 @@ function renderHome() {
   $("#homeBars").innerHTML = barsHTML(s);
 
   let act = "";
-  if (!words.length) act = `<p class="note">${esc(T("eleve.empty"))}</p>`;
+  if (!words.length && wordsRaw.length) act = `<p class="note">Aucun mot anglais de niveau ${levelsOf().en} pour l'instant — demande à un parent d'en importer, ou de changer le niveau dans ses réglages.</p>`;
+  else if (!words.length) act = `<p class="note">${esc(T("eleve.empty"))}</p>`;
   else if (s.completed) {
     act = `<h3 style="color:var(--green)">${esc(T("eleve.done"))}</h3><p class="muted">${esc(T("eleve.done.text"))}</p><div class="row" style="justify-content:center">`;
     if (canReveal()) act += `<button class="btn pink" id="btnReward">🎁 ${esc(T("end.btn"))}</button>`;
@@ -205,6 +244,7 @@ function renderHome() {
   $("#btnExtra")?.addEventListener("click", () => startQuiz("extra"));
   renderPuzzle();
   renderNl();
+  refreshStudy();
   $("#btnReward")?.addEventListener("click", revealShame);
   $("#btnReview")?.addEventListener("click", () => showShame(todayShame(), true));
 
@@ -665,6 +705,9 @@ function nextQuestion() {
     quiz.dir = quiz.mode === "daily" ? nextDirection(s, quiz.lastDir) : quiz.mode === "extra" ? nextDirection(curSeries(), quiz.lastDir) : (quiz.lastDir === "frEn" ? "enFr" : "frEn");
     quiz.cur = pickWord(pool(), { recent: quiz.recent, retry: quiz.retry, step: quiz.step, today });
   }
+  // Le vocabulaire disponible peut changer en cours de série (ex. un parent modifie le niveau
+  // de langue pendant que l'élève joue) : on quitte proprement plutôt que de planter.
+  if (!quiz.cur) { toast("Le vocabulaire disponible a changé. On revient à l'accueil.", "warn"); stopQuiz(); return; }
   quiz.lastDir = quiz.dir;
   quiz.answered = false;
   const w = quiz.cur;
@@ -977,11 +1020,15 @@ function renderPuzzle() {
 /* ---------------- Néerlandais (V03-002) ---------------- */
 function renderNl() {
   if (!$("#nlZone")) return;
+  if (!subjectsOf().nl) { $("#nlCard")?.classList.add("hidden"); return; }
+  $("#nlCard")?.classList.remove("hidden");
   if (!readyNl.w || !readyNl.s) { $("#nlZone").innerHTML = `<p class="muted small">Chargement…</p>`; return; }
   const sn = sessNl();
   const ser = sn.series || [];
   let html = "";
-  if (!wordsNl.length) {
+  if (!wordsNl.length && wordsNlRaw.length) {
+    html = `<p class="note">Aucun mot néerlandais de niveau ${levelsOf().nl} pour l'instant — demande à un parent d'en importer, ou de changer le niveau dans ses réglages.</p>`;
+  } else if (!wordsNl.length) {
     html = `<p class="note">Ton parent n'a pas encore ajouté de vocabulaire néerlandais dans l'espace parent → 🇳🇱 Néerlandais.</p>`;
   } else {
     const nSer = ser.length + 1;
@@ -993,6 +1040,7 @@ function renderNl() {
   }
   $("#nlZone").innerHTML = html;
   $("#btnNl")?.addEventListener("click", () => startQuiz("nl"));
+  refreshStudy();
 }
 function showEnd(done, piece) {
   const s = sess();
