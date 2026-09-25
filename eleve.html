@@ -18,44 +18,51 @@
   <main class="wrap hidden" id="main" style="padding-top:20px;padding-bottom:40px">
     <!-- ACCUEIL ÉLÈVE -->
     <section id="vHome">
-      <div class="grid g2">
-        <div class="card center">
-          <img id="homeArt" class="home-art" src="assets/scene-ensemble.webp" alt="Margaux">
-          <h2 id="hello"></h2>
-          <p class="muted" data-t="eleve.goal"></p>
-          <div class="ring" id="ring" style="margin:18px auto"><div><div class="n" id="ringN">0</div><div class="d">/ 20</div></div></div>
-          <div class="bars" id="homeBars"></div>
-          <div class="theme-bar" id="themeBar"></div>
-          <div id="homeAction"></div>
-          <div id="propZone" style="margin-top:10px"></div>
-        </div>
-        <div class="stack">
-          <div class="grid g2 keep2">
-            <div class="stat"><div class="v" id="stStreak">0</div><div class="l" data-t="eleve.st.streak">🔥 jours de série</div></div>
-            <div class="stat"><div class="v" id="stMaster">0</div><div class="l" data-t="eleve.st.master">⭐ mots maîtrisés</div></div>
-            <div class="stat"><div class="v" id="stWords">0</div><div class="l" data-t="eleve.st.words">📚 mots au total</div></div>
-            <div class="stat"><div class="v" id="stShame">0</div><div class="l" data-t="eleve.st.shame">💀 hontes débloquées</div></div>
+      <div id="englishZone">
+        <div class="grid g2">
+          <div class="card center">
+            <img id="homeArt" class="home-art" src="assets/scene-ensemble.webp" alt="Margaux">
+            <h2 id="hello"></h2>
+            <p class="muted" data-t="eleve.goal"></p>
+            <div class="ring" id="ring" style="margin:18px auto"><div><div class="n" id="ringN">0</div><div class="d">/ 20</div></div></div>
+            <div class="bars" id="homeBars"></div>
+            <div class="theme-bar" id="themeBar"></div>
+            <div id="homeAction"></div>
+            <div id="propZone" style="margin-top:10px"></div>
           </div>
-          <div class="card">
-            <h3 data-t="eleve.cal">📅 Mes 4 dernières semaines</h3>
-            <div class="days" id="days"></div>
-            <p class="small muted" style="margin-top:8px" data-t="eleve.cal.legend">Vert = 20/20 · Orange = commencé</p>
+          <div class="stack">
+            <div class="grid g2 keep2">
+              <div class="stat"><div class="v" id="stStreak">0</div><div class="l" data-t="eleve.st.streak">🔥 jours de série</div></div>
+              <div class="stat"><div class="v" id="stMaster">0</div><div class="l" data-t="eleve.st.master">⭐ mots maîtrisés</div></div>
+              <div class="stat"><div class="v" id="stWords">0</div><div class="l" data-t="eleve.st.words">📚 mots au total</div></div>
+              <div class="stat"><div class="v" id="stShame">0</div><div class="l" data-t="eleve.st.shame">💀 hontes débloquées</div></div>
+            </div>
+            <div class="card">
+              <h3 data-t="eleve.cal">📅 Mes 4 dernières semaines</h3>
+              <div class="days" id="days"></div>
+              <p class="small muted" style="margin-top:8px" data-t="eleve.cal.legend">Vert = 20/20 · Orange = commencé</p>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div class="card" style="margin-top:16px">
-        <h3 data-t="practice.title"></h3>
-        <p class="small muted" data-t="practice.help"></p>
-        <div class="row">
-          <button class="btn soft" id="btnVerbs"></button>
-          <button class="btn soft" id="btnDictee" data-t="dictee.btn"></button>
-          <button class="btn pink" id="btnDuel" data-t="duel.btn"></button>
+        <div class="card" style="margin-top:16px">
+          <h3 data-t="practice.title"></h3>
+          <p class="small muted" data-t="practice.help"></p>
+          <div class="row">
+            <button class="btn soft" id="btnVerbs"></button>
+            <button class="btn soft" id="btnDictee" data-t="dictee.btn"></button>
+            <button class="btn pink" id="btnDuel" data-t="duel.btn"></button>
+          </div>
+          <div id="duelZone" style="margin-top:14px"></div>
         </div>
-        <div id="duelZone" style="margin-top:14px"></div>
       </div>
 
       <div class="card">
+        <h3>🗺️ Cartes mentales & Flashcards</h3>
+        <div id="studyZone"></div>
+      </div>
+
+      <div class="card" id="ce1dCard">
         <h3 data-t="ce1d.title"></h3>
         <div id="ce1dZone"></div>
       </div>
@@ -65,7 +72,7 @@
         <div id="puzzleZone"></div>
       </div>
 
-      <div class="card">
+      <div class="card" id="nlCard">
         <div class="row between" style="align-items:center">
           <h3 style="margin:0">🇳🇱 Néerlandais</h3>
           <img src="assets/margaux-sixseven.gif" alt="Margaux — Six Seven !" title="SIX SEVEN 🤙" style="width:56px;height:56px;border-radius:50%;object-fit:cover;border:2px solid var(--blue)">
@@ -78,12 +85,12 @@
         <div id="badgeGrid" style="margin-top:12px"></div>
       </div>
 
-      <div class="card">
+      <div class="card" id="englishZone2">
         <h3 data-t="shame.collection"></h3>
         <div id="shameList"></div>
       </div>
 
-      <div class="card">
+      <div class="card" id="englishZone3">
         <h3 data-t="eleve.hard">🧠 Les mots qui me résistent</h3>
         <div id="hardList"></div>
       </div>

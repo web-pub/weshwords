@@ -33,7 +33,7 @@
       <nav class="tabs" id="tabs">
         <button class="tab on" data-tab="dash">📊 Tableau de bord</button>
         <button class="tab" data-tab="bilan">📅 Bilan</button>
-        <button class="tab" data-tab="vocab">📚 Vocabulaire</button>
+        <button class="tab" data-tab="vocab">🇬🇧 Anglais</button>
         <button class="tab" data-tab="nl">🇳🇱 Néerlandais</button>
         <button class="tab" data-tab="shame">💀 Mots de la honte</button>
         <button class="tab" data-tab="duel">⚔️ Duel</button>
@@ -207,7 +207,7 @@
             <div id="impPreviewNl"></div>
             <hr class="sep">
             <div class="row">
-              <button class="btn soft" id="btnSeedNl">📦 Vocabulaire néerlandais CE1D (1 500 mots)</button>
+              <button class="btn soft" id="btnSeedNl">📦 Vocabulaire néerlandais CE1D (975 mots)</button>
               <button class="btn soft" id="btnIrrNl">🔤 Liste des verbes irréguliers (119)</button>
               <button class="btn soft" id="btnExportNl">📤 Exporter en Excel</button>
             </div>
@@ -299,6 +299,28 @@
 
       <!-- RÉGLAGES -->
       <section class="panel" id="p-settings">
+        <div class="card">
+          <h3>📚 Matières & niveaux</h3>
+          <p class="muted small">Choisis ce que <span id="stChildName2"></span> doit étudier, et le niveau des langues (2e, 4e ou 6e/rhéto).</p>
+          <div class="field">
+            <label class="check"><input type="checkbox" id="stSubEn"> 🇬🇧 Anglais</label>
+            <label class="check"><input type="checkbox" id="stSubNl"> 🇳🇱 Néerlandais</label>
+            <label class="check"><input type="checkbox" id="stSubMath"> 📐 Mathématiques</label>
+            <label class="check"><input type="checkbox" id="stSubFr"> 📖 Français</label>
+            <label class="check"><input type="checkbox" id="stSubSci"> 🔬 Sciences</label>
+          </div>
+          <div class="row" style="margin-top:10px;flex-wrap:wrap;gap:18px">
+            <div>
+              <label class="small" style="display:block;margin-bottom:4px">Niveau anglais</label>
+              <select id="stLvlEn"><option value="2">2e année</option><option value="4">4e année</option><option value="6">6e année (fin de rhéto)</option></select>
+            </div>
+            <div>
+              <label class="small" style="display:block;margin-bottom:4px">Niveau néerlandais</label>
+              <select id="stLvlNl"><option value="2">2e année</option><option value="4">4e année</option><option value="6">6e année (fin de rhéto)</option></select>
+            </div>
+          </div>
+          <p class="small muted" style="margin-top:8px">Une matière décochée disparaît de l'espace élève. Le vocabulaire aujourd'hui disponible est tout au niveau 2 ; les niveaux 4 et 6 se rempliront au fur et à mesure des imports (colonne « Niveau » du fichier).</p>
+        </div>
         <div class="card">
           <h3>🎯 Thèmes à réviser</h3>
           <p class="muted small">Idéal avant un contrôle : limite les révisions à un ou plusieurs chapitres.</p>

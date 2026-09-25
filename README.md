@@ -1,4 +1,4 @@
-# Wesh Words — V03-002
+# Wesh Words — V03-006
 
 Révisions de vocabulaire anglais 🇫🇷 ↔ 🇬🇧 : 20 bonnes réponses par jour (10 FR→EN + 10 EN→FR), et au 20/20… le **mot de la honte**. 💀
 
@@ -40,8 +40,8 @@ assets/               CSS, JS, logo, icônes, personnage Margaux (margaux-*.webp
 1. Décompresser le ZIP sur le PC (clic droit → Extraire tout).
 2. Sur https://github.com/web-pub/weshwords → **Add file** → **Upload files**.
 3. Ouvrir le dossier décompressé, **sélectionner tout son contenu** (Ctrl + A : les pages HTML, `sw.js`, `favicon.ico`… **et le dossier `assets`**) et le glisser dans la page GitHub.
-   Les fichiers doivent arriver **à la racine** du dépôt (pas dans un sous-dossier « WeshWords-V03-002 »).
-4. En bas : message « Wesh Words V03-002 » → **Commit changes**.
+   Les fichiers doivent arriver **à la racine** du dépôt (pas dans un sous-dossier « WeshWords-V03-006 »).
+4. En bas : message « Wesh Words V03-006 » → **Commit changes**.
 5. Première fois seulement : **Settings** → **Pages** → Source « Deploy from a branch » → Branch **main** / **(root)** → Save.
 6. Attendre 1 à 2 minutes. Adresse du site : `https://web-pub.github.io/weshwords/`
 
@@ -55,7 +55,7 @@ git clone https://github.com/web-pub/weshwords.git
 cd weshwords
 # décompresser le ZIP ici (fichiers à la racine + dossier assets/)
 git add -A
-git commit -m "Wesh Words V03-002"
+git commit -m "Wesh Words V03-006"
 git push origin main
 ```
 
@@ -70,7 +70,7 @@ Ouvrir **`https://web-pub.github.io/weshwords/diagnostic.html`**. Elle teste et 
 |---|---|
 | Site en ligne, dossier `assets` présent | renvoyer le dossier `assets` à la racine du dépôt |
 | Base Firestore créée | étape A.3 |
-| Règles publiées **et à jour** (V03-002) | étape A.4 |
+| Règles publiées **et à jour** (V03-006) | étape A.4 |
 | Méthode E-mail/Mot de passe active | étape A.1 |
 | Super Admin installé | ouvrir `connexion.html` → Installation initiale |
 | Application installable | recharger la page une fois |
@@ -126,9 +126,17 @@ Astuce : après une mise à jour, si l'ancienne version s'affiche encore, rechar
 | Suivi des connexions (V03-001) | Super Admin → Membres : colonnes « Dernière visite » (dès que la personne ouvre une page de l'appli, même reconnectée automatiquement sans retaper son mot de passe) et « Dernière connexion » (dernière fois où le mot de passe a été tapé avec succès). Le mot de passe réellement tapé à la connexion est aussi réenregistré automatiquement dans l'onglet Mots de passe. |
 | Mots de la honte 2026 (V03-001) | 67 nouvelles expressions d'argot ajoutées (wesh, six seven / 67, rizz, aura farming, la hess, pain brioché, GOAT absolu…), dont plusieurs variantes autour du fameux « six seven » (67). Bouton « 💡 Ajouter des idées toutes prêtes » dans Vocabulaire → Mots de la honte. |
 | Mot de la honte | 1 révélation max par jour, uniquement après le 20/20, dans l'ordre de la file du parent. Jamais visible par l'élève avant révélation (règles Firestore). Ne consomme aucune question et ne touche pas aux niveaux. |
-| Néerlandais (V03-002) | Nouvel onglet « 🇳🇱 Néerlandais », en plus de l'anglais : vocabulaire, ajout, import/export et vérification séparés (espace parent → onglet dédié), séries de 20 **libres** (pas d'obligation quotidienne comme pour l'anglais), mêmes points et mêmes pièces de puzzle. Vocabulaire de départ fourni : 1500 mots CE1D A1-A2 + 119 verbes forts/irréguliers, à importer via « 📦 Vocabulaire néerlandais CE1D » et « 🔤 Liste des verbes irréguliers ». Les outils dictée audio, duel et contrôle blanc restent pour l'instant réservés à l'anglais. |
+| Néerlandais (V03-002) | Nouvel onglet « 🇳🇱 Néerlandais » (à côté de « 🇬🇧 Anglais », renommé en V03-003 pour la symétrie), en plus de l'anglais : vocabulaire, ajout, import/export et vérification séparés (espace parent → onglet dédié), séries de 20 **libres** (pas d'obligation quotidienne comme pour l'anglais), mêmes points et mêmes pièces de puzzle. Vocabulaire de départ fourni : 975 mots CE1D A1-A2 + 126 verbes irréguliers (liste officielle, V03-003), à importer via « 📦 Vocabulaire néerlandais CE1D » et « 🔤 Liste des verbes irréguliers ». *(Correction V03-006 : la liste importée en V03-002 annonçait 1500 mots mais contenait 525 entrées de remplissage fabriquées, sans valeur pédagogique — elles ont été retirées après audit ; 975 mots réels restent.)* Les outils dictée audio, duel et contrôle blanc restent pour l'instant réservés à l'anglais. |
 | Vérification automatique (V03-002) | 🤖 Assistant intégré au site (pas un service d'IA externe payant : le site n'a pas de serveur pour garder une clé API en sécurité) qui relit chaque mot ajouté à la main ou importé (anglais et néerlandais) et signale ce qui semble louche : colonnes inversées, mot vide, texte identique en français et dans l'autre langue, phrase entière collée par erreur… Un avertissement n'empêche pas d'ajouter/importer, il demande juste une confirmation. |
+| Import « OK / à vérifier » séparés (V03-003) | À l'import (fichier ou listes fournies), les mots jugés OK par la vérification automatique s'importent directement en un clic, sans avoir à faire défiler la liste. Les mots « à vérifier » sont affichés **en entier** (plus de limite à 30 lignes) dans un tableau à part, avec la raison de chaque alerte visible directement (plus besoin de survoler le ⚠️), pour les relire un par un avant de les importer ou non. |
+| Verbes irréguliers néerlandais officiels (V03-003) | La liste des 126 verbes irréguliers néerlandais a été remplacée par la liste de référence officielle (Enseignement à Distance, Communauté française) : infinitif, prétérit, participe passé, traduction et auxiliaire (zijn/hebben) pour chaque verbe. |
 | Puzzle « Six Seven » (V03-002) | Un 7e puzzle à collectionner (image de Margaux façon « SIX SEVEN », le mème TikTok) rejoint la rotation des 6 puzzles existants. Un petit sticker animé de Margaux « Six Seven » apparaît aussi à côté de la carte Néerlandais dans l'espace élève. |
+| Confidentialité des espaces parent (V03-003) | Chaque parent (y compris le Super Admin, dans son propre espace parent) ne voit que ses propres enfants. Le Super Admin peut toujours consulter le bilan de n'importe quel enfant, mais uniquement via Super Admin → Membres → lien « Suivi » sur la ligne de l'enfant. |
+| Page d'accueil CE1D (V03-004) | La page d'accueil (et le contenu, modifiable depuis Super Admin → Contenus du site) ne présente plus le site comme un simple outil d'anglais, mais comme une appli de révision pour le CE1D : anglais, néerlandais, maths, français, sciences, pensée pour de courtes séries de révision (« 5 minutes de libre ? »). |
+| Matières & niveaux par enfant (V03-004) | Espace parent → 🎛️ Réglages → « 📚 Matières & niveaux » : le parent choisit, pour chaque enfant, quelles matières sont visibles dans son espace élève (anglais, néerlandais, mathématiques, français, sciences) et le niveau de langue à étudier (2e, 4e ou 6e/fin de rhéto) pour l'anglais et le néerlandais séparément. Une matière décochée disparaît entièrement de l'espace élève ; le vocabulaire de la langue choisie est filtré par niveau. Par défaut (comptes existants compris) : toutes les matières sont activées, niveau 2. |
+| Niveau du vocabulaire (V03-004) | Chaque mot anglais/néerlandais porte désormais un niveau (2 / 4 / 6). Le vocabulaire déjà présent est au niveau 2. À l'import, une colonne « Niveau » (à mettre en colonne A du fichier Excel) permet de préciser le niveau de chaque mot importé ; sans cette colonne, les mots importés sont au niveau 2 par défaut. L'export (💾 Exporter) inclut aussi cette colonne. |
+| Cartes mentales & Flashcards (V03-005) | Nouvelle carte « 🗺️ Cartes mentales & Flashcards » dans l'espace élève : une bulle par matière activée (anglais, néerlandais, maths, français, sciences), qui ouvre une carte mentale visuelle — une bulle par catégorie/thème, taille selon le nombre d'éléments. Toucher une bulle (ou le centre pour tout mélanger) ouvre une session de flashcards recto/verso (question/réponse pour le CE1D, français/langue pour le vocabulaire) avec prononciation audio, pensée pour réviser en quelques minutes. Construites à partir des catégories et thèmes déjà existants, sans contenu à maintenir en double. |
+| Audit complet — code & contenu (V03-006) | Passage en revue de tout le code et de toute la matière (maths, français, sciences, anglais, néerlandais) par rapport au programme belge de 2e secondaire (CE1D). **Bugs corrigés :** plantage possible du quiz si un parent change le niveau de langue d'un enfant pendant qu'il joue ; message d'état vide trompeur côté néerlandais ; correcteur d'exercices CE1D qui refusait un signe moins normal ou mélangeait un chiffre d'unité (ex. « cm3 ») à la réponse ; question d'arrondi qui affichait un nombre déjà arrondi ; QCM générés pouvant proposer deux fois « la même » réponse écrite différemment (ex. 6/4 et 3/2). **Contenu corrigé :** un exercice de grammaire française mal formé, une explication d'étymologie imprécise, deux notes de conjugaison néerlandaise erronées, une vingtaine de traductions FR↔NL et FR↔EN incorrectes ou approximatives, une trentaine d'accords d'adjectifs néerlandais mal formés, une centaine de phrases d'exemple incohérentes (nettoyées plutôt que laissées fausses). **Correction de données :** la liste de vocabulaire néerlandais importée en V03-002 annonçait 1500 mots mais 525 étaient des entrées de remplissage fabriquées (« mot utile 1 », « mot utile 2 »…) sans aucune valeur pédagogique ; elles ont été retirées, il reste 975 mots néerlandais réels. |
 
 ## 6. Données Firestore
 
@@ -140,7 +148,7 @@ secrets/{uid}                  { username, email, password }   ← Super Admin u
 demandes/{id}                  { nom, prenom, gsm, email, statut }
 users/{uid}                    { prenom, nom, username, email, realEmail, role, parentUid, birth, gsm, lastSeen, lastLogin }   ← lastSeen/lastLogin V03-001
 users/{uid}/proposals/{id}     { type: alt|fix, wordId, dir, given, oldFr, oldEn, fr, en, note, status, decidedDay }
-users/{uid}/words/{id}         { fr, en, altFr[], altEn[], cat, nature, ex, conj, level, ok, ko, seen, lastSeen, lastKo, vLevel, vOk, vKo, dOk, dKo }
+users/{uid}/words/{id}         { fr, en, altFr[], altEn[], cat, nature, ex, conj, niveau (2/4/6, V03-004), level, ok, ko, seen, lastSeen, lastKo, vLevel, vOk, vKo, dOk, dKo }
 users/{uid}/sessions/{AAAA-MM-JJ} { frEn, enFr, attempts, errors, completed, wrong[], helped, qcm, bonus, exam, mastered[], verbs, verbsOk, dictee, dicteeOk,
                                  series[{n, attempts, errors, helped, acc, points}], cur }
 users/{uid}/shame/{id}         { expression, phrase, honte, revealed, revealedDay }
@@ -150,8 +158,9 @@ users/{uid}/duels/{id}         { createdBy, day, items[], child{score,total,time
 users/{uid}/meta/badges        { unlocked: { idBadge: AAAA-MM-JJ } }
 users/{uid}/meta/puzzle        { pieces, log[{day, n, points}] }                      ← V02-001
 users/{uid}/ce1d/{id}          { subject, theme, themeName, day, ok, total, score, wrong[], seen[], durationSec }   ← V02-001
-users/{uid}/meta/settings      { hints, autoQcm, qcmMinWords, themes[], themesLocked, themesUntil, childThemes[] }
-users/{uid}/wordsNl/{id}       { fr, en (= mot néerlandais), cat, nature, ex, conj, level, ok, ko, seen, lastSeen, lastKo }   ← V03-002
+users/{uid}/meta/settings      { hints, autoQcm, qcmMinWords, themes[], themesLocked, themesUntil, childThemes[],
+                                 subjects: {en,nl,math,francais,sciences}, levels: {en,nl} (2/4/6) }              ← subjects/levels V03-004
+users/{uid}/wordsNl/{id}       { fr, en (= mot néerlandais), cat, nature, ex, conj, niveau (2/4/6, V03-004), level, ok, ko, seen, lastSeen, lastKo }   ← V03-002
 users/{uid}/sessionsNl/{AAAA-MM-JJ} { series[{n, attempts, errors, helped, acc, points}], cur }                              ← V03-002, séries toujours libres
 ```
 
