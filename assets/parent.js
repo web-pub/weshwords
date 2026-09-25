@@ -33,6 +33,7 @@ let settings = { ...DEFAULT_SETTINGS }, settingsDirty = false;
 let exams = [], weekOffset = 0, badgesUnlocked = {}, duels = [], proposals = [], puzzle = { pieces: 0, log: [] }, ce1d = [];
 let histMonth = null; // null = toutes les sessions ; sinon "AAAA-MM" pour remonter dans le temps
 let wordsNl = [], sessionsNl = []; // Néerlandais (V03-002)
+let ce1dCustom = []; // Exercices CE1D perso (V03-007)
 let unsubs = [];
 let loaded = { shame: false, meta: false };
 let firstLoad = true;
@@ -155,9 +156,15 @@ function selectChild(c) {
     sessionsNl = s.docs.map(d => ({ day: d.id, ...d.data() })).sort((a, b) => b.day.localeCompare(a.day));
     renderSeriesDash();
   }, () => {}));
+  // --- Exercices CE1D perso (V03-007)
+  unsubs.push(onSnapshot(collection(db, ...base, "ce1dCustom"), s => {
+    ce1dCustom = s.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderCe1dCustomAll();
+  }, e => toast(errMsg(e), "err")));
   renderAccount();
   renderVocab(); renderDash(); renderHist(); renderShame(); renderSettings(); renderExams(); renderBilan(); renderDuels();
   renderVocabNl();
+  CE1D_CUSTOM_SUBJECTS.forEach(mountCe1dCustom);
 }
 
 /* ---------------- Onglets ---------------- */
@@ -165,6 +172,14 @@ $$("#tabs .tab").forEach(t => t.onclick = () => {
   $$("#tabs .tab").forEach(x => x.classList.toggle("on", x === t));
   $$(".panel").forEach(p => p.classList.toggle("on", p.id === "p-" + t.dataset.tab));
 });
+/* ---------------- Sous-onglets « Cours » (V03-007) ---------------- */
+function gotoCours(sub) {
+  $$("#tabs .tab").forEach(x => x.classList.toggle("on", x.dataset.tab === "cours"));
+  $$(".panel").forEach(p => p.classList.toggle("on", p.id === "p-cours"));
+  $$("#coursSubtabs .tab").forEach(x => x.classList.toggle("on", x.dataset.sub === sub));
+  $$(".subpanel").forEach(p => p.classList.toggle("on", p.id === "p-" + sub));
+}
+$$("#coursSubtabs .tab").forEach(t => t.onclick = () => gotoCours(t.dataset.sub));
 
 /* ---------------- Overlay ---------------- */
 function openOverlay(html) {
@@ -567,6 +582,110 @@ $("#btnExportNl")?.addEventListener("click", () => {
   catch (e) { toast(errMsg(e), "err"); }
 });
 
+/* ---------------- Exercices CE1D perso (V03-007) ----------------
+   Maths / Français / Sciences : les exercices sont normalement fixes (écrits dans le code
+   de l'appli). Ici, le parent peut ajouter ses propres exercices par matière/thème : ils
+   viennent s'ajouter aux exercices déjà prévus, dans le thème choisi, quand l'enfant joue une série. */
+const ce1dCustomCol = () => collection(db, "users", child.uid, "ce1dCustom");
+const CE1D_CUSTOM_SUBJECTS = ["math", "francais", "sciences"];
+function ce1dCustomForm(subId) {
+  const sub = SUBJECTS.find(s => s.id === subId);
+  return `<div class="grid g2">
+    <div class="card">
+      <h3>➕ Ajouter un exercice</h3>
+      <form id="ceAdd-${subId}" autocomplete="off">
+        <div class="field"><label>Thème <span class="req">*</span></label>
+          <select id="ceTh-${subId}" required>${sub.themes.map(t => `<option value="${esc(t.id)}">${esc(t.name)}</option>`).join("")}</select></div>
+        <div class="field"><label>Type de question <span class="req">*</span></label>
+          <select id="ceType-${subId}">
+            <option value="txt">Réponse libre (texte)</option>
+            <option value="num">Réponse numérique</option>
+            <option value="qcm">Choix multiple (QCM)</option>
+            <option value="vf">Vrai / Faux</option>
+          </select></div>
+        <div class="field"><label>Question <span class="req">*</span></label><input type="text" id="ceQ-${subId}" required></div>
+        <div class="field" id="ceAnsWrap-${subId}"></div>
+        <div class="field"><label>Explication (affichée après la réponse) <span class="req">*</span></label><input type="text" id="ceEx-${subId}" required></div>
+        <p class="small muted">* Champs obligatoires · pour un QCM ou une réponse texte, plusieurs bonnes réponses possibles : sépare-les par « / »</p>
+        <button class="btn" type="submit">Ajouter</button>
+      </form>
+    </div>
+    <div class="card">
+      <h3>📋 Exercices ajoutés <span class="chip">${ce1dCustom.filter(c => c.subject === subId).length}</span></h3>
+      <div id="ceList-${subId}"></div>
+    </div>
+  </div>`;
+}
+function ce1dAnswerFields(subId, type) {
+  const w = $(`#ceAnsWrap-${subId}`);
+  if (!w) return;
+  if (type === "qcm") w.innerHTML = `<label>Choix <span class="req">*</span></label>
+    <input type="text" id="ceC1-${subId}" placeholder="Bonne réponse" required style="margin-bottom:6px">
+    <input type="text" id="ceC2-${subId}" placeholder="Distracteur 1" style="margin-bottom:6px">
+    <input type="text" id="ceC3-${subId}" placeholder="Distracteur 2" style="margin-bottom:6px">
+    <input type="text" id="ceC4-${subId}" placeholder="Distracteur 3">`;
+  else if (type === "vf") w.innerHTML = `<label>Bonne réponse <span class="req">*</span></label>
+    <select id="ceVf-${subId}"><option value="1">Vrai</option><option value="0">Faux</option></select>`;
+  else if (type === "num") w.innerHTML = `<label>Réponse (nombre) <span class="req">*</span></label><input type="text" id="ceNum-${subId}" inputmode="decimal" required>
+    <label style="margin-top:6px">Unité <span class="small muted">(facultatif, ex. cm)</span></label><input type="text" id="ceUnit-${subId}">`;
+  else w.innerHTML = `<label>Réponse(s) attendue(s) <span class="req">*</span></label><input type="text" id="ceTxt-${subId}" required placeholder="réponse / variante">`;
+}
+function renderCe1dCustomList(subId) {
+  const host = $(`#ceList-${subId}`);
+  if (!host) return;
+  const sub = SUBJECTS.find(s => s.id === subId);
+  const list = ce1dCustom.filter(c => c.subject === subId);
+  host.innerHTML = list.length ? `<div class="table-wrap"><table><thead><tr><th>Thème</th><th>Question</th><th></th></tr></thead><tbody>${
+    list.map(c => `<tr><td class="small">${esc(sub.themes.find(t => t.id === c.theme)?.name || c.theme)}</td>
+      <td class="small">${esc(c.q)}</td>
+      <td><button class="icon-btn" data-cedel="${c.id}" title="Supprimer">🗑️</button></td></tr>`).join("")
+  }</tbody></table></div>` : `<p class="muted small">Aucun exercice ajouté pour l'instant.</p>`;
+  host.querySelectorAll("[data-cedel]").forEach(b => b.onclick = async () => {
+    try { await deleteDoc(doc(ce1dCustomCol(), b.dataset.cedel)); } catch (e) { toast(errMsg(e), "err"); }
+  });
+}
+function mountCe1dCustom(subId) {
+  const host = $(`#ceHost-${subId}`);
+  if (!host) return;
+  host.innerHTML = ce1dCustomForm(subId);
+  ce1dAnswerFields(subId, "txt");
+  $(`#ceType-${subId}`).onchange = e => ce1dAnswerFields(subId, e.target.value);
+  renderCe1dCustomList(subId);
+  $(`#ceAdd-${subId}`).addEventListener("submit", async e => {
+    e.preventDefault();
+    const theme = $(`#ceTh-${subId}`).value, type = $(`#ceType-${subId}`).value;
+    const q = $(`#ceQ-${subId}`).value.trim(), ex = $(`#ceEx-${subId}`).value.trim();
+    if (!q || !ex) return;
+    let item = { subject: subId, theme, q, t: type, ex, createdAt: serverTimestamp() };
+    if (type === "qcm") {
+      const c1 = $(`#ceC1-${subId}`).value.trim();
+      const bad = [$(`#ceC2-${subId}`).value.trim(), $(`#ceC3-${subId}`).value.trim(), $(`#ceC4-${subId}`).value.trim()].filter(Boolean);
+      if (!c1 || !bad.length) { toast("Il faut la bonne réponse et au moins un distracteur.", "warn"); return; }
+      item.c = [c1, ...bad]; item.a = 0;
+    } else if (type === "vf") {
+      item.a = $(`#ceVf-${subId}`).value === "1";
+    } else if (type === "num") {
+      const n = Number(String($(`#ceNum-${subId}`).value).replace(",", "."));
+      if (!isFinite(n)) { toast("Réponse numérique invalide.", "warn"); return; }
+      item.a = n;
+      const unit = $(`#ceUnit-${subId}`).value.trim(); if (unit) item.unit = unit;
+    } else {
+      const t = $(`#ceTxt-${subId}`).value.trim();
+      if (!t) return;
+      item.a = t.split("/").map(s => s.trim()).filter(Boolean);
+    }
+    try {
+      await addDoc(ce1dCustomCol(), item);
+      toast("Exercice ajouté ✅");
+      e.target.reset(); ce1dAnswerFields(subId, "txt");
+    } catch (err) { toast(errMsg(err), "err"); }
+  });
+}
+function renderCe1dCustomAll() {
+  if (!child) return;
+  CE1D_CUSTOM_SUBJECTS.forEach(id => renderCe1dCustomList(id));
+}
+
 /* ---------------- Mots de la honte ---------------- */
 let pickHonte = 5;
 function renderSkullPicker() {
@@ -873,11 +992,13 @@ function renderSettings() {
   if (!child) return;
   $("#stChildName").textContent = child.prenom || child.username;
   $("#stChildName2").textContent = child.prenom || child.username;
+  $("#stChildName3").textContent = child.prenom || child.username;
   const su = { en: true, nl: true, math: true, francais: true, sciences: true, ...(settings.subjects || {}) };
   $("#stSubEn").checked = su.en; $("#stSubNl").checked = su.nl; $("#stSubMath").checked = su.math;
   $("#stSubFr").checked = su.francais; $("#stSubSci").checked = su.sciences;
   $("#stLvlEn").value = String(settings.levels?.en || DEFAULT_NIVEAU);
   $("#stLvlNl").value = String(settings.levels?.nl || DEFAULT_NIVEAU);
+  $("#stMainLang").value = settings.mainLang === "nl" ? "nl" : "en";
   const lock = !!settings.themesLocked;
   $$('input[name="thMode"]').forEach(r => r.checked = (r.value === (lock ? "lock" : "free")));
   $("#stLockZone").classList.toggle("hidden", !lock);
@@ -906,6 +1027,7 @@ $("#stSave").onclick = async () => {
     themesLocked: lock, themes, themesUntil: lock ? ($("#stUntil").value || "") : "",
     hints: $("#stHints").checked, autoQcm: $("#stAutoQcm").checked,
     qcmMinWords: Math.max(2, Math.min(12, Number($("#stMinWords").value) || 4)),
+    mainLang: $("#stMainLang").value === "nl" ? "nl" : "en",
     subjects: {
       en: $("#stSubEn").checked, nl: $("#stSubNl").checked, math: $("#stSubMath").checked,
       francais: $("#stSubFr").checked, sciences: $("#stSubSci").checked
@@ -1235,8 +1357,7 @@ function ocrEditor() {
       .map(r => ({ fr: r.fr.trim(), en: r.en.trim(), cat, nature: "", ex: "", note: "Photo du cours", irr: false, conj: "" }));
     if (!rows.length) { toast("Aucune ligne à importer.", "warn"); return; }
     closeOverlay();
-    $$("#tabs .tab").forEach(x => x.classList.toggle("on", x.dataset.tab === "vocab"));
-    $$(".panel").forEach(p => p.classList.toggle("on", p.id === "p-vocab"));
+    gotoCours("vocab");
     previewImport(rows, "Photo du cours");
     $("#impPreview").scrollIntoView({ behavior: "smooth", block: "center" });
   };

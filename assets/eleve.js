@@ -72,6 +72,51 @@ function saveSessionNl() {
   setDoc(sessionRefNl(), { ...s }, { merge: true }).catch(e => console.warn(e));
 }
 
+/* ---------------- Langue obligatoire (V03-007) ----------------
+   Jusqu'ici, la série quotidienne obligatoire de 20 mots était toujours en anglais (collection
+   "words"/"sessions"), et le néerlandais (collection "wordsNl"/"sessionsNl") était toujours la
+   langue « libre » (pas d'obligation). Un enfant peut avoir le néerlandais comme langue 1 à
+   l'école (ex. Rose) : le parent choisit alors, dans la fiche de l'enfant, quelle langue porte
+   l'obligation quotidienne (mainLang, "en" ou "nl" — "en" par défaut pour ne rien changer aux
+   comptes existants). Les outils verbes irréguliers / dictée / duel / contrôle blanc restent pour
+   l'instant réservés à l'anglais quelle que soit la langue obligatoire (ils ne sont pas encore
+   déclinés en néerlandais) : ils continuent donc à utiliser littéralement words/sess()/sessionRef().
+   mand* = la langue obligatoire (ring, série du jour, séries bonus, badges, mot de la honte).
+   free* = l'autre langue, toujours en séries libres (comme le néerlandais l'était jusqu'ici). */
+function mandLang() { return settings.mainLang === "nl" ? "nl" : "en"; }
+function freeLang() { return mandLang() === "nl" ? "en" : "nl"; }
+function mandWords() { return mandLang() === "nl" ? wordsNl : words; }
+function mandWordsRaw() { return mandLang() === "nl" ? wordsNlRaw : wordsRaw; }
+function mandPool() { return filterByThemes(mandWords(), activeThemes(settings, today).list); }
+function mandSess() { return mandLang() === "nl" ? sessNl() : sess(); }
+function mandSessions() { return mandLang() === "nl" ? sessionsNl : sessions; }
+function mandCurSeries() { return mandLang() === "nl" ? curSeriesNl() : curSeries(); }
+function mandReady() { return mandLang() === "nl" ? readyNl : ready; }
+function freeWords() { return freeLang() === "nl" ? wordsNl : words; }
+function freeWordsRaw() { return freeLang() === "nl" ? wordsNlRaw : wordsRaw; }
+function freeSess() { return freeLang() === "nl" ? sessNl() : sess(); }
+function freeCurSeries() { return freeLang() === "nl" ? curSeriesNl() : curSeries(); }
+function freeReady() { return freeLang() === "nl" ? readyNl : ready; }
+/** true si le quiz en cours porte sur le vocabulaire néerlandais (mode "daily"/"extra"/"bonus" :
+    selon la langue obligatoire ; mode "nl" — le mode « libre » — : l'inverse de la langue obligatoire ;
+    mode "exam" — contrôle blanc — : toujours faux, cet outil reste réservé à l'anglais). */
+function quizIsNl() {
+  if (quiz.mode === "exam") return false;
+  return quiz.mode === "nl" ? freeLang() === "nl" : mandLang() === "nl";
+}
+/** Banque de mots utilisée par le quiz en cours, selon le mode (cohérent avec quizIsNl()). */
+function quizPool() {
+  if (quiz.mode === "exam") return words;
+  return quiz.mode === "nl" ? freeWords() : mandWords();
+}
+/** Enregistre la session en cours dans la bonne collection Firestore selon le mode et la langue
+    obligatoire — sauf « exam » (contrôle blanc), qui reste toujours lié à l'anglais littéral. */
+function saveActiveSession() {
+  if (quiz.mode === "exam") { saveSession(); return; }
+  const lang = quiz.mode === "nl" ? freeLang() : mandLang();
+  if (lang === "nl") saveSessionNl(); else saveSession();
+}
+
 /* ---------------- Flux temps réel ---------------- */
 onSnapshot(collection(db, "users", uid, "words"), snap => {
   wordsRaw = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -97,8 +142,9 @@ onSnapshot(collection(db, "users", uid, "wordsNl"), snap => {
   wordsNlRaw = snap.docs.map(d => ({ id: d.id, ...d.data() }));
   applyLevelFilter();
   readyNl.w = true;
+  boot();
   if (ready.w && ready.s && !quiz.active) renderNl();
-}, () => { readyNl.w = true; });
+}, () => { readyNl.w = true; boot(); });
 
 onSnapshot(collection(db, "users", uid, "sessionsNl"), snap => {
   const local = sessionsNl[today];
@@ -110,8 +156,9 @@ onSnapshot(collection(db, "users", uid, "sessionsNl"), snap => {
     if (ls > ss || (ls === ss && (local.cur?.attempts || 0) >= (srv.cur?.attempts || 0))) { srv.series = local.series; srv.cur = local.cur; }
   }
   readyNl.s = true;
+  boot();
   if (ready.w && ready.s && !quiz.active) renderNl();
-}, () => { readyNl.s = true; });
+}, () => { readyNl.s = true; boot(); });
 
 onSnapshot(query(collection(db, "users", uid, "shame"), where("revealed", "==", true)), snap => {
   revealed = snap.docs.map(d => ({ id: d.id, ...d.data() }))
@@ -157,24 +204,32 @@ onSnapshot(doc(db, "users", uid, "meta", "puzzle"), s => {
 
 /* ---------------- Préparer le CE1D (V02-001) ---------------- */
 let ce1dResults = [];
+let ce1dCustom = []; // V03-007 : exercices ajoutés par le parent, en plus des banques intégrées
 const saveCe1d = res => addDoc(collection(db, "users", uid, "ce1d"), { ...res, day: today, createdAt: serverTimestamp() });
 /** Filtre les matières CE1D affichées selon les matières choisies par le parent (V03-004) ;
     masque toute la carte si aucune matière CE1D n'est activée. */
 function refreshCe1d() {
   if (!$("#ce1dZone")) return;
   const su = subjectsOf();
-  const ids = ["math", "francais", "sciences", "langues"].filter(id => id === "langues" ? su.en : su[id]);
+  const ids = ["math", "francais", "sciences", "langues", "langues_nl"].filter(id => id === "langues" ? su.en : id === "langues_nl" ? su.nl : su[id]);
   $("#ce1dCard")?.classList.toggle("hidden", !ids.length);
-  if (ids.length) renderCe1dCard($("#ce1dZone"), ce1dResults, saveCe1d, ids);
+  if (ids.length) renderCe1dCard($("#ce1dZone"), ce1dResults, saveCe1d, ids, ce1dCustom);
 }
 onSnapshot(collection(db, "users", uid, "ce1d"), s => {
   ce1dResults = s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.createdAt?.seconds || 9e12) - (a.createdAt?.seconds || 9e12));
+  refreshCe1d();
+}, () => {});
+onSnapshot(collection(db, "users", uid, "ce1dCustom"), s => {
+  ce1dCustom = s.docs.map(d => ({ id: d.id, ...d.data() }));
   refreshCe1d();
 }, () => {});
 refreshCe1d();
 
 function boot() {
   if (!ready.w || !ready.s) return;
+  // Si la langue obligatoire de l'enfant est le néerlandais, on attend aussi que son vocabulaire
+  // et ses sessions néerlandaises soient chargés avant le premier affichage (V03-007).
+  if (mandLang() === "nl" && (!readyNl.w || !readyNl.s)) return;
   $("#loader").classList.add("hidden");
   $("#main").classList.remove("hidden");
   if (!quiz.active) renderHome();
@@ -182,7 +237,7 @@ function boot() {
 
 /* ---------------- Accueil ---------------- */
 function streak() {
-  const done = new Set(Object.values(sessions).filter(s => s.completed).map(s => s.day));
+  const done = new Set(Object.values(mandSessions()).filter(s => s.completed).map(s => s.day));
   return computeStreak(done, today, dayKeyOffset);
 }
 function barsHTML(s, lang = "en") {
@@ -193,26 +248,27 @@ function barsHTML(s, lang = "en") {
     <div class="bar"><div class="t"><span>${flag} → 🇫🇷</span><span>${b}/${PER_DIRECTION}</span></div><div class="track"><div class="fill" style="width:${b * 10}%"></div></div></div>`;
 }
 const nextShameId = () => (meta.queue || []).find(id => !((meta.dates || {})[id]) || meta.dates[id] <= today) || null;
-const canReveal = () => sess().completed && !!nextShameId() && meta.lastRevealDay !== today;
+const canReveal = () => mandSess().completed && !!nextShameId() && meta.lastRevealDay !== today;
 const nextShameDate = () => (meta.queue || []).map(id => (meta.dates || {})[id]).filter(d => d && d > today).sort()[0] || "";
 const todayShame = () => revealed.find(r => r.revealedDay === today);
 
 function renderHome() {
   if (quiz.active) return;
-  const suEn = subjectsOf().en;
-  $("#englishZone")?.classList.toggle("hidden", !suEn);
-  $("#englishZone2")?.classList.toggle("hidden", !suEn);
-  $("#englishZone3")?.classList.toggle("hidden", !suEn);
-  const s = sess();
+  const suMand = subjectsOf()[mandLang()];
+  $("#englishZone")?.classList.toggle("hidden", !suMand);
+  $("#englishZone2")?.classList.toggle("hidden", !suMand);
+  $("#englishZone3")?.classList.toggle("hidden", !suMand);
+  const s = mandSess();
   const total = Math.min(DAILY_GOAL, (s.frEn || 0) + (s.enFr || 0));
   $("#hello").textContent = T("eleve.hello", vars);
   $("#ringN").textContent = total;
   $("#ring").style.setProperty("--p", Math.round(total / DAILY_GOAL * 100));
-  $("#homeBars").innerHTML = barsHTML(s);
+  $("#homeBars").innerHTML = barsHTML(s, mandLang());
 
   let act = "";
-  if (!words.length && wordsRaw.length) act = `<p class="note">Aucun mot anglais de niveau ${levelsOf().en} pour l'instant — demande à un parent d'en importer, ou de changer le niveau dans ses réglages.</p>`;
-  else if (!words.length) act = `<p class="note">${esc(T("eleve.empty"))}</p>`;
+  const mw = mandWords(), mwr = mandWordsRaw(), mLangName = mandLang() === "nl" ? "néerlandais" : "anglais";
+  if (!mw.length && mwr.length) act = `<p class="note">Aucun mot ${mLangName} de niveau ${levelsOf()[mandLang()]} pour l'instant — demande à un parent d'en importer, ou de changer le niveau dans ses réglages.</p>`;
+  else if (!mw.length) act = `<p class="note">${esc(T("eleve.empty"))}</p>`;
   else if (s.completed) {
     act = `<h3 style="color:var(--green)">${esc(T("eleve.done"))}</h3><p class="muted">${esc(T("eleve.done.text"))}</p><div class="row" style="justify-content:center">`;
     if (canReveal()) act += `<button class="btn pink" id="btnReward">🎁 ${esc(T("end.btn"))}</button>`;
@@ -249,14 +305,15 @@ function renderHome() {
   $("#btnReview")?.addEventListener("click", () => showShame(todayShame(), true));
 
   $("#stStreak").textContent = streak();
-  $("#stMaster").textContent = words.filter(w => (w.level || 0) >= MAX_LEVEL).length;
-  $("#stWords").textContent = words.length;
+  $("#stMaster").textContent = mw.filter(w => (w.level || 0) >= MAX_LEVEL).length;
+  $("#stWords").textContent = mw.length;
   $("#stShame").textContent = revealed.length;
 
   // calendrier 28 jours
+  const msess = mandSessions();
   let cells = "";
   for (let i = 27; i >= 0; i--) {
-    const k = dayKeyOffset(today, -i), ss = sessions[k];
+    const k = dayKeyOffset(today, -i), ss = msess[k];
     const cls = ss?.completed ? "ok" : (ss?.attempts ? "part" : "");
     cells += `<div class="day ${cls} ${i === 0 ? "today" : ""}" title="${esc(fmtDay(k))}">${Number(k.slice(8))}</div>`;
   }
@@ -268,7 +325,7 @@ function renderHome() {
   }</tbody></table></div>` : `<p class="muted">${esc(T("shame.collection.empty"))}</p>`;
 
   // badges
-  const bl = evaluateBadges(badgeStats({ sessions: Object.values(sessions), words, exams, revealed: revealed.length }));
+  const bl = evaluateBadges(badgeStats({ sessions: Object.values(msess), words: mw, exams, revealed: revealed.length }));
   $("#badgeCount").textContent = `${bl.filter(b => b.done).length} / ${bl.length}`;
   $("#badgeGrid").innerHTML = badgesGrid(bl, badgesMeta.unlocked, T, esc, fmtDay);
   checkBadges(bl);
@@ -276,11 +333,12 @@ function renderHome() {
   renderProposalsNote();
 
   // mots difficiles
-  const hard = words.filter(w => (w.ko || 0) > 0).sort((a, b) => ((b.ko || 0) - (b.ok || 0) * .5) - ((a.ko || 0) - (a.ok || 0) * .5)).slice(0, 8);
-  $("#hardList").innerHTML = hard.length ? `<div class="table-wrap"><table><thead><tr><th>Français</th><th>Anglais</th><th>Niveau</th><th>Erreurs</th><th></th></tr></thead><tbody>${
-    hard.map(w => `<tr><td>${esc(w.fr)}</td><td><b>${esc(w.en)}</b></td><td>${lvlDots(w.level)}</td><td>${w.ko || 0}</td><td class="actions"><button class="icon-btn" data-say="${esc(w.en)}" title="Écouter">🔊</button></td></tr>`).join("")
+  const mLangLabel = mandLang() === "nl" ? "Néerlandais" : "Anglais";
+  const hard = mw.filter(w => (w.ko || 0) > 0).sort((a, b) => ((b.ko || 0) - (b.ok || 0) * .5) - ((a.ko || 0) - (a.ok || 0) * .5)).slice(0, 8);
+  $("#hardList").innerHTML = hard.length ? `<div class="table-wrap"><table><thead><tr><th>Français</th><th>${mLangLabel}</th><th>Niveau</th><th>Erreurs</th><th></th></tr></thead><tbody>${
+    hard.map(w => `<tr><td>${esc(w.fr)}</td><td><b>${esc(w.en)}</b></td><td>${lvlDots(w.level)}</td><td>${w.ko || 0}</td><td class="actions"><button class="icon-btn" data-say="${esc(w.en)}" data-lang="${mandLang()}" title="Écouter">🔊</button></td></tr>`).join("")
   }</tbody></table></div>` : `<p class="muted">${esc(T("eleve.hard.none"))}</p>`;
-  document.querySelectorAll("[data-say]").forEach(b => b.onclick = () => speak(b.dataset.say));
+  document.querySelectorAll("[data-say]").forEach(b => b.onclick = () => speak(b.dataset.say, b.dataset.lang === "nl" ? "nl-NL" : "en-GB"));
 }
 const lvlDots = l => `<span class="lvl">${Array.from({ length: MAX_LEVEL }, (_, i) => `<i class="${i < (l || 0) ? "on" : ""}"></i>`).join("")}</span>`;
 const fillPrenom = s => String(s || "").replace(/\{prenom\}/g, vars.prenom);
@@ -530,19 +588,20 @@ function renderProposalsNote() {
 /* ---------------- Thèmes ---------------- */
 function renderThemeBar() {
   const th = activeThemes(settings, today);
-  const cats = new Set(words.map(w => w.cat || ""));
+  const mw = mandWords();
+  const cats = new Set(mw.map(w => w.cat || ""));
   const list = th.list.filter(c => cats.has(c));
   const chips = list.length ? list.map(c => `<span class="chip b">${esc(c || "Sans catégorie")}</span>`).join("") : `<span class="chip">${esc(T("eleve.themes.all"))}</span>`;
-  const n = pool().length;
+  const n = mandPool().length;
   let right = "";
   if (th.locked) right = `<span class="chip w">${esc(T("eleve.themes.locked"))}${th.until ? " · jusqu'au " + esc(fmtDay(th.until)) : ""}</span>`;
-  else if (words.length) right = `<button class="btn ghost sm" id="btnThemes">${esc(T("eleve.themes.btn"))}</button>`;
-  $("#themeBar").innerHTML = words.length ? `<span class="lbl">${esc(T("eleve.themes"))}</span>${chips}<span class="small muted">(${n} mots)</span>${right}` : "";
+  else if (mw.length) right = `<button class="btn ghost sm" id="btnThemes">${esc(T("eleve.themes.btn"))}</button>`;
+  $("#themeBar").innerHTML = mw.length ? `<span class="lbl">${esc(T("eleve.themes"))}</span>${chips}<span class="small muted">(${n} mots)</span>${right}` : "";
   $("#btnThemes")?.addEventListener("click", openThemePicker);
 }
 function openThemePicker() {
   const chosen = new Set(settings.childThemes || []);
-  const cats = categoriesOf(words);
+  const cats = categoriesOf(mandWords());
   openOverlay(`<div class="card">
     <h3>🎯 ${esc(T("eleve.themes.btn"))}</h3>
     <p class="muted small">${esc(T("eleve.themes.help"))}</p>
@@ -653,14 +712,15 @@ const quiz = { active: false, mode: "daily", cur: null, dir: null, answered: fal
 const expectedOf = () => quiz.dir === "frEn" ? quiz.cur.en : quiz.cur.fr;
 
 function startQuiz(mode) {
-  if (mode === "nl" ? !wordsNl.length : !words.length) return;
+  if (mode === "nl" ? !freeWords().length : !mandWords().length) return;
   Object.assign(quiz, { active: true, mode, recent: [], retry: [], step: 0, lastDir: null, bonusCount: 0 });
   $("#vHome").classList.add("hidden");
   $("#vQuiz").classList.remove("hidden");
-  if (mode === "extra") curSeries();
-  if (mode === "nl") curSeriesNl();
-  $("#qMode").textContent = mode === "daily" ? T("quiz.mode.daily") : mode === "extra" ? T("series.mode", { n: (sess().series || []).length + 1 })
-    : mode === "nl" ? "🇳🇱 " + T("series.mode", { n: (sessNl().series || []).length + 1 }) : T("quiz.mode.bonus");
+  if (mode === "extra") mandCurSeries();
+  if (mode === "nl") freeCurSeries();
+  const flag = freeLang() === "nl" ? "🇳🇱 " : "🇬🇧 ";
+  $("#qMode").textContent = mode === "daily" ? T("quiz.mode.daily") : mode === "extra" ? T("series.mode", { n: (mandSess().series || []).length + 1 })
+    : mode === "nl" ? flag + T("series.mode", { n: (freeSess().series || []).length + 1 }) : T("quiz.mode.bonus");
   nextQuestion();
 }
 function stopQuiz() {
@@ -676,10 +736,9 @@ $("#qBack").onclick = () => {
 };
 
 function renderQuizBars() {
-  const s = sess();
   if (quiz.mode === "daily" || quiz.mode === "extra" || quiz.mode === "nl") {
-    const c = quiz.mode === "extra" ? curSeries() : quiz.mode === "nl" ? curSeriesNl() : s;
-    $("#qBars").innerHTML = barsHTML(c, quiz.mode === "nl" ? "nl" : "en");
+    const c = quiz.mode === "extra" ? mandCurSeries() : quiz.mode === "nl" ? freeCurSeries() : mandSess();
+    $("#qBars").innerHTML = barsHTML(c, quiz.mode === "nl" ? freeLang() : mandLang());
     const left = DAILY_GOAL - ((c.frEn || 0) + (c.enFr || 0));
     $("#qSuspense").textContent = left === 1 ? T("quiz.s1") : left === 2 ? T("quiz.s2") : (left <= 5 && left > 2) ? T("quiz.s5", { n: left }) : "";
   } else if (quiz.mode === "exam") {
@@ -692,18 +751,17 @@ function renderQuizBars() {
   }
 }
 function nextQuestion() {
-  const s = sess();
   if (quiz.mode === "exam") {
     let item, w = null;
     while (!w && (item = quiz.exam.queue.shift())) w = words.find(x => x.id === item.id) || null;
     if (!w) { finishExam(); return; }
     quiz.dir = item.dir; quiz.cur = w;
   } else if (quiz.mode === "nl") {
-    quiz.dir = nextDirection(curSeriesNl(), quiz.lastDir);
-    quiz.cur = pickWord(wordsNl, { recent: quiz.recent, retry: quiz.retry, step: quiz.step, today });
+    quiz.dir = nextDirection(freeCurSeries(), quiz.lastDir);
+    quiz.cur = pickWord(freeWords(), { recent: quiz.recent, retry: quiz.retry, step: quiz.step, today });
   } else {
-    quiz.dir = quiz.mode === "daily" ? nextDirection(s, quiz.lastDir) : quiz.mode === "extra" ? nextDirection(curSeries(), quiz.lastDir) : (quiz.lastDir === "frEn" ? "enFr" : "frEn");
-    quiz.cur = pickWord(pool(), { recent: quiz.recent, retry: quiz.retry, step: quiz.step, today });
+    quiz.dir = quiz.mode === "daily" ? nextDirection(mandSess(), quiz.lastDir) : quiz.mode === "extra" ? nextDirection(mandCurSeries(), quiz.lastDir) : (quiz.lastDir === "frEn" ? "enFr" : "frEn");
+    quiz.cur = pickWord(mandPool(), { recent: quiz.recent, retry: quiz.retry, step: quiz.step, today });
   }
   // Le vocabulaire disponible peut changer en cours de série (ex. un parent modifie le niveau
   // de langue pendant que l'élève joue) : on quitte proprement plutôt que de planter.
@@ -712,7 +770,7 @@ function nextQuestion() {
   quiz.answered = false;
   const w = quiz.cur;
   const frEn = quiz.dir === "frEn";
-  const isNl = quiz.mode === "nl";
+  const isNl = quizIsNl();
   const tFlag = isNl ? "🇳🇱" : "🇬🇧";
   $("#qDir").innerHTML = frEn ? `🇫🇷 <span>→</span> ${tFlag} <span class='small'>Traduis en ${isNl ? "néerlandais" : "anglais"}</span>` : `${tFlag} <span>→</span> 🇫🇷 <span class='small'>Traduis en français</span>`;
   $("#qPrompt").textContent = frEn ? w.fr : w.en;
@@ -744,7 +802,7 @@ function showInput() {
 }
 function showChoices() {
   const w = quiz.cur;
-  quiz.choices = buildChoices(w, quiz.dir, quiz.mode === "nl" ? wordsNl : words);
+  quiz.choices = buildChoices(w, quiz.dir, quizPool());
   $("#qAnswer").classList.add("hidden");
   $("#qSubmit").classList.add("hidden");
   $("#qChoices").innerHTML = `<div class="q-intro">${esc(T("quiz.qcmIntro"))}</div>` +
@@ -820,9 +878,9 @@ function saveSession() {
 }
 
 function answer(given, skipped = false, opt = {}) {
-  const w = quiz.cur, frEn = quiz.dir === "frEn", isNl = quiz.mode === "nl";
+  const w = quiz.cur, frEn = quiz.dir === "frEn", isNl = quizIsNl();
   const expected = frEn ? w.en : w.fr;
-  const pool2 = isNl ? wordsNl : words;
+  const pool2 = quizPool();
   // Accepte aussi la traduction d'un autre mot ayant exactement le même énoncé (ex. « band »)
   const promptOf = x => String(frEn ? x.fr : x.en).trim().toLowerCase();
   const alts = [...((frEn ? w.altEn : w.altFr) || []), ...pool2.filter(x => x.id !== w.id && promptOf(x) === promptOf(w)).map(x => frEn ? x.en : x.fr)];
@@ -844,7 +902,7 @@ function answer(given, skipped = false, opt = {}) {
   setMood(res.ok ? (helped ? "sure" : "joyeuse") : "colere");
   document.querySelectorAll("[data-ch]").forEach(bt => { bt.disabled = true; if (quiz.choices[Number(bt.dataset.ch)]?.correct) bt.classList.add("good"); });
 
-  const s = sess();
+  const s = mandSess();
   if (lv.before < MAX_LEVEL && lv.after >= MAX_LEVEL) s.mastered = [...(s.mastered || []), { fr: w.fr, en: w.en }].slice(-100);
   if (quiz.mode === "exam") {
     const ex = quiz.exam;
@@ -856,7 +914,9 @@ function answer(given, skipped = false, opt = {}) {
       if (ex.round === 1) ex.wrong.push(entry); else (ex.retryWrong = ex.retryWrong || []).push(entry);
     }
   }
-  const countsDaily = quiz.mode === "daily" || (quiz.mode === "exam" && !s.completed);
+  // Le contrôle blanc ne compte pour l'objectif quotidien que si la langue obligatoire est
+  // l'anglais (contrôle blanc = outil anglais uniquement, cf. V03-007) : sinon il reste à part.
+  const countsDaily = quiz.mode === "daily" || (quiz.mode === "exam" && mandLang() === "en" && !s.completed);
   if (countsDaily) {
     s.attempts = (s.attempts || 0) + 1;
     if (res.ok) {
@@ -874,7 +934,7 @@ function answer(given, skipped = false, opt = {}) {
     }
     if (quiz.mode === "exam") s.exam = (s.exam || 0) + 1;
   } else if (quiz.mode === "extra") {
-    const c = curSeries();
+    const c = mandCurSeries();
     c.attempts++;
     if (res.ok) { c[quiz.dir] = Math.min(PER_DIRECTION, (c[quiz.dir] || 0) + 1); if (helped) c.helped = (c.helped || 0) + 1; }
     else { c.errors = (c.errors || 0) + 1; c.wrong = [...(c.wrong || []), { fr: w.fr, en: w.en, dir: quiz.dir, given: String(given || "").slice(0, 80) }].slice(-40); }
@@ -888,12 +948,12 @@ function answer(given, skipped = false, opt = {}) {
   } else if (quiz.mode === "exam") {
     s.exam = (s.exam || 0) + 1;
   } else if (quiz.mode === "nl") {
-    const c = curSeriesNl();
+    const c = freeCurSeries();
     c.attempts++;
     if (res.ok) { c[quiz.dir] = Math.min(PER_DIRECTION, (c[quiz.dir] || 0) + 1); if (helped) c.helped = (c.helped || 0) + 1; }
     else { c.errors = (c.errors || 0) + 1; c.wrong = [...(c.wrong || []), { fr: w.fr, en: w.en, dir: quiz.dir, given: String(given || "").slice(0, 80) }].slice(-40); }
     if ((c.frEn || 0) + (c.enFr || 0) >= DAILY_GOAL) {
-      const sn = sessNl();
+      const sn = freeSess();
       const n = (sn.series || []).length + 1;
       const done = { n, attempts: c.attempts, errors: c.errors || 0, helped: c.helped || 0, acc: accuracy(c.errors || 0), points: seriesPoints(c.errors || 0, c.helped || 0) };
       sn.series = [...(sn.series || []), done];
@@ -901,7 +961,7 @@ function answer(given, skipped = false, opt = {}) {
       quiz.justDone = done;
     }
   } else if (res.ok) { quiz.bonusCount++; s.bonus = (s.bonus || 0) + 1; }
-  if (isNl) saveSessionNl(); else saveSession();
+  saveActiveSession();
 
   if (res.ok) quiz.retry = quiz.retry.filter(r => r.id !== w.id);
   else if (!quiz.retry.some(r => r.id === w.id)) quiz.retry.push({ id: w.id, due: quiz.step + 3 });
@@ -950,9 +1010,9 @@ function answer(given, skipped = false, opt = {}) {
 
 $("#qForm").addEventListener("submit", ev => {
   ev.preventDefault();
-  if (quiz.mode === "daily" && sess().completed) return; // 20/20 atteint : écran de fin en cours
-  if (quiz.mode === "extra" && !sess().cur) return;
-  if (quiz.mode === "nl" && !sessNl().cur) return;
+  if (quiz.mode === "daily" && mandSess().completed) return; // 20/20 atteint : écran de fin en cours
+  if (quiz.mode === "extra" && !mandSess().cur) return;
+  if (quiz.mode === "nl" && !freeSess().cur) return;
   if (quiz.answered) { nextQuestion(); return; }
   const v = $("#qAnswer").value;
   if (!v.trim()) { $("#qAnswer").focus(); return; }
@@ -1001,7 +1061,7 @@ function showSeriesEnd(done, piece, mode = "extra") {
   confetti();
   openOverlay(`<div class="shame-card">
     <img class="end-art" src="${done.acc > 90 ? MOODS.bravo : MOODS.sure}" alt="">
-    <h1 style="font-size:2rem">${mode === "nl" ? "🇳🇱 " : ""}${esc(T("series.done", { n: done.n }))}</h1>
+    <h1 style="font-size:2rem">${mode === "nl" ? (freeLang() === "nl" ? "🇳🇱 " : "🇬🇧 ") : ""}${esc(T("series.done", { n: done.n }))}</h1>
     <p class="small muted">${done.attempts} tentatives · ${done.errors} erreur(s)</p>
     ${seriesBlock(done, piece)}
     <button class="btn block" id="ovAgain" style="margin-top:12px">${esc(T("series.new", { n: done.n + 1 }))}</button>
@@ -1020,20 +1080,25 @@ function renderPuzzle() {
 /* ---------------- Néerlandais (V03-002) ---------------- */
 function renderNl() {
   if (!$("#nlZone")) return;
-  if (!subjectsOf().nl) { $("#nlCard")?.classList.add("hidden"); return; }
+  const fl = freeLang();
+  if (!subjectsOf()[fl]) { $("#nlCard")?.classList.add("hidden"); return; }
   $("#nlCard")?.classList.remove("hidden");
-  if (!readyNl.w || !readyNl.s) { $("#nlZone").innerHTML = `<p class="muted small">Chargement…</p>`; return; }
-  const sn = sessNl();
+  const flag = fl === "nl" ? "🇳🇱" : "🇬🇧", flName = fl === "nl" ? "néerlandais" : "anglais";
+  const title = $("#nlCardTitle"); if (title) title.textContent = `${flag} ${fl === "nl" ? "Néerlandais" : "Anglais"}`;
+  const fr = freeReady();
+  if (!fr.w || !fr.s) { $("#nlZone").innerHTML = `<p class="muted small">Chargement…</p>`; return; }
+  const sn = freeSess();
   const ser = sn.series || [];
+  const fw = freeWords(), fwr = freeWordsRaw();
   let html = "";
-  if (!wordsNl.length && wordsNlRaw.length) {
-    html = `<p class="note">Aucun mot néerlandais de niveau ${levelsOf().nl} pour l'instant — demande à un parent d'en importer, ou de changer le niveau dans ses réglages.</p>`;
-  } else if (!wordsNl.length) {
-    html = `<p class="note">Ton parent n'a pas encore ajouté de vocabulaire néerlandais dans l'espace parent → 🇳🇱 Néerlandais.</p>`;
+  if (!fw.length && fwr.length) {
+    html = `<p class="note">Aucun mot ${flName} de niveau ${levelsOf()[fl]} pour l'instant — demande à un parent d'en importer, ou de changer le niveau dans ses réglages.</p>`;
+  } else if (!fw.length) {
+    html = `<p class="note">Ton parent n'a pas encore ajouté de vocabulaire ${flName} dans l'espace parent → Cours → ${flag} ${fl === "nl" ? "Néerlandais" : "Anglais"}.</p>`;
   } else {
     const nSer = ser.length + 1;
-    html += `<p class="muted small">${wordsNl.length} mot(s) néerlandais au programme.</p>`;
-    html += `<button class="btn" id="btnNl">🇳🇱 ${esc(T(sn.cur && sn.cur.attempts ? "series.continue" : "series.new", { n: nSer }))}</button>`;
+    html += `<p class="muted small">${fw.length} mot(s) ${flName} au programme.</p>`;
+    html += `<button class="btn" id="btnNl">${flag} ${esc(T(sn.cur && sn.cur.attempts ? "series.continue" : "series.new", { n: nSer }))}</button>`;
     html += `<p class="small muted" style="margin-top:8px">Séries libres, comme les séries bonus : pas d'obligation, mais des points et des pièces de puzzle à chaque série réussie.</p>`;
     if (ser.length) html += `<div class="series-pills">${ser.map(x => `<span title="${x.acc}% de réussite">#${x.n} · ⭐ ${x.points}</span>`).join("")}</div>
       <p class="small muted">${esc(T("series.today", { n: ser.length, pts: ser.reduce((a, x) => a + x.points, 0) }))}</p>`;
@@ -1043,7 +1108,8 @@ function renderNl() {
   refreshStudy();
 }
 function showEnd(done, piece) {
-  const s = sess();
+  const s = mandSess();
+  const flag = mandLang() === "nl" ? "🇳🇱" : "🇬🇧";
   confetti();
   let reward = "";
   if (canReveal()) {
@@ -1060,7 +1126,7 @@ function showEnd(done, piece) {
   openOverlay(`<div class="shame-card">
     <img class="end-art" src="${MOODS.bravo}" alt="Super travail !">
     <h1 style="font-size:2.4rem">${esc(T("end.title"))}</h1>
-    <div class="end-score"><div>🇫🇷→🇬🇧 ${s.frEn}/${PER_DIRECTION}</div><div>🇬🇧→🇫🇷 ${s.enFr}/${PER_DIRECTION}</div></div>
+    <div class="end-score"><div>🇫🇷→${flag} ${s.frEn}/${PER_DIRECTION}</div><div>${flag}→🇫🇷 ${s.enFr}/${PER_DIRECTION}</div></div>
     <p class="streak">🔥 Série : ${streak()} jour${streak() > 1 ? "s" : ""}</p>
     <p class="small muted">${s.attempts} tentatives · ${s.errors || 0} erreur(s)</p>
     ${seriesBlock(done, piece)}

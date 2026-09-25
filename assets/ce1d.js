@@ -16,8 +16,9 @@ import MATH from "./ce1d-math.js";
 import FRANCAIS from "./ce1d-francais.js";
 import SCIENCES from "./ce1d-sciences.js";
 import LANGUES from "./ce1d-langues.js";
+import LANGUES_NL from "./ce1d-langues-nl.js";
 
-export const SUBJECTS = [MATH, FRANCAIS, SCIENCES, LANGUES];
+export const SUBJECTS = [MATH, FRANCAIS, SCIENCES, LANGUES, LANGUES_NL];
 export const SERIES_LEN = 10;
 
 const shuffle = a => { a = [...a]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
@@ -46,14 +47,18 @@ function concrete(raw, theme) {
   return it;
 }
 
-/** Série de n questions (mélange équilibré entre les thèmes si themeId est vide) */
-export function buildSeries(subjectId, themeId = null, n = SERIES_LEN, avoid = new Set()) {
+/** Série de n questions (mélange équilibré entre les thèmes si themeId est vide)
+    extra (V03-007) : exercices ajoutés par le parent (Super Admin/Parent), au format
+    [{ theme: "id-du-thème", q, t, c?, a, ex, … }] — mêmes champs qu'un item statique.
+    Ils sont mélangés avec les questions intégrées du thème correspondant. */
+export function buildSeries(subjectId, themeId = null, n = SERIES_LEN, avoid = new Set(), extra = []) {
   const sub = subjectById(subjectId);
   const themes = sub.themes.filter(t => !themeId || t.id === themeId);
-  // pool : questions fixes + générateurs
+  // pool : questions fixes + générateurs + exercices perso du parent
   const pools = themes.map(t => shuffle([
     ...(t.items || []).map(q => ({ q, t })),
-    ...(t.gen || []).map(g => ({ g, t }))
+    ...(t.gen || []).map(g => ({ g, t })),
+    ...extra.filter(e => e.theme === t.id).map(q => ({ q, t }))
   ]).sort((a, b) => (avoid.has(a.q?.q) ? 1 : 0) - (avoid.has(b.q?.q) ? 1 : 0)));
   const out = [];
   let k = 0, guard = 0;

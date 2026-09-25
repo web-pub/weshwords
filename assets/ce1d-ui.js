@@ -24,23 +24,25 @@ export function ce1dStats(results) {
 }
 
 /** Carte « Préparer le CE1D » de l'accueil élève.
-    enabledIds (V03-004) : liste des ids de matières à afficher (choisies par le parent) — null/absent = toutes. */
-export function renderCe1dCard(el, results, onSave, enabledIds = null) {
+    enabledIds (V03-004) : liste des ids de matières à afficher (choisies par le parent) — null/absent = toutes.
+    customItems (V03-007) : exercices ajoutés par le parent, [{ subject, theme, q, t, c?, a, ex, … }]. */
+export function renderCe1dCard(el, results, onSave, enabledIds = null, customItems = []) {
   const st = ce1dStats(results);
   const subs = enabledIds ? SUBJECTS.filter(s => enabledIds.includes(s.id)) : SUBJECTS;
   el.innerHTML = `<p class="small muted">${esc(T("ce1d.help"))}</p>
     <div class="ce1d-subjects">${subs.map(s => {
       const b = st[s.id];
       const pct = b ? Math.round(b.ok / Math.max(1, b.total) * 100) : null;
+      const nCustom = customItems.filter(c => c.subject === s.id).length;
       return `<button class="ce1d-sub" data-sub="${s.id}"><span class="ic">${s.icon}</span><b>${esc(s.name)}</b>
-        <span class="small muted">${s.themes.length} thèmes · ${countItems(s)} questions</span>
+        <span class="small muted">${s.themes.length} thèmes · ${countItems(s)}${nCustom ? ` + ${nCustom}` : ""} questions</span>
         <span class="small">${b ? `${b.n} série(s) · ${pct} % de réussite` : esc(T("ce1d.new"))}</span>
         ${b ? `<span class="ce1d-bar"><i style="width:${pct}%"></i></span>` : ""}</button>`;
     }).join("")}</div>`;
-  el.querySelectorAll("[data-sub]").forEach(b => b.onclick = () => chooseTheme(b.dataset.sub, results, onSave));
+  el.querySelectorAll("[data-sub]").forEach(b => b.onclick = () => chooseTheme(b.dataset.sub, results, onSave, customItems));
 }
 
-function chooseTheme(subId, results, onSave) {
+function chooseTheme(subId, results, onSave, customItems = []) {
   const sub = subjectById(subId), st = ce1dStats(results)[subId];
   show(`<h3>${sub.icon} ${esc(sub.name)}</h3>
     <p class="small muted">${esc(T("ce1d.choose"))}</p>
@@ -51,15 +53,16 @@ function chooseTheme(subId, results, onSave) {
     </div>
     <div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn ghost sm" id="c1Close">Fermer</button></div>`);
   $("#c1Close").onclick = hide;
-  inner().querySelectorAll("[data-th]").forEach(b => b.onclick = () => runSeries(subId, b.dataset.th || null, results, onSave));
+  inner().querySelectorAll("[data-th]").forEach(b => b.onclick = () => runSeries(subId, b.dataset.th || null, results, onSave, customItems));
 }
 
-function runSeries(subId, themeId, results, onSave) {
+function runSeries(subId, themeId, results, onSave, customItems = []) {
   const sub = subjectById(subId);
   const theme = themeId ? sub.themes.find(t => t.id === themeId) : null;
   // éviter de reposer les questions ratées ou vues à la dernière série… sauf si la banque est trop petite
   const recent = new Set(results.filter(r => r.subject === subId).slice(0, 3).flatMap(r => (r.seen || [])));
-  const list = buildSeries(subId, themeId, SERIES_LEN, recent);
+  const extra = customItems.filter(c => c.subject === subId);
+  const list = buildSeries(subId, themeId, SERIES_LEN, recent, extra);
   const st = { i: 0, ok: 0, wrong: [], answered: false, t0: Date.now() };
 
   function q() {
@@ -82,7 +85,8 @@ function runSeries(subId, themeId, results, onSave) {
         <button class="btn ghost sm" id="c1Quit">✖ ${esc(T("practice.quit"))}</button>
         <button class="btn hidden" id="c1Next">${st.i + 1 < list.length ? "Suivant →" : "Voir mon score →"}</button>
       </div></div>`);
-    if (it.audio) { $("#c1Play").onclick = () => speak(it.audio, "en-GB", .9); $("#c1Slow").onclick = () => speak(it.audio, "en-GB", .65); setTimeout(() => speak(it.audio, "en-GB", .9), 300); }
+    const voice = sub.voiceLang || "en-GB";
+    if (it.audio) { $("#c1Play").onclick = () => speak(it.audio, voice, .9); $("#c1Slow").onclick = () => speak(it.audio, voice, .65); setTimeout(() => speak(it.audio, voice, .9), 300); }
     $("#c1Quit").onclick = () => { speechSynthesis?.cancel?.(); hide(); };
     $("#c1Next").onclick = next;
     inner().querySelectorAll("[data-k]").forEach(b => b.onclick = () => !st.answered && check(Number(b.dataset.k), b.querySelector("span:last-child").textContent));
@@ -125,7 +129,7 @@ function runSeries(subId, themeId, results, onSave) {
         <button class="btn" id="c1Again">🔁 ${esc(T("ce1d.again"))}</button>
       </div></div>`);
     $("#c1Done").onclick = hide;
-    $("#c1Again").onclick = () => runSeries(subId, themeId, [{ ...res }, ...results], onSave);
+    $("#c1Again").onclick = () => runSeries(subId, themeId, [{ ...res }, ...results], onSave, customItems);
     try { await onSave(res); } catch (e) { console.warn(e); }
   }
   if (!list.length) { hide(); return; }

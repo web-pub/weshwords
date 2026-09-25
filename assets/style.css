@@ -146,13 +146,20 @@ td.actions { white-space: nowrap; text-align: right; }
 .hbtn { color: var(--muted); text-decoration: none; font-weight: 800; font-size: .9rem; padding: .5em .8em; border-radius: 10px; }
 .hbtn.on, .hbtn:hover { color: var(--text); background: var(--card2); }
 
-/* ---------- Onglets ---------- */
-.tabs { display: flex; gap: 6px; overflow-x: auto; padding: 4px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; margin: 18px 0; scrollbar-width: none; }
-.tabs::-webkit-scrollbar { display: none; }
+/* ---------- Onglets ----------
+   flex-wrap plutôt qu'un scroll horizontal à défilement caché (scrollbar-width: none
+   masquait toute trace de contenu hors-champ : les derniers onglets — ex. « Réglages »,
+   « Comptes » — restaient invisibles et inatteignables sans qu'on sache qu'il fallait
+   défiler. Avec le retour à la ligne, tous les onglets sont toujours visibles. */
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; margin: 18px 0; }
 .tab { flex: 0 0 auto; border: 0; background: none; color: var(--muted); font: 800 .92rem var(--font); padding: .65em 1em; border-radius: 12px; cursor: pointer; white-space: nowrap; }
 .tab.on { background: var(--grad); color: #fff; }
 .panel { display: none; }
 .panel.on { display: block; animation: fade .25s ease; }
+/* sous-onglets de l'onglet « Cours » (Anglais / Néerlandais / Maths / Français / Sciences) */
+#coursSubtabs { margin: 0 0 16px; }
+.subpanel { display: none; }
+.subpanel.on { display: block; animation: fade .25s ease; }
 @keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
 /* ---------- Hero / accueil ---------- */

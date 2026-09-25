@@ -71,6 +71,7 @@ export default {
   id: "langues",
   name: "Anglais (langues modernes)",
   icon: "🇬🇧",
+  voiceLang: "en-GB",
   themes: [
     // =====================================================
     {
