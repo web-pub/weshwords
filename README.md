@@ -1,4 +1,4 @@
-# Wesh Words — V03-007
+# Wesh Words — V04-001
 
 Révisions de vocabulaire anglais 🇫🇷 ↔ 🇬🇧 : 20 bonnes réponses par jour (10 FR→EN + 10 EN→FR), et au 20/20… le **mot de la honte**. 💀
 
@@ -40,8 +40,8 @@ assets/               CSS, JS, logo, icônes, personnage Margaux (margaux-*.webp
 1. Décompresser le ZIP sur le PC (clic droit → Extraire tout).
 2. Sur https://github.com/web-pub/weshwords → **Add file** → **Upload files**.
 3. Ouvrir le dossier décompressé, **sélectionner tout son contenu** (Ctrl + A : les pages HTML, `sw.js`, `favicon.ico`… **et le dossier `assets`**) et le glisser dans la page GitHub.
-   Les fichiers doivent arriver **à la racine** du dépôt (pas dans un sous-dossier « WeshWords-V03-007 »).
-4. En bas : message « Wesh Words V03-007 » → **Commit changes**.
+   Les fichiers doivent arriver **à la racine** du dépôt (pas dans un sous-dossier « WeshWords-V04-001 »).
+4. En bas : message « Wesh Words V04-001 » → **Commit changes**.
 5. Première fois seulement : **Settings** → **Pages** → Source « Deploy from a branch » → Branch **main** / **(root)** → Save.
 6. Attendre 1 à 2 minutes. Adresse du site : `https://web-pub.github.io/weshwords/`
 
@@ -55,7 +55,7 @@ git clone https://github.com/web-pub/weshwords.git
 cd weshwords
 # décompresser le ZIP ici (fichiers à la racine + dossier assets/)
 git add -A
-git commit -m "Wesh Words V03-007"
+git commit -m "Wesh Words V04-001"
 git push origin main
 ```
 
@@ -70,7 +70,7 @@ Ouvrir **`https://web-pub.github.io/weshwords/diagnostic.html`**. Elle teste et 
 |---|---|
 | Site en ligne, dossier `assets` présent | renvoyer le dossier `assets` à la racine du dépôt |
 | Base Firestore créée | étape A.3 |
-| Règles publiées **et à jour** (V03-007) | étape A.4 |
+| Règles publiées **et à jour** (V04-001) | étape A.4 |
 | Méthode E-mail/Mot de passe active | étape A.1 |
 | Super Admin installé | ouvrir `connexion.html` → Installation initiale |
 | Application installable | recharger la page une fois |
@@ -137,9 +137,10 @@ Astuce : après une mise à jour, si l'ancienne version s'affiche encore, rechar
 | Niveau du vocabulaire (V03-004) | Chaque mot anglais/néerlandais porte désormais un niveau (2 / 4 / 6). Le vocabulaire déjà présent est au niveau 2. À l'import, une colonne « Niveau » (à mettre en colonne A du fichier Excel) permet de préciser le niveau de chaque mot importé ; sans cette colonne, les mots importés sont au niveau 2 par défaut. L'export (💾 Exporter) inclut aussi cette colonne. |
 | Cartes mentales & Flashcards (V03-005) | Nouvelle carte « 🗺️ Cartes mentales & Flashcards » dans l'espace élève : une bulle par matière activée (anglais, néerlandais, maths, français, sciences), qui ouvre une carte mentale visuelle — une bulle par catégorie/thème, taille selon le nombre d'éléments. Toucher une bulle (ou le centre pour tout mélanger) ouvre une session de flashcards recto/verso (question/réponse pour le CE1D, français/langue pour le vocabulaire) avec prononciation audio, pensée pour réviser en quelques minutes. Construites à partir des catégories et thèmes déjà existants, sans contenu à maintenir en double. |
 | Audit complet — code & contenu (V03-006) | Passage en revue de tout le code et de toute la matière (maths, français, sciences, anglais, néerlandais) par rapport au programme belge de 2e secondaire (CE1D). **Bugs corrigés :** plantage possible du quiz si un parent change le niveau de langue d'un enfant pendant qu'il joue ; message d'état vide trompeur côté néerlandais ; correcteur d'exercices CE1D qui refusait un signe moins normal ou mélangeait un chiffre d'unité (ex. « cm3 ») à la réponse ; question d'arrondi qui affichait un nombre déjà arrondi ; QCM générés pouvant proposer deux fois « la même » réponse écrite différemment (ex. 6/4 et 3/2). **Contenu corrigé :** un exercice de grammaire française mal formé, une explication d'étymologie imprécise, deux notes de conjugaison néerlandaise erronées, une vingtaine de traductions FR↔NL et FR↔EN incorrectes ou approximatives, une trentaine d'accords d'adjectifs néerlandais mal formés, une centaine de phrases d'exemple incohérentes (nettoyées plutôt que laissées fausses). **Correction de données :** la liste de vocabulaire néerlandais importée en V03-002 annonçait 1500 mots mais 525 étaient des entrées de remplissage fabriquées (« mot utile 1 », « mot utile 2 »…) sans aucune valeur pédagogique ; elles ont été retirées, il reste 975 mots néerlandais réels. |
-| Onglet « 📚 Cours » + exercices CE1D personnalisés (V03-007) | Espace parent : Anglais et Néerlandais sont désormais regroupés avec Maths/Français/Sciences dans un même onglet « 📚 Cours » à sous-onglets, pour corriger le débordement de la barre d'onglets (le bouton « Réglages » était inatteignable sur petit écran — corrigé aussi). Le parent peut maintenant ajouter ses propres exercices CE1D (QCM, vrai/faux, numérique ou texte à trous) dans **toutes** les matières — Maths, Français, Sciences — comme c'était déjà possible pour Anglais/Néerlandais ; ils s'ajoutent aux banques intégrées sans les remplacer. |
-| Banque CE1D néerlandaise (V03-007) | La carte « Préparer le CE1D » de l'espace élève affiche maintenant aussi 🇳🇱 Néerlandais (elle n'apparaissait qu'en anglais jusqu'ici) : nouvelle banque complète d'environ 75 questions (lecture, écoute, grammaire, vocabulaire), même format et même niveau d'exigence que la banque anglaise. |
-| Langue obligatoire par enfant (V03-007) | En secondaire, chaque élève n'a qu'une seule langue germanique obligatoire (anglais **ou** néerlandais selon l'école) : le parent choisit maintenant, dans Réglages → « 🗣️ Langue obligatoire », laquelle est la langue étudiée en 1er pour chaque enfant. C'est cette langue qui porte désormais la série quotidienne des 20 mots, le calendrier, la série gardée (mot de la honte) et les badges ; l'autre langue reste disponible en séries libres, sans obligation, comme le néerlandais l'était jusqu'ici pour tout le monde. **Limite assumée :** les verbes irréguliers, la dictée audio, le duel et le contrôle blanc restent pour l'instant des outils réservés à l'anglais quelle que soit la langue obligatoire choisie (ils ne sont pas encore déclinés en néerlandais) ; pour un enfant dont la langue obligatoire est le néerlandais, le contrôle blanc anglais reste utilisable en pratique libre mais ne compte plus dans l'objectif quotidien. |
+| Onglet « 📚 Cours » + exercices CE1D personnalisés (V04-001) | Espace parent : Anglais et Néerlandais sont désormais regroupés avec Maths/Français/Sciences dans un même onglet « 📚 Cours » à sous-onglets, pour corriger le débordement de la barre d'onglets (le bouton « Réglages » était inatteignable sur petit écran — corrigé aussi). Le parent peut maintenant ajouter ses propres exercices CE1D (QCM, vrai/faux, numérique ou texte à trous) dans **toutes** les matières — Maths, Français, Sciences — comme c'était déjà possible pour Anglais/Néerlandais ; ils s'ajoutent aux banques intégrées sans les remplacer. |
+| Banque CE1D néerlandaise (V04-001) | La carte « Préparer le CE1D » de l'espace élève affiche maintenant aussi 🇳🇱 Néerlandais (elle n'apparaissait qu'en anglais jusqu'ici) : nouvelle banque complète d'environ 75 questions (lecture, écoute, grammaire, vocabulaire), même format et même niveau d'exigence que la banque anglaise. |
+| Langue obligatoire par enfant (V04-001) | En secondaire, chaque élève n'a qu'une seule langue germanique obligatoire (anglais **ou** néerlandais selon l'école) : le parent choisit maintenant, dans Réglages → « 🗣️ Langue obligatoire », laquelle est la langue étudiée en 1er pour chaque enfant. C'est cette langue qui porte désormais la série quotidienne des 20 mots, le calendrier, la série gardée (mot de la honte) et les badges ; l'autre langue reste disponible en séries libres, sans obligation, comme le néerlandais l'était jusqu'ici pour tout le monde. **Limite assumée :** les verbes irréguliers, la dictée audio, le duel et le contrôle blanc restent pour l'instant des outils réservés à l'anglais quelle que soit la langue obligatoire choisie (ils ne sont pas encore déclinés en néerlandais) ; pour un enfant dont la langue obligatoire est le néerlandais, le contrôle blanc anglais reste utilisable en pratique libre mais ne compte plus dans l'objectif quotidien. |
+| 800 QCM CE1D ajoutés — Maths, Français, Sciences, Anglais (V04-001) | Les 4 banques « Préparer le CE1D » (Mathématiques, Français, Sciences, Anglais) reçoivent chacune 200 questions à choix multiples supplémentaires (8 chapitres de 25 questions, calqués sur les chapitres du programme de 2e secondaire), fournies par la famille et intégrées telles quelles. Elles s'ajoutent aux exercices déjà présents dans chaque matière, sans rien remplacer. Comme pour tous les exercices CE1D, une explication s'affiche automatiquement dès que l'enfant répond, qu'il ait juste ou faux. Pour les questions de compréhension de lecture (français/anglais), le texte à lire s'affiche dans un encadré séparé au-dessus de la question. **Une correction :** une des 200 questions de maths proposait deux fois exactement la même réponse (« 50 000 cm² ») comme choix C et D ; le choix D a été remplacé par une valeur différente et clairement fausse (« 500 000 cm² ») pour que la question ait un sens. |
 
 ## 6. Données Firestore
 
