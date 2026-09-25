@@ -33,7 +33,7 @@ let settings = { ...DEFAULT_SETTINGS }, settingsDirty = false;
 let exams = [], weekOffset = 0, badgesUnlocked = {}, duels = [], proposals = [], puzzle = { pieces: 0, log: [] }, ce1d = [];
 let histMonth = null; // null = toutes les sessions ; sinon "AAAA-MM" pour remonter dans le temps
 let wordsNl = [], sessionsNl = []; // Néerlandais (V03-002)
-let ce1dCustom = []; // Exercices CE1D perso (V03-007)
+let ce1dCustom = []; // Exercices CE1D perso (V04-001)
 let unsubs = [];
 let loaded = { shame: false, meta: false };
 let firstLoad = true;
@@ -156,7 +156,7 @@ function selectChild(c) {
     sessionsNl = s.docs.map(d => ({ day: d.id, ...d.data() })).sort((a, b) => b.day.localeCompare(a.day));
     renderSeriesDash();
   }, () => {}));
-  // --- Exercices CE1D perso (V03-007)
+  // --- Exercices CE1D perso (V04-001)
   unsubs.push(onSnapshot(collection(db, ...base, "ce1dCustom"), s => {
     ce1dCustom = s.docs.map(d => ({ id: d.id, ...d.data() }));
     renderCe1dCustomAll();
@@ -172,7 +172,7 @@ $$("#tabs .tab").forEach(t => t.onclick = () => {
   $$("#tabs .tab").forEach(x => x.classList.toggle("on", x === t));
   $$(".panel").forEach(p => p.classList.toggle("on", p.id === "p-" + t.dataset.tab));
 });
-/* ---------------- Sous-onglets « Cours » (V03-007) ---------------- */
+/* ---------------- Sous-onglets « Cours » (V04-001) ---------------- */
 function gotoCours(sub) {
   $$("#tabs .tab").forEach(x => x.classList.toggle("on", x.dataset.tab === "cours"));
   $$(".panel").forEach(p => p.classList.toggle("on", p.id === "p-cours"));
@@ -582,7 +582,7 @@ $("#btnExportNl")?.addEventListener("click", () => {
   catch (e) { toast(errMsg(e), "err"); }
 });
 
-/* ---------------- Exercices CE1D perso (V03-007) ----------------
+/* ---------------- Exercices CE1D perso (V04-001) ----------------
    Maths / Français / Sciences : les exercices sont normalement fixes (écrits dans le code
    de l'appli). Ici, le parent peut ajouter ses propres exercices par matière/thème : ils
    viennent s'ajouter aux exercices déjà prévus, dans le thème choisi, quand l'enfant joue une série. */

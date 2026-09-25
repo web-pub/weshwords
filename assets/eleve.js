@@ -72,7 +72,7 @@ function saveSessionNl() {
   setDoc(sessionRefNl(), { ...s }, { merge: true }).catch(e => console.warn(e));
 }
 
-/* ---------------- Langue obligatoire (V03-007) ----------------
+/* ---------------- Langue obligatoire (V04-001) ----------------
    Jusqu'ici, la série quotidienne obligatoire de 20 mots était toujours en anglais (collection
    "words"/"sessions"), et le néerlandais (collection "wordsNl"/"sessionsNl") était toujours la
    langue « libre » (pas d'obligation). Un enfant peut avoir le néerlandais comme langue 1 à
@@ -204,7 +204,7 @@ onSnapshot(doc(db, "users", uid, "meta", "puzzle"), s => {
 
 /* ---------------- Préparer le CE1D (V02-001) ---------------- */
 let ce1dResults = [];
-let ce1dCustom = []; // V03-007 : exercices ajoutés par le parent, en plus des banques intégrées
+let ce1dCustom = []; // V04-001 : exercices ajoutés par le parent, en plus des banques intégrées
 const saveCe1d = res => addDoc(collection(db, "users", uid, "ce1d"), { ...res, day: today, createdAt: serverTimestamp() });
 /** Filtre les matières CE1D affichées selon les matières choisies par le parent (V03-004) ;
     masque toute la carte si aucune matière CE1D n'est activée. */
@@ -228,7 +228,7 @@ refreshCe1d();
 function boot() {
   if (!ready.w || !ready.s) return;
   // Si la langue obligatoire de l'enfant est le néerlandais, on attend aussi que son vocabulaire
-  // et ses sessions néerlandaises soient chargés avant le premier affichage (V03-007).
+  // et ses sessions néerlandaises soient chargés avant le premier affichage (V04-001).
   if (mandLang() === "nl" && (!readyNl.w || !readyNl.s)) return;
   $("#loader").classList.add("hidden");
   $("#main").classList.remove("hidden");
@@ -915,7 +915,7 @@ function answer(given, skipped = false, opt = {}) {
     }
   }
   // Le contrôle blanc ne compte pour l'objectif quotidien que si la langue obligatoire est
-  // l'anglais (contrôle blanc = outil anglais uniquement, cf. V03-007) : sinon il reste à part.
+  // l'anglais (contrôle blanc = outil anglais uniquement, cf. V04-001) : sinon il reste à part.
   const countsDaily = quiz.mode === "daily" || (quiz.mode === "exam" && mandLang() === "en" && !s.completed);
   if (countsDaily) {
     s.attempts = (s.attempts || 0) + 1;

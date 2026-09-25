@@ -304,7 +304,7 @@ export function buildChoices(word, dir, pool, n = 4) {
     pour ne rien changer aux comptes existants. Niveaux de langue : 2e/4e/6e (fin de rhéto), 2 par défaut. */
 export const DEFAULT_SUBJECTS = { en: true, nl: true, math: true, francais: true, sciences: true };
 export const DEFAULT_LEVELS = { en: DEFAULT_NIVEAU, nl: DEFAULT_NIVEAU };
-/** Langue obligatoire (V03-007) : la série quotidienne de 20 mots obligatoire porte sur cette
+/** Langue obligatoire (V04-001) : la série quotidienne de 20 mots obligatoire porte sur cette
     langue. "en" par défaut pour ne rien changer aux comptes existants (ex. Margaux = anglais) ;
     un parent d'un enfant qui étudie le néerlandais en langue 1 (ex. Rose) peut la passer à "nl". */
 export const DEFAULT_MAIN_LANG = "en";

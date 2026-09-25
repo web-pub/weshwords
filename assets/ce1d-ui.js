@@ -25,7 +25,7 @@ export function ce1dStats(results) {
 
 /** Carte « Préparer le CE1D » de l'accueil élève.
     enabledIds (V03-004) : liste des ids de matières à afficher (choisies par le parent) — null/absent = toutes.
-    customItems (V03-007) : exercices ajoutés par le parent, [{ subject, theme, q, t, c?, a, ex, … }]. */
+    customItems (V04-001) : exercices ajoutés par le parent, [{ subject, theme, q, t, c?, a, ex, … }]. */
 export function renderCe1dCard(el, results, onSave, enabledIds = null, customItems = []) {
   const st = ce1dStats(results);
   const subs = enabledIds ? SUBJECTS.filter(s => enabledIds.includes(s.id)) : SUBJECTS;

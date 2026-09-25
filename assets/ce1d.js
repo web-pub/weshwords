@@ -48,7 +48,7 @@ function concrete(raw, theme) {
 }
 
 /** Série de n questions (mélange équilibré entre les thèmes si themeId est vide)
-    extra (V03-007) : exercices ajoutés par le parent (Super Admin/Parent), au format
+    extra (V04-001) : exercices ajoutés par le parent (Super Admin/Parent), au format
     [{ theme: "id-du-thème", q, t, c?, a, ex, … }] — mêmes champs qu'un item statique.
     Ils sont mélangés avec les questions intégrées du thème correspondant. */
 export function buildSeries(subjectId, themeId = null, n = SERIES_LEN, avoid = new Set(), extra = []) {
