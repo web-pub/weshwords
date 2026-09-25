@@ -2,7 +2,8 @@
 import {
   db, $, $$, esc, T, guard, initPrivatePage, renderAppHeader, fmtTs, toast, errMsg, roleLabel, VERSION,
   doc, getDocs, setDoc, updateDoc, deleteDoc, collection, query, where, onSnapshot, writeBatch, serverTimestamp,
-  changeAuthPassword, deleteAuthAccount, loadContent, PSEUDO_DOMAIN, enhancePasswords
+  changeAuthPassword, deleteAuthAccount, loadContent, PSEUDO_DOMAIN, enhancePasswords,
+  updateMemberInfo, changeMemberEmailUsername
 } from "./app.js";
 import { DEFAULT_CONTENT, LEGAL_PAGES } from "./content.js";
 import { mountMemberForm } from "./member-form.js";
@@ -49,13 +50,55 @@ function renderMembers() {
     <td><span class="role-badge r-${esc(u.role)}">${esc(roleLabel(u.role))}</span></td>
     <td>${u.role === "enfant" ? esc(nameOf(byId[u.parentUid])) : ""}</td>
     <td class="small">${esc(shownEmail(u.email))}</td><td class="small muted">${esc(fmtTs(u.createdAt))}</td>
+    <td class="small muted">${u.lastSeen ? esc(fmtTs(u.lastSeen)) : "—"}</td>
+    <td class="small muted">${u.lastLogin ? esc(fmtTs(u.lastLogin)) : "—"}</td>
     <td class="actions">
+      <button class="icon-btn" data-edit="${u.uid}" title="Modifier la fiche">✏️</button>
       ${u.role === "enfant" ? `<a class="btn ghost sm" href="parent.html?child=${u.uid}">Suivi</a>` : ""}
       ${u.role === "enfant" ? `<button class="icon-btn" data-relink="${u.uid}" title="Changer de parent">🔗</button>` : ""}
       ${u.uid !== user.uid ? `<button class="icon-btn" data-del="${u.uid}" title="Supprimer">🗑️</button>` : ""}
-    </td></tr>`).join("") || `<tr><td colspan="7" class="muted center">Aucun membre.</td></tr>`;
+    </td></tr>`).join("") || `<tr><td colspan="9" class="muted center">Aucun membre.</td></tr>`;
   $$("[data-del]").forEach(b => b.onclick = () => deleteMember(users.find(u => u.uid === b.dataset.del)));
   $$("[data-relink]").forEach(b => b.onclick = () => relink(users.find(u => u.uid === b.dataset.relink)));
+  $$("[data-edit]").forEach(b => b.onclick = () => editMember(users.find(u => u.uid === b.dataset.edit)));
+}
+
+function editMember(u) {
+  const s = secrets[u.uid] || {};
+  openOverlay(`<h3>✏️ Modifier la fiche — ${esc(nameOf(u))}</h3>
+    <form id="emInfoForm" class="grid g2">
+      <div class="field"><label>Prénom</label><input type="text" id="emPrenom" value="${esc(u.prenom || "")}"></div>
+      <div class="field"><label>Nom</label><input type="text" id="emNom" value="${esc(u.nom || "")}"></div>
+      <div class="field"><label>Date de naissance</label><input type="date" id="emBirth" value="${esc(u.birth || "")}"></div>
+      <div class="field"><label>GSM</label><input type="tel" id="emGsm" value="${esc(u.gsm || "")}"></div>
+      <div class="field" style="grid-column:1/-1"><button class="btn soft" type="submit">💾 Enregistrer la fiche</button></div>
+    </form>
+    <h4 style="margin-top:14px">📧 E-mail / identifiant</h4>
+    <form id="emCredForm" class="grid g2">
+      <div class="field"><label>Adresse e-mail</label><input type="email" id="emEmail" value="${esc(s.email && !s.email.endsWith("@" + PSEUDO_DOMAIN) ? s.email : "")}"></div>
+      <div class="field"><label>Identifiant</label><input type="text" id="emUser" autocapitalize="none" value="${esc(u.username || "")}"></div>
+      <div class="field" style="grid-column:1/-1"><label>Mot de passe actuel</label><input type="password" id="emOld" value="${esc(s.password || "")}" required></div>
+      <div class="field" style="grid-column:1/-1"><button class="btn soft" type="submit">Enregistrer</button></div>
+    </form>
+    <p class="small muted" style="margin-top:10px">Dernière visite : ${u.lastSeen ? esc(fmtTs(u.lastSeen)) : "—"} · Dernière connexion : ${u.lastLogin ? esc(fmtTs(u.lastLogin)) : "—"}</p>`);
+  enhancePasswords($("#overlayInner"));
+  $("#emInfoForm").onsubmit = async ev => {
+    ev.preventDefault();
+    try {
+      await updateMemberInfo(u.uid, { prenom: $("#emPrenom").value.trim(), nom: $("#emNom").value.trim(), birth: $("#emBirth").value, gsm: $("#emGsm").value.trim() });
+      toast("Fiche mise à jour ✅");
+    } catch (e) { toast(errMsg(e), "err"); }
+  };
+  $("#emCredForm").onsubmit = async ev => {
+    ev.preventDefault();
+    try {
+      await changeMemberEmailUsername(u.uid, {
+        oldEmail: s.email || u.email, oldPwd: $("#emOld").value, oldUsername: u.username,
+        newEmail: $("#emEmail").value.trim(), newUsername: $("#emUser").value.trim()
+      });
+      toast("E-mail / identifiant mis à jour ✅"); closeOverlay();
+    } catch (e) { toast(errMsg(e), "err"); }
+  };
 }
 
 function parentOptions() {
@@ -98,7 +141,7 @@ async function deleteMember(u) {
     }
     // données de l'élève
     if (u.role === "enfant") {
-      for (const sub of ["words", "sessions", "shame", "meta", "exams", "duels"]) {
+      for (const sub of ["words", "sessions", "shame", "meta", "exams", "duels", "wordsNl", "sessionsNl"]) {
         const snap = await getDocs(collection(db, "users", u.uid, sub));
         for (let i = 0; i < snap.docs.length; i += 400) {
           const b = writeBatch(db);

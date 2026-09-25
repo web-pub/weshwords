@@ -4,17 +4,20 @@ import { SUBJECTS } from "./ce1d.js";
 import {
   db, $, $$, esc, T, guard, initPrivatePage, renderAppHeader, todayKey, dayKeyOffset, fmtDay, fmtTs, toast, errMsg, shuffle,
   doc, getDoc, setDoc, updateDoc, deleteDoc, addDoc, collection, query, where, onSnapshot, writeBatch, serverTimestamp,
-  arrayRemove, arrayUnion, changeAuthPassword, PSEUDO_DOMAIN, applyContent, MOODS
+  arrayRemove, arrayUnion, changeAuthPassword, PSEUDO_DOMAIN, applyContent, MOODS,
+  updateMemberInfo, changeMemberEmailUsername
 } from "./app.js";
-import { parseVocabFile, readSheet, guessMapping, rowsFromMapping, IMPORT_FIELDS, dupKey, exportVocab, speak, computeStreak, PER_DIRECTION, DAILY_GOAL, MAX_LEVEL, DEFAULT_SETTINGS, categoriesOf } from "./words.js";
+import { parseVocabFile, readSheet, guessMapping, rowsFromMapping, IMPORT_FIELDS, IMPORT_FIELDS_NL, dupKey, exportVocab, speak, computeStreak, PER_DIRECTION, DAILY_GOAL, MAX_LEVEL, DEFAULT_SETTINGS, categoriesOf } from "./words.js";
 import { SHAME_IDEAS } from "./content.js";
 import { mountMemberForm } from "./member-form.js";
 import { findIrregular, IRREGULAR_VERBS } from "./irregular-verbs.js";
+import { IRREGULAR_VERBS_NL } from "./irregular-verbs-nl.js";
 import { badgeStats, evaluateBadges, badgesGrid, BADGES } from "./badges.js";
 import { playDuel, buildDuelItems, duelWinner, fmtTime, DUEL_PENALTIES, hideOverlay } from "./practice.js";
 import { irregularVerbs, activeThemes, filterByThemes } from "./words.js";
 import { ocrImages, parseOcrText } from "./ocr.js";
 import { pendingFixes } from "./fixes.js";
+import { checkWord, checkBatch, summarizeChecks } from "./vocab-check.js";
 
 await initPrivatePage();
 const { user, profile } = await guard(["parent", "superadmin"]);
@@ -28,6 +31,8 @@ let child = null;
 let words = [], sessions = [], shames = [], meta = { queue: [], lastRevealDay: "" };
 let settings = { ...DEFAULT_SETTINGS }, settingsDirty = false;
 let exams = [], weekOffset = 0, badgesUnlocked = {}, duels = [], proposals = [], puzzle = { pieces: 0, log: [] }, ce1d = [];
+let histMonth = null; // null = toutes les sessions ; sinon "AAAA-MM" pour remonter dans le temps
+let wordsNl = [], sessionsNl = []; // Néerlandais (V03-002)
 let unsubs = [];
 let loaded = { shame: false, meta: false };
 let firstLoad = true;
@@ -76,7 +81,8 @@ function selectChild(c) {
   unsubs.forEach(u => u()); unsubs = [];
   child = c; words = []; sessions = []; shames = []; meta = { queue: [], lastRevealDay: "" };
   loaded = { shame: false, meta: false };
-  settings = { ...DEFAULT_SETTINGS }; settingsDirty = false; exams = []; weekOffset = 0; badgesUnlocked = {}; duels = []; proposals = []; puzzle = { pieces: 0, log: [] }; ce1d = [];
+  settings = { ...DEFAULT_SETTINGS }; settingsDirty = false; exams = []; weekOffset = 0; badgesUnlocked = {}; duels = []; proposals = []; puzzle = { pieces: 0, log: [] }; ce1d = []; histMonth = null;
+  wordsNl = []; sessionsNl = [];
   renderPicker();
   $("#shTitle").textContent = T("parent.shame.title", { prenom: c.prenom || c.username });
   const base = ["users", c.uid];
@@ -125,8 +131,18 @@ function selectChild(c) {
     settings = { ...DEFAULT_SETTINGS, ...(s.exists() ? s.data() : {}) };
     if (!settingsDirty) renderSettings(); else renderChildChoice();
   }, () => {}));
+  // --- Néerlandais (V03-002)
+  unsubs.push(onSnapshot(collection(db, ...base, "wordsNl"), s => {
+    wordsNl = s.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderVocabNl(); renderSeriesDash();
+  }, e => toast(errMsg(e), "err")));
+  unsubs.push(onSnapshot(collection(db, ...base, "sessionsNl"), s => {
+    sessionsNl = s.docs.map(d => ({ day: d.id, ...d.data() })).sort((a, b) => b.day.localeCompare(a.day));
+    renderSeriesDash();
+  }, () => {}));
   renderAccount();
   renderVocab(); renderDash(); renderHist(); renderShame(); renderSettings(); renderExams(); renderBilan(); renderDuels();
+  renderVocabNl();
 }
 
 /* ---------------- Onglets ---------------- */
@@ -145,7 +161,7 @@ function closeOverlay() { $("#overlay").classList.add("hidden"); }
 // (pas de fermeture en cliquant à côté : évite de perdre un duel ou une correction de photo en cours)
 
 const lvlDots = l => `<span class="lvl" title="Niveau ${l || 0}">${Array.from({ length: MAX_LEVEL }, (_, i) => `<i class="${i < (l || 0) ? "on" : ""}"></i>`).join("")}</span>`;
-const wordsCol = () => collection(db, "users", child.uid, "words");
+const wordsCol = (lang = "en") => collection(db, "users", child.uid, lang === "nl" ? "wordsNl" : "words");
 
 /* ---------------- Tableau de bord ---------------- */
 function renderDash() {
@@ -261,6 +277,8 @@ $("#addWord").addEventListener("submit", async ev => {
   if (!w.fr || !w.en) return;
   const keys = new Set(words.map(dupKey));
   if (keys.has(dupKey(w))) { toast("Ce mot existe déjà dans la liste.", "warn"); return; }
+  const chk = checkWord(w, "en");
+  if (chk.level === "warn" && !confirm(`🤖 Vérification automatique :\n\n${chk.reasons.join("\n")}\n\nAjouter quand même ?`)) return;
   try {
     await addDoc(wordsCol(), { ...w, level: 0, ok: 0, ko: 0, seen: 0, createdAt: serverTimestamp() });
     toast("Mot ajouté ✅");
@@ -270,36 +288,50 @@ $("#addWord").addEventListener("submit", async ev => {
 });
 
 /* Import */
-async function writeWords(list) {
+async function writeWords(list, lang = "en") {
   let done = 0;
+  const previewId = lang === "nl" ? "impPreviewNl" : "impPreview";
   for (let i = 0; i < list.length; i += 400) {
     const b = writeBatch(db);
-    list.slice(i, i + 400).forEach(w => b.set(doc(wordsCol()), { ...w, level: 0, ok: 0, ko: 0, seen: 0, createdAt: serverTimestamp() }));
+    list.slice(i, i + 400).forEach(w => b.set(doc(wordsCol(lang)), { ...w, level: 0, ok: 0, ko: 0, seen: 0, createdAt: serverTimestamp() }));
     await b.commit();
     done += Math.min(400, list.length - i);
-    $("#impPreview").innerHTML = `<p class="note">Import en cours… ${done} / ${list.length}</p>`;
+    $("#" + previewId).innerHTML = `<p class="note">Import en cours… ${done} / ${list.length}</p>`;
   }
 }
-function previewImport(rows, sourceLabel) {
-  const existing = new Set(words.map(dupKey));
+/** Vérification automatique (V03-002) : relit chaque ligne à importer et signale ce qui semble louche
+    (colonnes inversées, mot vide, langue qui ne correspond pas…) — un assistant intégré au site, pas un
+    service d'IA externe payant (Wesh Words n'a pas de serveur pour garder une clé API en sécurité). */
+function previewImport(rows, sourceLabel, lang = "en") {
+  const previewId = lang === "nl" ? "impPreviewNl" : "impPreview";
+  const fileId = lang === "nl" ? "impFileNl" : "impFile";
+  const arr = lang === "nl" ? wordsNl : words;
+  const targetLabel = lang === "nl" ? "Néerlandais" : "Anglais";
+  const existing = new Set(arr.map(dupKey));
   const seen = new Set();
   const fresh = [], dups = [];
   rows.forEach(r => {
     const k = dupKey(r);
     if (existing.has(k) || seen.has(k)) dups.push(r); else { seen.add(k); fresh.push(r); }
   });
-  $("#impPreview").innerHTML = `
+  const checked = checkBatch(fresh, lang);
+  const sum = summarizeChecks(checked);
+  $("#" + previewId).innerHTML = `
     <div class="note">
       <b>${esc(sourceLabel)}</b> : ${rows.length} ligne(s) lue(s) — <b style="color:var(--green)">${fresh.length} nouveau(x)</b>, ${dups.length} doublon(s) ignoré(s).
-      ${fresh.length ? `<div class="table-wrap" style="margin:10px 0;max-height:220px"><table><thead><tr><th>Français</th><th>Anglais</th><th>Catégorie</th></tr></thead><tbody>${
-        fresh.slice(0, 12).map(w => `<tr><td>${esc(w.fr)}</td><td>${esc(w.en)}</td><td class="small">${esc(w.cat)}</td></tr>`).join("")}
-        ${fresh.length > 12 ? `<tr><td colspan="3" class="muted small">… et ${fresh.length - 12} autre(s)</td></tr>` : ""}</tbody></table></div>
+      ${fresh.length ? (sum.warn
+        ? `<p class="small" style="color:var(--warn);font-weight:700">🤖 Vérification automatique : ${sum.warn} mot(s) à vérifier (survole le ⚠️ pour voir pourquoi).</p>`
+        : `<p class="small" style="color:var(--green-d)">🤖 Vérification automatique : rien à signaler.</p>`) : ""}
+      ${fresh.length ? `<div class="table-wrap" style="margin:10px 0;max-height:220px"><table><thead><tr><th></th><th>Français</th><th>${esc(targetLabel)}</th><th>Catégorie</th></tr></thead><tbody>${
+        checked.slice(0, 30).map(w => `<tr><td>${w._check.level === "warn" ? `<span title="${esc(w._check.reasons.join(" — "))}">⚠️</span>` : "✅"}</td><td>${esc(w.fr)}</td><td>${esc(w.en)}</td><td class="small">${esc(w.cat)}</td></tr>`).join("")}
+        ${fresh.length > 30 ? `<tr><td colspan="4" class="muted small">… et ${fresh.length - 30} autre(s)</td></tr>` : ""}</tbody></table></div>
         <button class="btn sm" id="impGo">Importer ${fresh.length} mot(s)</button>` : ""}
       <button class="btn ghost sm" id="impCancel">Annuler</button>
     </div>`;
-  $("#impCancel").onclick = () => { $("#impPreview").innerHTML = ""; $("#impFile").value = ""; };
+  $("#impCancel").onclick = () => { $("#" + previewId).innerHTML = ""; const f = $("#" + fileId); if (f) f.value = ""; };
   $("#impGo")?.addEventListener("click", async () => {
-    try { await writeWords(fresh); toast(`${fresh.length} mot(s) importé(s) ✅`); $("#impPreview").innerHTML = ""; $("#impFile").value = ""; }
+    if (sum.warn && !confirm(`🤖 ${sum.warn} mot(s) semblent suspects (colonnes peut-être inversées, doublon…). Importer quand même les ${fresh.length} mot(s) ?`)) return;
+    try { await writeWords(fresh, lang); toast(`${fresh.length} mot(s) importé(s) ✅`); $("#" + previewId).innerHTML = ""; const f = $("#" + fileId); if (f) f.value = ""; }
     catch (e) { toast(errMsg(e), "err"); }
   });
 }
@@ -310,23 +342,26 @@ $("#impFile").addEventListener("change", async () => {
   catch (e) { toast(errMsg(e), "err"); }
 });
 /** Étape 1 de l'import : l'utilisateur vérifie à quoi correspond chaque colonne */
-function mappingStep(name, rows) {
+function mappingStep(name, rows, lang = "en") {
   if (!rows.length) { toast("Fichier vide.", "warn"); return; }
+  const previewId = lang === "nl" ? "impPreviewNl" : "impPreview";
+  const fileId = lang === "nl" ? "impFileNl" : "impFile";
+  const fields = lang === "nl" ? IMPORT_FIELDS_NL : IMPORT_FIELDS;
   let { map, hasHeader } = guessMapping(rows);
   const draw = () => {
     const sample = rows.slice(hasHeader ? 1 : 0, (hasHeader ? 1 : 0) + 5);
     const built = rowsFromMapping(rows, map, hasHeader);
-    $("#impPreview").innerHTML = `<div class="note">
+    $("#" + previewId).innerHTML = `<div class="note">
       <b>📄 ${esc(name)}</b> — ${rows.length - (hasHeader ? 1 : 0)} ligne(s). <b>Vérifie à quoi correspond chaque colonne</b> :
       <label class="check small" style="margin:8px 0"><input type="checkbox" id="mapHead" ${hasHeader ? "checked" : ""}> La 1re ligne contient les titres des colonnes</label>
-      <div class="table-wrap" style="margin:8px 0"><table><thead><tr>${map.map((m, j) => `<th><select data-map="${j}" style="min-width:130px;font-size:.85rem;padding:.35em">${IMPORT_FIELDS.map(([v, l]) => `<option value="${v}" ${v === m ? "selected" : ""}>${l}</option>`).join("")}</select>${hasHeader ? `<div class="small muted" style="font-weight:600">${esc(rows[0][j] ?? "")}</div>` : ""}</th>`).join("")}</tr></thead>
+      <div class="table-wrap" style="margin:8px 0"><table><thead><tr>${map.map((m, j) => `<th><select data-map="${j}" style="min-width:130px;font-size:.85rem;padding:.35em">${fields.map(([v, l]) => `<option value="${v}" ${v === m ? "selected" : ""}>${l}</option>`).join("")}</select>${hasHeader ? `<div class="small muted" style="font-weight:600">${esc(rows[0][j] ?? "")}</div>` : ""}</th>`).join("")}</tr></thead>
       <tbody>${sample.map(r => `<tr>${map.map((_, j) => `<td class="small">${esc(r[j] ?? "")}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
-      <p class="small">${map.includes("fr") && map.includes("en") ? `✅ ${built.length} mot(s) prêts à être vérifiés.` : "⚠️ Choisis au moins une colonne « Français » et une colonne « Anglais »."}</p>
+      <p class="small">${map.includes("fr") && map.includes("en") ? `✅ ${built.length} mot(s) prêts à être vérifiés.` : `⚠️ Choisis au moins une colonne « Français » et une colonne « ${lang === "nl" ? "Néerlandais" : "Anglais"} ».`}</p>
       <div class="row"><button class="btn sm" id="mapGo" ${map.includes("fr") && map.includes("en") ? "" : "disabled"}>Continuer →</button><button class="btn ghost sm" id="mapCancel">Annuler</button></div></div>`;
     $$("[data-map]").forEach(el => el.onchange = () => { map[Number(el.dataset.map)] = el.value; draw(); });
     $("#mapHead").onchange = () => { hasHeader = $("#mapHead").checked; draw(); };
-    $("#mapCancel").onclick = () => { $("#impPreview").innerHTML = ""; $("#impFile").value = ""; };
-    $("#mapGo").onclick = () => previewImport(rowsFromMapping(rows, map, hasHeader), name);
+    $("#mapCancel").onclick = () => { $("#" + previewId).innerHTML = ""; const f = $("#" + fileId); if (f) f.value = ""; };
+    $("#mapGo").onclick = () => previewImport(rowsFromMapping(rows, map, hasHeader), name, lang);
   };
   draw();
 }
@@ -378,6 +413,122 @@ $("#btnDelFiltered").onclick = async () => {
   }
   toast(`${list.length} mot(s) supprimé(s).`);
 };
+
+/* ---------------- Néerlandais (V03-002) : même principe que le Vocabulaire anglais ---------------- */
+let vnPage = 0;
+function filteredNl() {
+  const q = ($("#nSearch")?.value || "").trim().toLowerCase(), c = $("#nCat")?.value || "", l = $("#nLvl")?.value ?? "";
+  return wordsNl.filter(w =>
+    (!q || (w.fr || "").toLowerCase().includes(q) || (w.en || "").toLowerCase().includes(q)) &&
+    (!c || w.cat === c) && (l === "" || (w.level || 0) === Number(l))
+  ).sort((a, b) => (a.cat || "").localeCompare(b.cat || "") || (a.fr || "").localeCompare(b.fr || ""));
+}
+function renderVocabNl() {
+  if (!child || !$("#nBody")) return;
+  const cats = [...new Set(wordsNl.map(w => w.cat).filter(Boolean))].sort();
+  const cur = $("#nCat").value;
+  $("#nCat").innerHTML = `<option value="">Toutes les catégories</option>` + cats.map(c => `<option ${c === cur ? "selected" : ""}>${esc(c)}</option>`).join("");
+  $("#nCatList").innerHTML = cats.map(c => `<option value="${esc(c)}">`).join("");
+  const list = filteredNl();
+  const PAGE_N = 50;
+  const pages = Math.max(1, Math.ceil(list.length / PAGE_N));
+  vnPage = Math.min(vnPage, pages - 1);
+  $("#nCount").textContent = `${list.length} / ${wordsNl.length}`;
+  $("#nBody").innerHTML = list.slice(vnPage * PAGE_N, vnPage * PAGE_N + PAGE_N).map(w => `
+    <tr><td>${esc(w.fr)}</td><td><b>${esc(w.en)}</b>${w.conj ? `<div class="small muted">${esc(w.conj)}</div>` : ""}</td>
+    <td>${w.cat ? `<span class="chip b">${esc(w.cat)}</span>` : ""}</td><td>${lvlDots(w.level)}</td>
+    <td class="small">${w.ok || 0} / ${w.ko || 0}</td>
+    <td class="actions"><button class="icon-btn" data-nsay="${w.id}" title="Écouter">🔊</button>
+    <button class="icon-btn" data-nedit="${w.id}" title="Modifier">✏️</button>
+    <button class="icon-btn" data-ndel="${w.id}" title="Supprimer">🗑️</button></td></tr>`).join("")
+    || `<tr><td colspan="6" class="muted center">Aucun mot. Ajoute-en ou importe un fichier Excel.</td></tr>`;
+  $("#nPager").innerHTML = pages > 1 ? `<button class="btn ghost sm" id="npgPrev" ${vnPage ? "" : "disabled"}>←</button><span class="small">Page ${vnPage + 1} / ${pages}</span><button class="btn ghost sm" id="npgNext" ${vnPage < pages - 1 ? "" : "disabled"}>→</button>` : "";
+  $("#npgPrev")?.addEventListener("click", () => { vnPage--; renderVocabNl(); });
+  $("#npgNext")?.addEventListener("click", () => { vnPage++; renderVocabNl(); });
+  $$("[data-nsay]").forEach(b => b.onclick = () => speak(wordsNl.find(w => w.id === b.dataset.nsay)?.en, "nl-NL"));
+  $$("[data-nedit]").forEach(b => b.onclick = () => editWordNl(wordsNl.find(w => w.id === b.dataset.nedit)));
+  $$("[data-ndel]").forEach(b => b.onclick = async () => {
+    const w = wordsNl.find(x => x.id === b.dataset.ndel);
+    if (!confirm(`Supprimer « ${w.fr} → ${w.en} » ?`)) return;
+    deleteDoc(doc(wordsCol("nl"), w.id)).catch(e => toast(errMsg(e), "err"));
+  });
+}
+["nSearch", "nCat", "nLvl"].forEach(id => $("#" + id)?.addEventListener("input", () => { vnPage = 0; renderVocabNl(); }));
+
+function editWordNl(w) {
+  openOverlay(`<h3>✏️ Modifier le mot (Néerlandais)</h3>
+    <form id="ewFormNl">
+      <div class="grid g2"><div class="field"><label>Français</label><input type="text" id="ewFrNl" value="${esc(w.fr)}" required></div>
+      <div class="field"><label>Néerlandais</label><input type="text" id="ewNlN" value="${esc(w.en)}" required></div></div>
+      <div class="grid g2"><div class="field"><label>Catégorie</label><input type="text" id="ewCatNl" value="${esc(w.cat || "")}" list="nCatList"></div>
+      <div class="field"><label>Nature</label><input type="text" id="ewNatNl" value="${esc(w.nature || "")}"></div></div>
+      <div class="field"><label>Exemple</label><input type="text" id="ewExNl" value="${esc(w.ex || "")}"></div>
+      <div class="field"><label>Conjugaison / formes</label><input type="text" id="ewConjNl" value="${esc(w.conj || "")}"></div>
+      <div class="field"><label>Niveau (0 à 5)</label><input type="number" min="0" max="5" id="ewLvlNl" value="${w.level || 0}"></div>
+      <button class="btn" type="submit">Enregistrer</button>
+    </form>`);
+  $("#ewFormNl").onsubmit = async ev => {
+    ev.preventDefault();
+    try {
+      await updateDoc(doc(wordsCol("nl"), w.id), {
+        fr: $("#ewFrNl").value.trim(), en: $("#ewNlN").value.trim(), cat: $("#ewCatNl").value.trim(),
+        nature: $("#ewNatNl").value.trim(), ex: $("#ewExNl").value.trim(), conj: $("#ewConjNl").value.trim(),
+        level: Math.max(0, Math.min(MAX_LEVEL, Number($("#ewLvlNl").value) || 0))
+      });
+      toast("Mot modifié ✅"); closeOverlay();
+    } catch (e) { toast(errMsg(e), "err"); }
+  };
+}
+
+$("#addWordNl")?.addEventListener("submit", async ev => {
+  ev.preventDefault();
+  const w = { fr: $("#nwFr").value.trim(), en: $("#nwNl").value.trim(), cat: $("#nwCat").value.trim(), nature: $("#nwNat").value, ex: $("#nwEx").value.trim(), conj: $("#nwConj").value.trim(), note: "", irr: !!$("#nwConj").value.trim() };
+  if (!w.fr || !w.en) return;
+  const keys = new Set(wordsNl.map(dupKey));
+  if (keys.has(dupKey(w))) { toast("Ce mot existe déjà dans la liste.", "warn"); return; }
+  const chk = checkWord(w, "nl");
+  if (chk.level === "warn" && !confirm(`🤖 Vérification automatique :\n\n${chk.reasons.join("\n")}\n\nAjouter quand même ?`)) return;
+  try {
+    await addDoc(wordsCol("nl"), { ...w, level: 0, ok: 0, ko: 0, seen: 0, createdAt: serverTimestamp() });
+    toast("Mot ajouté ✅");
+    ["nwFr", "nwNl", "nwEx", "nwConj"].forEach(id => $("#" + id).value = "");
+    $("#nwFr").focus();
+  } catch (e) { toast(errMsg(e), "err"); }
+});
+$("#impFileNl")?.addEventListener("change", async () => {
+  const f = $("#impFileNl").files[0];
+  if (!f) return;
+  try { mappingStep(f.name, (await readSheet(f)).rows, "nl"); }
+  catch (e) { toast(errMsg(e), "err"); }
+});
+$("#btnSeedNl")?.addEventListener("click", async () => {
+  try {
+    const raw = await (await fetch("assets/vocab-neerlandais.json")).json();
+    const rows = raw.map(r => ({ fr: r.fr, en: r.en, cat: r.c || "", nature: r.n || "", ex: r.x || "", note: r.o || "", irr: !!r.i, conj: r.g || "" }));
+    previewImport(rows, "Vocabulaire néerlandais CE1D A1-A2 (1500 mots)", "nl");
+  } catch (e) { toast(errMsg(e), "err"); }
+});
+$("#btnIrrNl")?.addEventListener("click", () => {
+  previewImport(IRREGULAR_VERBS_NL.map(v => ({ fr: v.fr, en: v.nl, cat: v.cat || "Verbes irréguliers", nature: v.nature || "verbe irrégulier", ex: v.ex || "", note: v.note || "", irr: true, conj: v.conj || "" })), "Liste des verbes irréguliers néerlandais", "nl");
+});
+$("#btnWipeNl")?.addEventListener("click", async () => {
+  if (!wordsNl.length) { toast("Le vocabulaire néerlandais est déjà vide.", "warn"); return; }
+  const ok = prompt(`Supprimer les ${wordsNl.length} mots néerlandais de ${child.prenom || "l'élève"} pour recommencer à zéro ?\n(les séries et points déjà gagnés sont conservés)\n\nTape SUPPRIMER pour confirmer :`);
+  if ((ok || "").trim().toUpperCase() !== "SUPPRIMER") { toast("Suppression annulée."); return; }
+  try {
+    const list = [...wordsNl];
+    for (let i = 0; i < list.length; i += 400) {
+      const b = writeBatch(db);
+      list.slice(i, i + 400).forEach(w => b.delete(doc(wordsCol("nl"), w.id)));
+      await b.commit();
+    }
+    toast(`${list.length} mot(s) supprimé(s). Tu peux réimporter ton fichier 📥`);
+  } catch (e) { toast(errMsg(e), "err"); }
+});
+$("#btnExportNl")?.addEventListener("click", () => {
+  try { exportVocab(wordsNl, `WeshWords-${(child.prenom || "eleve").replace(/\s+/g, "")}-neerlandais.xlsx`); }
+  catch (e) { toast(errMsg(e), "err"); }
+});
 
 /* ---------------- Mots de la honte ---------------- */
 let pickHonte = 5;
@@ -554,6 +705,12 @@ function renderSeriesDash() {
   }
   h += `<div class="table-wrap" style="margin-top:10px"><table><thead><tr><th>Jour</th><th>Séries</th><th>Points par série</th><th>Total</th></tr></thead><tbody>${rows.join("")}</tbody></table></div>
     <p class="small muted">Points : 100 par série, −5 par erreur, −2 par aide, +20 si zéro faute (minimum 10). La 1re série est obligatoire, les suivantes au choix (toujours par blocs de 20).</p>`;
+  // Néerlandais (V03-002) : séries toujours libres, points et puzzle partagés avec l'anglais
+  const tn = sessionsNl.find(s => s.day === today), serN = seriesOf(tn);
+  const totalSerN = sessionsNl.reduce((a, s) => a + seriesOf(s).length, 0);
+  const totalPtsN = sessionsNl.reduce((a, s) => a + seriesOf(s).reduce((x, y) => x + y.points, 0), 0);
+  h += `<hr class="sep"><p style="margin-bottom:4px"><b>🇳🇱 Néerlandais — aujourd'hui :</b> ${serN.length} série(s) · ⭐ <b>${serN.reduce((a, x) => a + x.points, 0)}</b> points${tn?.cur?.attempts ? ` <span class="chip w">série n°${serN.length + 1} en cours : ${(tn.cur.frEn || 0) + (tn.cur.enFr || 0)}/20</span>` : ""}</p>
+    <p class="small muted">Depuis le début : ${totalSerN} série(s) · ⭐ ${totalPtsN} points au total. Séries toujours libres (pas d'obligation quotidienne) ; ${wordsNl.length} mot(s) néerlandais au programme.</p>`;
   $("#dSeries").innerHTML = h;
   const st = puzzleState(puzzle.pieces || 0);
   $("#dPuzzle").innerHTML = puzzleGrid(st.img, st.shown) + `<p class="center" style="margin-top:8px"><b>${st.inCur}/${PIECES}</b> morceaux · ${st.done} puzzle(s) terminé(s) · ${st.total} morceau(x) au total</p>
@@ -582,9 +739,20 @@ function renderCe1dDash() {
 }
 
 /* ---------------- Historique ---------------- */
+const MONTH_NAMES = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+function addMonths(ym, n) {
+  let [y, m] = ym.split("-").map(Number);
+  m += n; while (m < 1) { m += 12; y--; } while (m > 12) { m -= 12; y++; }
+  return `${y}-${String(m).padStart(2, "0")}`;
+}
 function renderHist() {
   if (!child) return;
-  $("#hBody").innerHTML = sessions.map(s => {
+  const shown = histMonth ? sessions.filter(s => s.day.slice(0, 7) === histMonth) : sessions;
+  const curMonth = today.slice(0, 7);
+  $("#hLabel").textContent = histMonth ? `${MONTH_NAMES[Number(histMonth.slice(5, 7)) - 1]} ${histMonth.slice(0, 4)}` : "Toutes les sessions";
+  $("#hNext").disabled = !histMonth || histMonth >= curMonth;
+  $("#hAll").disabled = !histMonth;
+  $("#hBody").innerHTML = shown.map(s => {
     const ok = Math.min(DAILY_GOAL, (s.frEn || 0) + (s.enFr || 0));
     const rate = s.attempts ? Math.round(ok / s.attempts * 100) : 0;
     return `<tr><td><b>${esc(fmtDay(s.day))}</b><div class="small muted">${esc(s.day)}</div></td>
@@ -592,7 +760,7 @@ function renderHist() {
       <td>${rate}%</td><td>${s.helped || 0}${s.qcm ? ` <span class="small muted">(+${s.qcm} QCM auto)</span>` : ""}</td><td>${seriesOf(s).length || ""}</td><td class="small">${seriesOf(s).map(x => `<span class="chip" title="${x.errors} erreur(s) · ${x.acc}%">#${x.n} ⭐ ${x.points}</span>`).join(" ")}${seriesOf(s).length > 1 ? ` <b>= ${seriesOf(s).reduce((a, x) => a + x.points, 0)}</b>` : ""}${s.bonus ? `<div class="muted">+${s.bonus} bonus</div>` : ""}</td>
       <td>${s.completed ? '<span class="chip g">20/20 ✅</span>' : (s.attempts ? '<span class="chip w">en cours</span>' : "")}</td>
       <td class="actions">${(s.wrong || []).length ? `<button class="btn ghost sm" data-wrong="${s.day}">Erreurs</button>` : ""}</td></tr>`;
-  }).join("") || `<tr><td colspan="11" class="muted center">Aucune session pour l'instant.</td></tr>`;
+  }).join("") || `<tr><td colspan="11" class="muted center">${histMonth ? "Aucune session ce mois-là." : "Aucune session pour l'instant."}</td></tr>`;
   $$("[data-wrong]").forEach(b => b.onclick = () => {
     const s = sessions.find(x => x.day === b.dataset.wrong);
     openOverlay(`<h3>❌ Erreurs du ${esc(fmtDay(s.day))}</h3><div class="table-wrap"><table><thead><tr><th>Sens</th><th>Question</th><th>Réponse donnée</th><th>Attendu</th></tr></thead><tbody>${
@@ -600,14 +768,44 @@ function renderHist() {
     }</tbody></table></div>`);
   });
 }
+$("#hPrev").onclick = () => { histMonth = addMonths(histMonth || today.slice(0, 7), -1); renderHist(); };
+$("#hNext").onclick = () => { if (!histMonth || histMonth >= today.slice(0, 7)) return; histMonth = addMonths(histMonth, 1); renderHist(); };
+$("#hAll").onclick = () => { histMonth = null; renderHist(); };
 
 /* ---------------- Comptes ---------------- */
 function renderAccount() {
   if (!child) return;
   $("#acChildName").textContent = child.prenom || child.username;
   const mail = child.email && !child.email.endsWith("@" + PSEUDO_DOMAIN) ? child.email : "— (e-mail technique)";
-  $("#acChildInfo").innerHTML = `Utilisateur : <b>${esc(child.username)}</b><br>E-mail : ${esc(mail)}`;
+  $("#acChildInfo").innerHTML = `Utilisateur : <b>${esc(child.username)}</b><br>E-mail : ${esc(mail)}
+    <br><span class="small muted">Dernière visite : ${child.lastSeen ? esc(fmtTs(child.lastSeen)) : "—"} · Dernière connexion : ${child.lastLogin ? esc(fmtTs(child.lastLogin)) : "—"}</span>`;
+  if (!document.activeElement || !$("#childInfoForm").contains(document.activeElement)) {
+    $("#ciPrenom").value = child.prenom || ""; $("#ciNom").value = child.nom || "";
+    $("#ciBirth").value = child.birth || ""; $("#ciGsm").value = child.gsm || "";
+  }
+  if (!document.activeElement || !$("#childEmailForm").contains(document.activeElement)) {
+    $("#ceEmail").value = child.email && !child.email.endsWith("@" + PSEUDO_DOMAIN) ? child.email : "";
+    $("#ceUser").value = child.username || "";
+  }
 }
+$("#childInfoForm").addEventListener("submit", async ev => {
+  ev.preventDefault();
+  try {
+    await updateMemberInfo(child.uid, { prenom: $("#ciPrenom").value.trim(), nom: $("#ciNom").value.trim(), birth: $("#ciBirth").value, gsm: $("#ciGsm").value.trim() });
+    toast("Fiche mise à jour ✅");
+  } catch (e) { toast(errMsg(e), "err"); }
+});
+$("#childEmailForm").addEventListener("submit", async ev => {
+  ev.preventDefault();
+  try {
+    await changeMemberEmailUsername(child.uid, {
+      oldEmail: child.email, oldPwd: $("#ceOld").value, oldUsername: child.username,
+      newEmail: $("#ceEmail").value.trim(), newUsername: $("#ceUser").value.trim()
+    });
+    toast("E-mail / identifiant mis à jour ✅");
+    $("#ceOld").value = "";
+  } catch (e) { toast(errMsg(e), "err"); }
+});
 $("#childPwdForm").addEventListener("submit", async ev => {
   ev.preventDefault();
   const nw = $("#cpNew").value;

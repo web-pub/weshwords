@@ -1,7 +1,7 @@
 /* =========================================================
    Wesh Words — points des séries & puzzle à collectionner (V02-001)
    ========================================================= */
-export const PUZZLES = ["assets/puzzle-1.webp", "assets/puzzle-2.webp", "assets/puzzle-3.webp", "assets/puzzle-4.webp", "assets/puzzle-5.webp", "assets/puzzle-6.webp"];
+export const PUZZLES = ["assets/puzzle-1.webp", "assets/puzzle-2.webp", "assets/puzzle-3.webp", "assets/puzzle-4.webp", "assets/puzzle-5.webp", "assets/puzzle-6.webp", "assets/puzzle-7.webp"];
 export const PIECES = 12; // 4 colonnes × 3 lignes
 const ORDER = [5, 0, 10, 3, 8, 1, 11, 6, 2, 9, 4, 7]; // ordre d'apparition des morceaux
 

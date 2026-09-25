@@ -10,6 +10,7 @@ export const DAILY_GOAL = PER_DIRECTION * 2;
 
 const ARTICLES_EN = /^(a|an|the|to|some)\s+/;
 const ARTICLES_FR = /^(?:(?:de la|les|le|la|une|un|des|du|de|se)\s+|(?:de l'|l'|d'|s')\s*)/;
+const ARTICLES_NL = /^(de|het|een|te)\s+/;
 
 function baseNorm(s) {
   return String(s ?? "")
@@ -22,7 +23,7 @@ function baseNorm(s) {
     .trim();
 }
 function dropArticle(s, lang) {
-  const re = lang === "en" ? ARTICLES_EN : ARTICLES_FR;
+  const re = lang === "en" ? ARTICLES_EN : lang === "nl" ? ARTICLES_NL : ARTICLES_FR;
   let prev;
   do { prev = s; s = s.replace(re, "").trim(); } while (s !== prev && s.length);
   return s;
@@ -171,6 +172,8 @@ export const IMPORT_FIELDS = [
   ["", "— ignorer —"], ["fr", "🇫🇷 Français"], ["en", "🇬🇧 Anglais"], ["cat", "Catégorie / thème"],
   ["nature", "Nature"], ["ex", "Exemple"], ["note", "Note"], ["conj", "Formes (verbe irrégulier)"], ["irr", "Irrégulier (oui/non)"]
 ];
+/** Mêmes colonnes, libellé « Néerlandais » à la place d'« Anglais » (V03-002) */
+export const IMPORT_FIELDS_NL = IMPORT_FIELDS.map(([v, l]) => v === "en" ? ["en", "🇳🇱 Néerlandais"] : [v, l]);
 /** Lit la 1re feuille « vocab » (ou la 1re) et renvoie les lignes brutes */
 export async function readSheet(file) {
   if (!window.XLSX) throw new Error("Module Excel non chargé (connexion internet requise).");
@@ -228,6 +231,7 @@ export function speak(text, lang = "en-GB", rate = 0.92) {
   speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(String(text).replace(/\s*\/\s*/g, ", "));
   if (lang.startsWith("en")) { _voice = _voice || pickVoice(); if (_voice) u.voice = _voice; u.lang = "en-GB"; }
+  else if (lang.startsWith("nl")) u.lang = "nl-NL";
   else u.lang = "fr-FR";
   u.rate = rate;
   speechSynthesis.speak(u);

@@ -30,6 +30,9 @@ let ready = { w: false, s: false };
 let settings = { ...DEFAULT_SETTINGS };
 let duels = [];
 let puzzle = { pieces: 0, log: [] }, puzzleLoaded = false;
+// --- Néerlandais (V03-002) : même moteur de quiz que l'anglais, vocabulaire et sessions séparés,
+// séries toujours « libres » (pas de série obligatoire du jour), points et pièces de puzzle partagés.
+let wordsNl = [], sessionsNl = {}, readyNl = { w: false, s: false };
 let holdBadges = false; // pas de pop-up de badge pendant un écran de fin
 let exams = [], badgesMeta = { unlocked: {} }, badgesLoaded = { m: false, x: false }, badgeQueue = [];
 const pool = () => filterByThemes(words, activeThemes(settings, today).list);
@@ -39,6 +42,15 @@ const sess = () => sessions[today] || (sessions[today] = emptySession());
 const newCur = () => ({ frEn: 0, enFr: 0, attempts: 0, errors: 0, helped: 0, wrong: [] });
 const curSeries = () => { const s = sess(); if (!s.cur) s.cur = newCur(); return s.cur; };
 const sessionRef = () => doc(db, "users", uid, "sessions", today);
+
+const emptySessionNl = () => ({ day: today, series: [], cur: null });
+const sessNl = () => sessionsNl[today] || (sessionsNl[today] = emptySessionNl());
+const curSeriesNl = () => { const s = sessNl(); if (!s.cur) s.cur = newCur(); return s.cur; };
+const sessionRefNl = () => doc(db, "users", uid, "sessionsNl", today);
+function saveSessionNl() {
+  const s = sessNl();
+  setDoc(sessionRefNl(), { ...s }, { merge: true }).catch(e => console.warn(e));
+}
 
 /* ---------------- Flux temps réel ---------------- */
 onSnapshot(collection(db, "users", uid, "words"), snap => {
@@ -59,6 +71,25 @@ onSnapshot(collection(db, "users", uid, "sessions"), snap => {
   }
   ready.s = true; boot();
 }, e => { toast(errMsg(e), "err"); ready.s = true; boot(); });
+
+onSnapshot(collection(db, "users", uid, "wordsNl"), snap => {
+  wordsNl = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  readyNl.w = true;
+  if (ready.w && ready.s && !quiz.active) renderNl();
+}, () => { readyNl.w = true; });
+
+onSnapshot(collection(db, "users", uid, "sessionsNl"), snap => {
+  const local = sessionsNl[today];
+  sessionsNl = {};
+  snap.docs.forEach(d => sessionsNl[d.id] = { day: d.id, ...d.data() });
+  if (local && quiz.active && quiz.mode === "nl") {
+    const srv = sessionsNl[today] || (sessionsNl[today] = emptySessionNl());
+    const ls = (local.series || []).length, ss = (srv.series || []).length;
+    if (ls > ss || (ls === ss && (local.cur?.attempts || 0) >= (srv.cur?.attempts || 0))) { srv.series = local.series; srv.cur = local.cur; }
+  }
+  readyNl.s = true;
+  if (ready.w && ready.s && !quiz.active) renderNl();
+}, () => { readyNl.s = true; });
 
 onSnapshot(query(collection(db, "users", uid, "shame"), where("revealed", "==", true)), snap => {
   revealed = snap.docs.map(d => ({ id: d.id, ...d.data() }))
@@ -120,11 +151,12 @@ function streak() {
   const done = new Set(Object.values(sessions).filter(s => s.completed).map(s => s.day));
   return computeStreak(done, today, dayKeyOffset);
 }
-function barsHTML(s) {
+function barsHTML(s, lang = "en") {
+  const flag = lang === "nl" ? "🇳🇱" : "🇬🇧";
   const a = Math.min(PER_DIRECTION, s.frEn || 0), b = Math.min(PER_DIRECTION, s.enFr || 0);
   return `
-    <div class="bar"><div class="t"><span>🇫🇷 → 🇬🇧</span><span>${a}/${PER_DIRECTION}</span></div><div class="track"><div class="fill" style="width:${a * 10}%"></div></div></div>
-    <div class="bar"><div class="t"><span>🇬🇧 → 🇫🇷</span><span>${b}/${PER_DIRECTION}</span></div><div class="track"><div class="fill" style="width:${b * 10}%"></div></div></div>`;
+    <div class="bar"><div class="t"><span>🇫🇷 → ${flag}</span><span>${a}/${PER_DIRECTION}</span></div><div class="track"><div class="fill" style="width:${a * 10}%"></div></div></div>
+    <div class="bar"><div class="t"><span>${flag} → 🇫🇷</span><span>${b}/${PER_DIRECTION}</span></div><div class="track"><div class="fill" style="width:${b * 10}%"></div></div></div>`;
 }
 const nextShameId = () => (meta.queue || []).find(id => !((meta.dates || {})[id]) || meta.dates[id] <= today) || null;
 const canReveal = () => sess().completed && !!nextShameId() && meta.lastRevealDay !== today;
@@ -172,6 +204,7 @@ function renderHome() {
   $("#btnBonus")?.addEventListener("click", () => startQuiz("bonus"));
   $("#btnExtra")?.addEventListener("click", () => startQuiz("extra"));
   renderPuzzle();
+  renderNl();
   $("#btnReward")?.addEventListener("click", revealShame);
   $("#btnReview")?.addEventListener("click", () => showShame(todayShame(), true));
 
@@ -580,12 +613,14 @@ const quiz = { active: false, mode: "daily", cur: null, dir: null, answered: fal
 const expectedOf = () => quiz.dir === "frEn" ? quiz.cur.en : quiz.cur.fr;
 
 function startQuiz(mode) {
-  if (!words.length) return;
+  if (mode === "nl" ? !wordsNl.length : !words.length) return;
   Object.assign(quiz, { active: true, mode, recent: [], retry: [], step: 0, lastDir: null, bonusCount: 0 });
   $("#vHome").classList.add("hidden");
   $("#vQuiz").classList.remove("hidden");
   if (mode === "extra") curSeries();
-  $("#qMode").textContent = mode === "daily" ? T("quiz.mode.daily") : mode === "extra" ? T("series.mode", { n: (sess().series || []).length + 1 }) : T("quiz.mode.bonus");
+  if (mode === "nl") curSeriesNl();
+  $("#qMode").textContent = mode === "daily" ? T("quiz.mode.daily") : mode === "extra" ? T("series.mode", { n: (sess().series || []).length + 1 })
+    : mode === "nl" ? "🇳🇱 " + T("series.mode", { n: (sessNl().series || []).length + 1 }) : T("quiz.mode.bonus");
   nextQuestion();
 }
 function stopQuiz() {
@@ -602,9 +637,9 @@ $("#qBack").onclick = () => {
 
 function renderQuizBars() {
   const s = sess();
-  if (quiz.mode === "daily" || quiz.mode === "extra") {
-    const c = quiz.mode === "extra" ? curSeries() : s;
-    $("#qBars").innerHTML = barsHTML(c);
+  if (quiz.mode === "daily" || quiz.mode === "extra" || quiz.mode === "nl") {
+    const c = quiz.mode === "extra" ? curSeries() : quiz.mode === "nl" ? curSeriesNl() : s;
+    $("#qBars").innerHTML = barsHTML(c, quiz.mode === "nl" ? "nl" : "en");
     const left = DAILY_GOAL - ((c.frEn || 0) + (c.enFr || 0));
     $("#qSuspense").textContent = left === 1 ? T("quiz.s1") : left === 2 ? T("quiz.s2") : (left <= 5 && left > 2) ? T("quiz.s5", { n: left }) : "";
   } else if (quiz.mode === "exam") {
@@ -623,6 +658,9 @@ function nextQuestion() {
     while (!w && (item = quiz.exam.queue.shift())) w = words.find(x => x.id === item.id) || null;
     if (!w) { finishExam(); return; }
     quiz.dir = item.dir; quiz.cur = w;
+  } else if (quiz.mode === "nl") {
+    quiz.dir = nextDirection(curSeriesNl(), quiz.lastDir);
+    quiz.cur = pickWord(wordsNl, { recent: quiz.recent, retry: quiz.retry, step: quiz.step, today });
   } else {
     quiz.dir = quiz.mode === "daily" ? nextDirection(s, quiz.lastDir) : quiz.mode === "extra" ? nextDirection(curSeries(), quiz.lastDir) : (quiz.lastDir === "frEn" ? "enFr" : "frEn");
     quiz.cur = pickWord(pool(), { recent: quiz.recent, retry: quiz.retry, step: quiz.step, today });
@@ -631,14 +669,16 @@ function nextQuestion() {
   quiz.answered = false;
   const w = quiz.cur;
   const frEn = quiz.dir === "frEn";
-  $("#qDir").innerHTML = frEn ? "🇫🇷 <span>→</span> 🇬🇧 <span class='small'>Traduis en anglais</span>" : "🇬🇧 <span>→</span> 🇫🇷 <span class='small'>Traduis en français</span>";
+  const isNl = quiz.mode === "nl";
+  const tFlag = isNl ? "🇳🇱" : "🇬🇧";
+  $("#qDir").innerHTML = frEn ? `🇫🇷 <span>→</span> ${tFlag} <span class='small'>Traduis en ${isNl ? "néerlandais" : "anglais"}</span>` : `${tFlag} <span>→</span> 🇫🇷 <span class='small'>Traduis en français</span>`;
   $("#qPrompt").textContent = frEn ? w.fr : w.en;
   const meta = [];
   if (w.cat) meta.push(`<span class="chip b">${esc(w.cat)}</span>`);
   if (w.nature) meta.push(`<span class="chip">${esc(w.nature)}</span>`);
   if (!frEn) meta.push(`<button type="button" class="icon-btn" id="qSay" title="Écouter">🔊</button>`);
   $("#qMeta").innerHTML = meta.join("");
-  $("#qSay")?.addEventListener("click", () => speak(w.en));
+  $("#qSay")?.addEventListener("click", () => speak(w.en, isNl ? "nl-NL" : "en-GB"));
   const a = $("#qAnswer");
   a.value = ""; a.className = "answer"; a.disabled = false;
   $("#qFeedback").innerHTML = "";
@@ -661,7 +701,7 @@ function showInput() {
 }
 function showChoices() {
   const w = quiz.cur;
-  quiz.choices = buildChoices(w, quiz.dir, words);
+  quiz.choices = buildChoices(w, quiz.dir, quiz.mode === "nl" ? wordsNl : words);
   $("#qAnswer").classList.add("hidden");
   $("#qSubmit").classList.add("hidden");
   $("#qChoices").innerHTML = `<div class="q-intro">${esc(T("quiz.qcmIntro"))}</div>` +
@@ -717,7 +757,7 @@ function setMood(m) {
   el.dataset.m = m; el.src = MOODS[m];
   el.classList.remove("pop"); void el.offsetWidth; el.classList.add("pop");
 }
-function saveWord(w, ok, gain = 1) {
+function saveWord(w, ok, gain = 1, coll = "words") {
   const upd = {
     level: ok ? Math.min(MAX_LEVEL, (w.level || 0) + gain) : Math.max(0, (w.level || 0) - 1),
     ok: (w.ok || 0) + (ok ? 1 : 0), ko: (w.ko || 0) + (ok ? 0 : 1),
@@ -726,7 +766,7 @@ function saveWord(w, ok, gain = 1) {
   if (!ok) upd.lastKo = today;
   const before = w.level || 0;
   Object.assign(w, upd);
-  updateDoc(doc(db, "users", uid, "words", w.id), upd).catch(e => console.warn(e));
+  updateDoc(doc(db, "users", uid, coll, w.id), upd).catch(e => console.warn(e));
   return { before, after: upd.level };
 }
 function saveSession() {
@@ -737,15 +777,16 @@ function saveSession() {
 }
 
 function answer(given, skipped = false, opt = {}) {
-  const w = quiz.cur, frEn = quiz.dir === "frEn";
+  const w = quiz.cur, frEn = quiz.dir === "frEn", isNl = quiz.mode === "nl";
   const expected = frEn ? w.en : w.fr;
+  const pool2 = isNl ? wordsNl : words;
   // Accepte aussi la traduction d'un autre mot ayant exactement le même énoncé (ex. « band »)
   const promptOf = x => String(frEn ? x.fr : x.en).trim().toLowerCase();
-  const alts = [...((frEn ? w.altEn : w.altFr) || []), ...words.filter(x => x.id !== w.id && promptOf(x) === promptOf(w)).map(x => frEn ? x.en : x.fr)];
+  const alts = [...((frEn ? w.altEn : w.altFr) || []), ...pool2.filter(x => x.id !== w.id && promptOf(x) === promptOf(w)).map(x => frEn ? x.en : x.fr)];
   let res = { ok: false, accent: false };
   if ("choiceOk" in opt) res = { ok: opt.choiceOk, accent: false };
   else if (!skipped) {
-    for (const exp of [expected, ...alts]) { const r = checkAnswer(exp, given, frEn ? "en" : "fr"); if (r.ok && (!res.ok || res.accent)) res = r; }
+    for (const exp of [expected, ...alts]) { const r = checkAnswer(exp, given, frEn ? (isNl ? "nl" : "en") : "fr"); if (r.ok && (!res.ok || res.accent)) res = r; }
   }
   // Aide utilisée (indice ou QCM demandé) : compte pour les 20 mais pas de montée de niveau
   const helped = quiz.help > 0 && !quiz.qcmAuto;
@@ -754,7 +795,7 @@ function answer(given, skipped = false, opt = {}) {
   const a = $("#qAnswer");
   a.disabled = true;
   a.classList.add(res.ok ? "ok" : "ko");
-  const lv = saveWord(w, res.ok, helped ? 0 : 1);
+  const lv = saveWord(w, res.ok, helped ? 0 : 1, isNl ? "wordsNl" : "words");
   $("#qHelp").classList.add("hidden");
   $("#qSubmit").classList.remove("hidden");
   setMood(res.ok ? (helped ? "sure" : "joyeuse") : "colere");
@@ -803,15 +844,28 @@ function answer(given, skipped = false, opt = {}) {
     }
   } else if (quiz.mode === "exam") {
     s.exam = (s.exam || 0) + 1;
+  } else if (quiz.mode === "nl") {
+    const c = curSeriesNl();
+    c.attempts++;
+    if (res.ok) { c[quiz.dir] = Math.min(PER_DIRECTION, (c[quiz.dir] || 0) + 1); if (helped) c.helped = (c.helped || 0) + 1; }
+    else { c.errors = (c.errors || 0) + 1; c.wrong = [...(c.wrong || []), { fr: w.fr, en: w.en, dir: quiz.dir, given: String(given || "").slice(0, 80) }].slice(-40); }
+    if ((c.frEn || 0) + (c.enFr || 0) >= DAILY_GOAL) {
+      const sn = sessNl();
+      const n = (sn.series || []).length + 1;
+      const done = { n, attempts: c.attempts, errors: c.errors || 0, helped: c.helped || 0, acc: accuracy(c.errors || 0), points: seriesPoints(c.errors || 0, c.helped || 0) };
+      sn.series = [...(sn.series || []), done];
+      sn.cur = null;
+      quiz.justDone = done;
+    }
   } else if (res.ok) { quiz.bonusCount++; s.bonus = (s.bonus || 0) + 1; }
-  saveSession();
+  if (isNl) saveSessionNl(); else saveSession();
 
   if (res.ok) quiz.retry = quiz.retry.filter(r => r.id !== w.id);
   else if (!quiz.retry.some(r => r.id === w.id)) quiz.retry.push({ id: w.id, due: quiz.step + 3 });
 
   const extra = [];
   if (w.conj) extra.push(`Formes : ${esc(w.conj)}`);
-  else { const iv = findIrregular(w.en, w.nature); if (iv) extra.push(`🔤 Verbe irrégulier : <b>${esc(iv[0])} — ${esc(iv[1])} — ${esc(iv[2])}</b>`); }
+  else if (!isNl) { const iv = findIrregular(w.en, w.nature); if (iv) extra.push(`🔤 Verbe irrégulier : <b>${esc(iv[0])} — ${esc(iv[1])} — ${esc(iv[2])}</b>`); }
   if (w.ex) extra.push(`Exemple : <i>${esc(w.ex)}</i>`);
   const say = `<button type="button" class="icon-btn" id="fbSay" title="Écouter" style="margin-left:6px">🔊</button>`;
   if (res.ok) {
@@ -824,27 +878,30 @@ function answer(given, skipped = false, opt = {}) {
     $("#qFeedback").innerHTML = `<div class="bad">${esc(T("quiz.ko"))}</div><div class="sol">${esc(expected)}${say}</div>` +
       (extra.length ? `<div class="extra">${extra.join("<br>")}</div>` : "");
   }
-  $("#fbSay")?.addEventListener("click", () => speak(w.en));
-  if (frEn) speak(w.en);
-  // Propositions : « ma réponse est juste aussi » / « il y a une erreur dans ce mot »
-  const canAlt = !res.ok && !skipped && !("choiceOk" in opt) && String(given || "").trim();
-  $("#qFeedback").insertAdjacentHTML("beforeend", `<div class="prop-links">
-    ${canAlt ? `<button type="button" class="link-btn" id="prAlt">${esc(T("prop.alt"))}</button>` : ""}
-    <button type="button" class="link-btn" id="prFix">${esc(T("prop.fix"))}</button></div><div id="prBox"></div>`);
-  $("#prAlt")?.addEventListener("click", () => sendProposal({ type: "alt", word: w, dir: quiz.dir, given: String(given).trim() }, $("#prAlt")));
-  $("#prFix").addEventListener("click", () => openFixBox(w));
+  const speakLang = isNl ? "nl-NL" : "en-GB";
+  $("#fbSay")?.addEventListener("click", () => speak(w.en, speakLang));
+  if (frEn) speak(w.en, speakLang);
+  // Propositions : « ma réponse est juste aussi » / « il y a une erreur dans ce mot » (anglais uniquement pour l'instant)
+  const canAlt = !isNl && !res.ok && !skipped && !("choiceOk" in opt) && String(given || "").trim();
+  if (!isNl) {
+    $("#qFeedback").insertAdjacentHTML("beforeend", `<div class="prop-links">
+      ${canAlt ? `<button type="button" class="link-btn" id="prAlt">${esc(T("prop.alt"))}</button>` : ""}
+      <button type="button" class="link-btn" id="prFix">${esc(T("prop.fix"))}</button></div><div id="prBox"></div>`);
+    $("#prAlt")?.addEventListener("click", () => sendProposal({ type: "alt", word: w, dir: quiz.dir, given: String(given).trim() }, $("#prAlt")));
+    $("#prFix").addEventListener("click", () => openFixBox(w));
+  }
   $("#qSkip").classList.add("hidden");
   $("#qSubmit").textContent = "Suivant →";
   renderQuizBars();
   setTimeout(() => $("#qSubmit").focus(), 30);
 
   if (quiz.mode === "exam" && s.completed && !quiz.exam.dailyToast) { quiz.exam.dailyToast = true; toast(T("exam.daily")); }
-  if ((quiz.mode === "daily" && s.completed) || (quiz.mode === "extra" && quiz.justDone)) {
+  if ((quiz.mode === "daily" && s.completed) || ((quiz.mode === "extra" || quiz.mode === "nl") && quiz.justDone)) {
     $("#qSubmit").disabled = true;
     holdBadges = true;
     const done = quiz.justDone, mode = quiz.mode;
     quiz.justDone = null;
-    setTimeout(async () => { $("#qSubmit").disabled = false; stopQuiz(); const piece = await awardPiece(done); mode === "daily" ? showEnd(done, piece) : showSeriesEnd(done, piece); }, 900);
+    setTimeout(async () => { $("#qSubmit").disabled = false; stopQuiz(); const piece = await awardPiece(done); mode === "daily" ? showEnd(done, piece) : showSeriesEnd(done, piece, mode); }, 900);
   }
 }
 
@@ -852,6 +909,7 @@ $("#qForm").addEventListener("submit", ev => {
   ev.preventDefault();
   if (quiz.mode === "daily" && sess().completed) return; // 20/20 atteint : écran de fin en cours
   if (quiz.mode === "extra" && !sess().cur) return;
+  if (quiz.mode === "nl" && !sessNl().cur) return;
   if (quiz.answered) { nextQuestion(); return; }
   const v = $("#qAnswer").value;
   if (!v.trim()) { $("#qAnswer").focus(); return; }
@@ -896,17 +954,17 @@ async function awardPiece(done) {
   const inCur = total % PIECES;
   return { total, completed: inCur === 0, index: inCur === 0 ? -1 : pieceOrderIndex(inCur) };
 }
-function showSeriesEnd(done, piece) {
+function showSeriesEnd(done, piece, mode = "extra") {
   confetti();
   openOverlay(`<div class="shame-card">
     <img class="end-art" src="${done.acc > 90 ? MOODS.bravo : MOODS.sure}" alt="">
-    <h1 style="font-size:2rem">${esc(T("series.done", { n: done.n }))}</h1>
+    <h1 style="font-size:2rem">${mode === "nl" ? "🇳🇱 " : ""}${esc(T("series.done", { n: done.n }))}</h1>
     <p class="small muted">${done.attempts} tentatives · ${done.errors} erreur(s)</p>
     ${seriesBlock(done, piece)}
     <button class="btn block" id="ovAgain" style="margin-top:12px">${esc(T("series.new", { n: done.n + 1 }))}</button>
     <button class="btn ghost block" id="ovClose" style="margin-top:10px">Fermer</button>
   </div>`);
-  $("#ovAgain").onclick = () => { $("#overlay").classList.add("hidden"); startQuiz("extra"); };
+  $("#ovAgain").onclick = () => { $("#overlay").classList.add("hidden"); startQuiz(mode); };
 }
 function renderPuzzle() {
   if (!$("#puzzleZone")) return;
@@ -915,6 +973,26 @@ function renderPuzzle() {
     <p class="center" style="font-weight:800;margin-top:10px">${st.inCur} / ${PIECES} ${esc(T("puzzle.pieces"))}</p>
     <p class="small muted center">${esc(T("puzzle.rule"))}</p>
     ${st.done ? `<p class="small" style="margin-top:8px"><b>${esc(T("puzzle.gallery"))} (${st.done})</b></p><div class="pz-gallery">${st.completedImgs.map(i => `<img src="${i}" alt="">`).join("")}</div>` : ""}`;
+}
+/* ---------------- Néerlandais (V03-002) ---------------- */
+function renderNl() {
+  if (!$("#nlZone")) return;
+  if (!readyNl.w || !readyNl.s) { $("#nlZone").innerHTML = `<p class="muted small">Chargement…</p>`; return; }
+  const sn = sessNl();
+  const ser = sn.series || [];
+  let html = "";
+  if (!wordsNl.length) {
+    html = `<p class="note">Ton parent n'a pas encore ajouté de vocabulaire néerlandais dans l'espace parent → 🇳🇱 Néerlandais.</p>`;
+  } else {
+    const nSer = ser.length + 1;
+    html += `<p class="muted small">${wordsNl.length} mot(s) néerlandais au programme.</p>`;
+    html += `<button class="btn" id="btnNl">🇳🇱 ${esc(T(sn.cur && sn.cur.attempts ? "series.continue" : "series.new", { n: nSer }))}</button>`;
+    html += `<p class="small muted" style="margin-top:8px">Séries libres, comme les séries bonus : pas d'obligation, mais des points et des pièces de puzzle à chaque série réussie.</p>`;
+    if (ser.length) html += `<div class="series-pills">${ser.map(x => `<span title="${x.acc}% de réussite">#${x.n} · ⭐ ${x.points}</span>`).join("")}</div>
+      <p class="small muted">${esc(T("series.today", { n: ser.length, pts: ser.reduce((a, x) => a + x.points, 0) }))}</p>`;
+  }
+  $("#nlZone").innerHTML = html;
+  $("#btnNl")?.addEventListener("click", () => startQuiz("nl"));
 }
 function showEnd(done, piece) {
   const s = sess();
