@@ -15,7 +15,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { DEFAULT_CONTENT, LEGAL_PAGES } from "./content.js";
 
-export const VERSION = "V01-008";
+export const VERSION = "V02-001";
 export const PROJECT = "Wesh Words";
 export const PSEUDO_DOMAIN = "weshwords.firebaseapp.com"; // e-mail technique pour les comptes sans adresse
 
@@ -182,7 +182,7 @@ export function mountHLLogo() {
   if ($(".hl-badge")) return;
   const a = document.createElement("a");
   a.className = "hl-badge"; a.href = "index.html"; a.title = "Site développé par Hélène Laruelle";
-  a.innerHTML = HL_LOGO;
+  a.innerHTML = `<img src="assets/hl-logo-128.webp" alt="Logo Hélène Laruelle" width="52" height="52">`;
   document.body.appendChild(a);
 }
 

@@ -4,6 +4,9 @@ import {
   doc, getDoc, setDoc, updateDoc, addDoc, collection, query, where, onSnapshot, writeBatch, serverTimestamp, arrayRemove
 } from "./app.js";
 import { shuffle } from "./app.js";
+import { findIrregular, IRREGULAR_VERBS } from "./irregular-verbs.js";
+import { accuracy, seriesPoints, earnsPiece, puzzleState, puzzleGrid, pieceOrderIndex, PIECES } from "./rewards.js";
+import { renderCe1dCard } from "./ce1d-ui.js";
 import { badgeStats, evaluateBadges, badgesGrid } from "./badges.js";
 import { runVerbs, runDictee, playDuel, buildDuelItems, duelWinner, fmtTime, DUEL_PENALTIES } from "./practice.js";
 import { irregularVerbs, wordCount } from "./words.js";
@@ -26,12 +29,15 @@ let meta = { queue: [], lastRevealDay: "" };
 let ready = { w: false, s: false };
 let settings = { ...DEFAULT_SETTINGS };
 let duels = [];
+let puzzle = { pieces: 0, log: [] }, puzzleLoaded = false;
 let holdBadges = false; // pas de pop-up de badge pendant un écran de fin
 let exams = [], badgesMeta = { unlocked: {} }, badgesLoaded = { m: false, x: false }, badgeQueue = [];
 const pool = () => filterByThemes(words, activeThemes(settings, today).list);
 
 const emptySession = () => ({ day: today, frEn: 0, enFr: 0, attempts: 0, errors: 0, completed: false, wrong: [], bonus: 0 });
 const sess = () => sessions[today] || (sessions[today] = emptySession());
+const newCur = () => ({ frEn: 0, enFr: 0, attempts: 0, errors: 0, helped: 0, wrong: [] });
+const curSeries = () => { const s = sess(); if (!s.cur) s.cur = newCur(); return s.cur; };
 const sessionRef = () => doc(db, "users", uid, "sessions", today);
 
 /* ---------------- Flux temps réel ---------------- */
@@ -46,6 +52,11 @@ onSnapshot(collection(db, "users", uid, "sessions"), snap => {
   snap.docs.forEach(d => sessions[d.id] = { day: d.id, ...d.data() });
   // on ne remplace pas la session en cours si elle est plus avancée localement
   if (local && quiz.active && (!sessions[today] || (sessions[today].attempts || 0) < (local.attempts || 0))) sessions[today] = local;
+  // séries en plus : la série en cours locale prime tant qu'elle est plus avancée que celle du serveur
+  else if (local && quiz.active && quiz.mode === "extra" && sessions[today]) {
+    const srv = sessions[today], ls = (local.series || []).length, ss = (srv.series || []).length;
+    if (ls > ss || (ls === ss && (local.cur?.attempts || 0) >= (srv.cur?.attempts || 0))) { srv.series = local.series; srv.cur = local.cur; }
+  }
   ready.s = true; boot();
 }, e => { toast(errMsg(e), "err"); ready.s = true; boot(); });
 
@@ -81,6 +92,21 @@ onSnapshot(collection(db, "users", uid, "duels"), s => {
   duels = s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.createdAt?.seconds || 9e12) - (a.createdAt?.seconds || 9e12));
   if (ready.w && ready.s) renderHome();
 }, () => {});
+
+onSnapshot(doc(db, "users", uid, "meta", "puzzle"), s => {
+  puzzle = s.exists() ? { pieces: 0, log: [], ...s.data() } : { pieces: 0, log: [] };
+  puzzleLoaded = true;
+  if (ready.w && ready.s && !quiz.active) renderHome();
+}, () => { puzzleLoaded = true; });
+
+/* ---------------- Préparer le CE1D (V02-001) ---------------- */
+let ce1dResults = [];
+const saveCe1d = res => addDoc(collection(db, "users", uid, "ce1d"), { ...res, day: today, createdAt: serverTimestamp() });
+onSnapshot(collection(db, "users", uid, "ce1d"), s => {
+  ce1dResults = s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.createdAt?.seconds || 9e12) - (a.createdAt?.seconds || 9e12));
+  if ($("#ce1dZone")) renderCe1dCard($("#ce1dZone"), ce1dResults, saveCe1d);
+}, () => {});
+renderCe1dCard($("#ce1dZone"), ce1dResults, saveCe1d);
 
 function boot() {
   if (!ready.w || !ready.s) return;
@@ -120,7 +146,12 @@ function renderHome() {
     act = `<h3 style="color:var(--green)">${esc(T("eleve.done"))}</h3><p class="muted">${esc(T("eleve.done.text"))}</p><div class="row" style="justify-content:center">`;
     if (canReveal()) act += `<button class="btn pink" id="btnReward">🎁 ${esc(T("end.btn"))}</button>`;
     else if (todayShame()) act += `<button class="btn pink" id="btnReview">${esc(T("eleve.review"))}</button>`;
-    act += `<button class="btn ghost" id="btnBonus">${esc(T("eleve.extra"))}</button></div>`;
+    const nSer = (s.series || []).length + 1;
+    act += `<button class="btn" id="btnExtra">${esc(T(s.cur && s.cur.attempts ? "series.continue" : "series.new", { n: nSer }))}</button></div>`;
+    const ser = s.series || [];
+    act += `<p class="small muted" style="margin-top:8px">${esc(T("series.optional"))}</p>`;
+    if (ser.length) act += `<div class="series-pills">${ser.map(x => `<span title="${x.acc}% de réussite">#${x.n} · ⭐ ${x.points}</span>`).join("")}</div>
+      <p class="small muted">${esc(T("series.today", { n: ser.length, pts: ser.reduce((a, x) => a + x.points, 0) }))}</p>`;
   } else {
     act = `<button class="btn big" id="btnStart">${esc(T(s.attempts ? "eleve.continue" : "eleve.start"))}</button>`;
     if (s.attempts) act += `<p class="small muted" style="margin-top:10px">Tentatives : ${s.attempts} · erreurs : ${s.errors || 0}</p>`;
@@ -139,6 +170,8 @@ function renderHome() {
   $("#homeArt").src = MOODS[art]; $("#homeArt").className = cls;
   $("#btnStart")?.addEventListener("click", () => startQuiz("daily"));
   $("#btnBonus")?.addEventListener("click", () => startQuiz("bonus"));
+  $("#btnExtra")?.addEventListener("click", () => startQuiz("extra"));
+  renderPuzzle();
   $("#btnReward")?.addEventListener("click", revealShame);
   $("#btnReview")?.addEventListener("click", () => showShame(todayShame(), true));
 
@@ -207,7 +240,7 @@ function showNextBadge() {
 /* ---------------- Entraînements : verbes, dictée, duel ---------------- */
 const parentName = () => T("duel.parent");
 function renderPractice() {
-  const verbs = irregularVerbs(words);
+  const verbs = irregularVerbs(words, findIrregular);
   $("#btnVerbs").textContent = `${T("verbs.btn")} (${verbs.length})`;
   $("#btnVerbs").onclick = openVerbsSetup;
   $("#btnDictee").onclick = startDictee;
@@ -250,7 +283,7 @@ function resultOverlay({ title, ok, total, score, wrongHTML, again }) {
   $("#prAgain").onclick = again;
 }
 function openVerbsSetup() {
-  const verbs = irregularVerbs(words);
+  const verbs = irregularVerbs(words, findIrregular);
   if (!verbs.length) { toast(T("verbs.none"), "warn"); return; }
   openOverlay(`<div class="card">
     <h3>🔤 ${esc(T("verbs.title"))} <span class="chip">${verbs.length}</span></h3>
@@ -265,7 +298,7 @@ function openVerbsSetup() {
 function startVerbs(mode, count) {
   holdBadges = true;
   runVerbs({
-    verbs: irregularVerbs(words), mode, count,
+    verbs: irregularVerbs(words, findIrregular), mode, count,
     onAnswer: (v, ok) => {
       const w = v.word;
       const upd = { vLevel: ok ? Math.min(MAX_LEVEL, (w.vLevel || 0) + 1) : Math.max(0, (w.vLevel || 0) - 1), vOk: (w.vOk || 0) + (ok ? 1 : 0), vKo: (w.vKo || 0) + (ok ? 0 : 1), vLast: today };
@@ -551,7 +584,8 @@ function startQuiz(mode) {
   Object.assign(quiz, { active: true, mode, recent: [], retry: [], step: 0, lastDir: null, bonusCount: 0 });
   $("#vHome").classList.add("hidden");
   $("#vQuiz").classList.remove("hidden");
-  $("#qMode").textContent = mode === "daily" ? T("quiz.mode.daily") : T("quiz.mode.bonus");
+  if (mode === "extra") curSeries();
+  $("#qMode").textContent = mode === "daily" ? T("quiz.mode.daily") : mode === "extra" ? T("series.mode", { n: (sess().series || []).length + 1 }) : T("quiz.mode.bonus");
   nextQuestion();
 }
 function stopQuiz() {
@@ -568,9 +602,10 @@ $("#qBack").onclick = () => {
 
 function renderQuizBars() {
   const s = sess();
-  if (quiz.mode === "daily") {
-    $("#qBars").innerHTML = barsHTML(s);
-    const left = DAILY_GOAL - ((s.frEn || 0) + (s.enFr || 0));
+  if (quiz.mode === "daily" || quiz.mode === "extra") {
+    const c = quiz.mode === "extra" ? curSeries() : s;
+    $("#qBars").innerHTML = barsHTML(c);
+    const left = DAILY_GOAL - ((c.frEn || 0) + (c.enFr || 0));
     $("#qSuspense").textContent = left === 1 ? T("quiz.s1") : left === 2 ? T("quiz.s2") : (left <= 5 && left > 2) ? T("quiz.s5", { n: left }) : "";
   } else if (quiz.mode === "exam") {
     const ex = quiz.exam, pct = ex.total ? Math.round(ex.done / ex.total * 100) : 0;
@@ -589,7 +624,7 @@ function nextQuestion() {
     if (!w) { finishExam(); return; }
     quiz.dir = item.dir; quiz.cur = w;
   } else {
-    quiz.dir = quiz.mode === "daily" ? nextDirection(s, quiz.lastDir) : (quiz.lastDir === "frEn" ? "enFr" : "frEn");
+    quiz.dir = quiz.mode === "daily" ? nextDirection(s, quiz.lastDir) : quiz.mode === "extra" ? nextDirection(curSeries(), quiz.lastDir) : (quiz.lastDir === "frEn" ? "enFr" : "frEn");
     quiz.cur = pickWord(pool(), { recent: quiz.recent, retry: quiz.retry, step: quiz.step, today });
   }
   quiz.lastDir = quiz.dir;
@@ -748,8 +783,24 @@ function answer(given, skipped = false, opt = {}) {
       s.errors = (s.errors || 0) + 1;
       s.wrong = [...(s.wrong || []), { fr: w.fr, en: w.en, dir: quiz.dir, given: String(given || "").slice(0, 80), help: quiz.help }].slice(-40);
     }
-    if ((s.frEn || 0) + (s.enFr || 0) >= DAILY_GOAL) s.completed = true;
+    if ((s.frEn || 0) + (s.enFr || 0) >= DAILY_GOAL && !s.completed) {
+      s.completed = true;
+      s.series = [...(s.series || []).filter(x => x.n !== 1), { n: 1, attempts: s.attempts, errors: s.errors || 0, helped: s.helped || 0, acc: accuracy(s.errors || 0), points: seriesPoints(s.errors || 0, s.helped || 0) }];
+      quiz.justDone = s.series[s.series.length - 1];
+    }
     if (quiz.mode === "exam") s.exam = (s.exam || 0) + 1;
+  } else if (quiz.mode === "extra") {
+    const c = curSeries();
+    c.attempts++;
+    if (res.ok) { c[quiz.dir] = Math.min(PER_DIRECTION, (c[quiz.dir] || 0) + 1); if (helped) c.helped = (c.helped || 0) + 1; }
+    else { c.errors = (c.errors || 0) + 1; c.wrong = [...(c.wrong || []), { fr: w.fr, en: w.en, dir: quiz.dir, given: String(given || "").slice(0, 80) }].slice(-40); }
+    if ((c.frEn || 0) + (c.enFr || 0) >= DAILY_GOAL) {
+      const n = (s.series || []).length + 1;
+      const done = { n, attempts: c.attempts, errors: c.errors || 0, helped: c.helped || 0, acc: accuracy(c.errors || 0), points: seriesPoints(c.errors || 0, c.helped || 0) };
+      s.series = [...(s.series || []), done];
+      s.cur = null;
+      quiz.justDone = done;
+    }
   } else if (quiz.mode === "exam") {
     s.exam = (s.exam || 0) + 1;
   } else if (res.ok) { quiz.bonusCount++; s.bonus = (s.bonus || 0) + 1; }
@@ -760,6 +811,7 @@ function answer(given, skipped = false, opt = {}) {
 
   const extra = [];
   if (w.conj) extra.push(`Formes : ${esc(w.conj)}`);
+  else { const iv = findIrregular(w.en, w.nature); if (iv) extra.push(`🔤 Verbe irrégulier : <b>${esc(iv[0])} — ${esc(iv[1])} — ${esc(iv[2])}</b>`); }
   if (w.ex) extra.push(`Exemple : <i>${esc(w.ex)}</i>`);
   const say = `<button type="button" class="icon-btn" id="fbSay" title="Écouter" style="margin-left:6px">🔊</button>`;
   if (res.ok) {
@@ -787,16 +839,19 @@ function answer(given, skipped = false, opt = {}) {
   setTimeout(() => $("#qSubmit").focus(), 30);
 
   if (quiz.mode === "exam" && s.completed && !quiz.exam.dailyToast) { quiz.exam.dailyToast = true; toast(T("exam.daily")); }
-  if (quiz.mode === "daily" && s.completed) {
+  if ((quiz.mode === "daily" && s.completed) || (quiz.mode === "extra" && quiz.justDone)) {
     $("#qSubmit").disabled = true;
     holdBadges = true;
-    setTimeout(() => { $("#qSubmit").disabled = false; stopQuiz(); showEnd(); }, 900);
+    const done = quiz.justDone, mode = quiz.mode;
+    quiz.justDone = null;
+    setTimeout(async () => { $("#qSubmit").disabled = false; stopQuiz(); const piece = await awardPiece(done); mode === "daily" ? showEnd(done, piece) : showSeriesEnd(done, piece); }, 900);
   }
 }
 
 $("#qForm").addEventListener("submit", ev => {
   ev.preventDefault();
   if (quiz.mode === "daily" && sess().completed) return; // 20/20 atteint : écran de fin en cours
+  if (quiz.mode === "extra" && !sess().cur) return;
   if (quiz.answered) { nextQuestion(); return; }
   const v = $("#qAnswer").value;
   if (!v.trim()) { $("#qAnswer").focus(); return; }
@@ -825,7 +880,43 @@ function openOverlay(html) {
 }
 function closeOverlay() { holdBadges = false; $("#overlay").classList.add("hidden"); renderHome(); }
 
-function showEnd() {
+function seriesBlock(done, piece) {
+  if (!done) return "";
+  const pz = piece ? `<div style="margin:10px 0">${puzzleGrid(puzzleState(piece.total).img, puzzleState(piece.total).shown, piece.index, piece.completed)}</div>
+      <p style="font-weight:800;color:#FFD27A">${esc(piece.completed ? T("puzzle.complete") : T("puzzle.won", { n: puzzleState(piece.total).inCur || PIECES }))}</p>`
+    : `<p class="small muted">${esc(T("puzzle.rule"))}</p>`;
+  return `<p style="font:700 1.5rem var(--font-h);margin:8px 0">⭐ ${done.points} points <span class="small muted" style="font-size:.9rem">· ${done.acc} % de réussite</span></p>${pz}`;
+}
+async function awardPiece(done) {
+  if (!done || !earnsPiece(done.errors)) return null;
+  const total = (puzzle.pieces || 0) + 1;
+  const log = [...(puzzle.log || []), { day: today, n: done.n, points: done.points }].slice(-100);
+  puzzle = { ...puzzle, pieces: total, log };
+  try { await setDoc(doc(db, "users", uid, "meta", "puzzle"), { pieces: total, log }, { merge: true }); } catch (e) { console.warn(e); }
+  const inCur = total % PIECES;
+  return { total, completed: inCur === 0, index: inCur === 0 ? -1 : pieceOrderIndex(inCur) };
+}
+function showSeriesEnd(done, piece) {
+  confetti();
+  openOverlay(`<div class="shame-card">
+    <img class="end-art" src="${done.acc > 90 ? MOODS.bravo : MOODS.sure}" alt="">
+    <h1 style="font-size:2rem">${esc(T("series.done", { n: done.n }))}</h1>
+    <p class="small muted">${done.attempts} tentatives · ${done.errors} erreur(s)</p>
+    ${seriesBlock(done, piece)}
+    <button class="btn block" id="ovAgain" style="margin-top:12px">${esc(T("series.new", { n: done.n + 1 }))}</button>
+    <button class="btn ghost block" id="ovClose" style="margin-top:10px">Fermer</button>
+  </div>`);
+  $("#ovAgain").onclick = () => { $("#overlay").classList.add("hidden"); startQuiz("extra"); };
+}
+function renderPuzzle() {
+  if (!$("#puzzleZone")) return;
+  const st = puzzleState(puzzle.pieces || 0);
+  $("#puzzleZone").innerHTML = `${puzzleGrid(st.img, st.shown)}
+    <p class="center" style="font-weight:800;margin-top:10px">${st.inCur} / ${PIECES} ${esc(T("puzzle.pieces"))}</p>
+    <p class="small muted center">${esc(T("puzzle.rule"))}</p>
+    ${st.done ? `<p class="small" style="margin-top:8px"><b>${esc(T("puzzle.gallery"))} (${st.done})</b></p><div class="pz-gallery">${st.completedImgs.map(i => `<img src="${i}" alt="">`).join("")}</div>` : ""}`;
+}
+function showEnd(done, piece) {
   const s = sess();
   confetti();
   let reward = "";
@@ -846,6 +937,7 @@ function showEnd() {
     <div class="end-score"><div>🇫🇷→🇬🇧 ${s.frEn}/${PER_DIRECTION}</div><div>🇬🇧→🇫🇷 ${s.enFr}/${PER_DIRECTION}</div></div>
     <p class="streak">🔥 Série : ${streak()} jour${streak() > 1 ? "s" : ""}</p>
     <p class="small muted">${s.attempts} tentatives · ${s.errors || 0} erreur(s)</p>
+    ${seriesBlock(done, piece)}
     ${reward}
     <button class="btn ghost block" id="ovClose" style="margin-top:12px">Fermer</button>
   </div>`);

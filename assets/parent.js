@@ -1,12 +1,15 @@
 /* Wesh Words — espace parent (« Maman ») */
+import { PIECES, puzzleState, puzzleGrid, accuracy, seriesPoints } from "./rewards.js";
+import { SUBJECTS } from "./ce1d.js";
 import {
   db, $, $$, esc, T, guard, initPrivatePage, renderAppHeader, todayKey, dayKeyOffset, fmtDay, fmtTs, toast, errMsg, shuffle,
   doc, getDoc, setDoc, updateDoc, deleteDoc, addDoc, collection, query, where, onSnapshot, writeBatch, serverTimestamp,
   arrayRemove, arrayUnion, changeAuthPassword, PSEUDO_DOMAIN, applyContent, MOODS
 } from "./app.js";
-import { parseVocabFile, dupKey, exportVocab, speak, computeStreak, PER_DIRECTION, DAILY_GOAL, MAX_LEVEL, DEFAULT_SETTINGS, categoriesOf } from "./words.js";
+import { parseVocabFile, readSheet, guessMapping, rowsFromMapping, IMPORT_FIELDS, dupKey, exportVocab, speak, computeStreak, PER_DIRECTION, DAILY_GOAL, MAX_LEVEL, DEFAULT_SETTINGS, categoriesOf } from "./words.js";
 import { SHAME_IDEAS } from "./content.js";
 import { mountMemberForm } from "./member-form.js";
+import { findIrregular, IRREGULAR_VERBS } from "./irregular-verbs.js";
 import { badgeStats, evaluateBadges, badgesGrid, BADGES } from "./badges.js";
 import { playDuel, buildDuelItems, duelWinner, fmtTime, DUEL_PENALTIES, hideOverlay } from "./practice.js";
 import { irregularVerbs, activeThemes, filterByThemes } from "./words.js";
@@ -24,7 +27,7 @@ let children = [];
 let child = null;
 let words = [], sessions = [], shames = [], meta = { queue: [], lastRevealDay: "" };
 let settings = { ...DEFAULT_SETTINGS }, settingsDirty = false;
-let exams = [], weekOffset = 0, badgesUnlocked = {}, duels = [], proposals = [];
+let exams = [], weekOffset = 0, badgesUnlocked = {}, duels = [], proposals = [], puzzle = { pieces: 0, log: [] }, ce1d = [];
 let unsubs = [];
 let loaded = { shame: false, meta: false };
 let firstLoad = true;
@@ -73,7 +76,7 @@ function selectChild(c) {
   unsubs.forEach(u => u()); unsubs = [];
   child = c; words = []; sessions = []; shames = []; meta = { queue: [], lastRevealDay: "" };
   loaded = { shame: false, meta: false };
-  settings = { ...DEFAULT_SETTINGS }; settingsDirty = false; exams = []; weekOffset = 0; badgesUnlocked = {}; duels = []; proposals = [];
+  settings = { ...DEFAULT_SETTINGS }; settingsDirty = false; exams = []; weekOffset = 0; badgesUnlocked = {}; duels = []; proposals = []; puzzle = { pieces: 0, log: [] }; ce1d = [];
   renderPicker();
   $("#shTitle").textContent = T("parent.shame.title", { prenom: c.prenom || c.username });
   const base = ["users", c.uid];
@@ -97,6 +100,14 @@ function selectChild(c) {
   unsubs.push(onSnapshot(doc(db, ...base, "meta", "badges"), s => {
     badgesUnlocked = s.exists() ? (s.data().unlocked || {}) : {};
     renderBadges(); renderBilan();
+  }, () => {}));
+  unsubs.push(onSnapshot(doc(db, ...base, "meta", "puzzle"), s => {
+    puzzle = s.exists() ? { pieces: 0, log: [], ...s.data() } : { pieces: 0, log: [] };
+    renderSeriesDash();
+  }, () => {}));
+  unsubs.push(onSnapshot(collection(db, ...base, "ce1d"), s => {
+    ce1d = s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.createdAt?.seconds || 9e12) - (a.createdAt?.seconds || 9e12));
+    renderCe1dDash(); renderBilan();
   }, () => {}));
   unsubs.push(onSnapshot(collection(db, ...base, "exams"), s => {
     exams = s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
@@ -168,7 +179,7 @@ function renderDash() {
 
   const hard = words.filter(w => (w.ko || 0) > 0)
     .sort((a, b) => ((b.ko || 0) - (b.ok || 0) * .5) - ((a.ko || 0) - (a.ok || 0) * .5)).slice(0, 10);
-  renderBadges(); renderPracticeDash();
+  renderBadges(); renderPracticeDash(); renderSeriesDash(); renderCe1dDash();
   $("#dHard").innerHTML = hard.length ? `<div class="table-wrap"><table><thead><tr><th>Français</th><th>Anglais</th><th>Niveau</th><th>✅</th><th>❌</th></tr></thead><tbody>${
     hard.map(w => `<tr><td>${esc(w.fr)}</td><td><b>${esc(w.en)}</b></td><td>${lvlDots(w.level)}</td><td>${w.ok || 0}</td><td>${w.ko || 0}</td></tr>`).join("")}</tbody></table></div>`
     : `<p class="muted">Pas encore de mot difficile.</p>`;
@@ -295,14 +306,52 @@ function previewImport(rows, sourceLabel) {
 $("#impFile").addEventListener("change", async () => {
   const f = $("#impFile").files[0];
   if (!f) return;
-  try { previewImport(await parseVocabFile(f), f.name); }
+  try { mappingStep(f.name, (await readSheet(f)).rows); }
   catch (e) { toast(errMsg(e), "err"); }
 });
+/** Étape 1 de l'import : l'utilisateur vérifie à quoi correspond chaque colonne */
+function mappingStep(name, rows) {
+  if (!rows.length) { toast("Fichier vide.", "warn"); return; }
+  let { map, hasHeader } = guessMapping(rows);
+  const draw = () => {
+    const sample = rows.slice(hasHeader ? 1 : 0, (hasHeader ? 1 : 0) + 5);
+    const built = rowsFromMapping(rows, map, hasHeader);
+    $("#impPreview").innerHTML = `<div class="note">
+      <b>📄 ${esc(name)}</b> — ${rows.length - (hasHeader ? 1 : 0)} ligne(s). <b>Vérifie à quoi correspond chaque colonne</b> :
+      <label class="check small" style="margin:8px 0"><input type="checkbox" id="mapHead" ${hasHeader ? "checked" : ""}> La 1re ligne contient les titres des colonnes</label>
+      <div class="table-wrap" style="margin:8px 0"><table><thead><tr>${map.map((m, j) => `<th><select data-map="${j}" style="min-width:130px;font-size:.85rem;padding:.35em">${IMPORT_FIELDS.map(([v, l]) => `<option value="${v}" ${v === m ? "selected" : ""}>${l}</option>`).join("")}</select>${hasHeader ? `<div class="small muted" style="font-weight:600">${esc(rows[0][j] ?? "")}</div>` : ""}</th>`).join("")}</tr></thead>
+      <tbody>${sample.map(r => `<tr>${map.map((_, j) => `<td class="small">${esc(r[j] ?? "")}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
+      <p class="small">${map.includes("fr") && map.includes("en") ? `✅ ${built.length} mot(s) prêts à être vérifiés.` : "⚠️ Choisis au moins une colonne « Français » et une colonne « Anglais »."}</p>
+      <div class="row"><button class="btn sm" id="mapGo" ${map.includes("fr") && map.includes("en") ? "" : "disabled"}>Continuer →</button><button class="btn ghost sm" id="mapCancel">Annuler</button></div></div>`;
+    $$("[data-map]").forEach(el => el.onchange = () => { map[Number(el.dataset.map)] = el.value; draw(); });
+    $("#mapHead").onchange = () => { hasHeader = $("#mapHead").checked; draw(); };
+    $("#mapCancel").onclick = () => { $("#impPreview").innerHTML = ""; $("#impFile").value = ""; };
+    $("#mapGo").onclick = () => previewImport(rowsFromMapping(rows, map, hasHeader), name);
+  };
+  draw();
+}
 $("#btnSeed").onclick = async () => {
   try {
     const raw = await (await fetch("assets/vocab-margaux.json")).json();
     const rows = raw.map(r => ({ fr: r.fr, en: r.en, cat: r.c || "", nature: r.n || "", ex: r.x || "", note: r.o || "", irr: !!r.i, conj: r.g || "" }));
     previewImport(rows, "Vocabulaire de départ");
+  } catch (e) { toast(errMsg(e), "err"); }
+};
+$("#btnIrr").onclick = () => {
+  previewImport(IRREGULAR_VERBS.map(v => ({ fr: v[3], en: "to " + v[0], cat: "Verbes irréguliers", nature: "verbe irrégulier", ex: "", note: "", irr: true, conj: `${v[0]} — ${v[1]} — ${v[2]}` })), "Liste des verbes irréguliers");
+};
+$("#btnWipe").onclick = async () => {
+  if (!words.length) { toast("Le vocabulaire est déjà vide.", "warn"); return; }
+  const ok = prompt(`Supprimer les ${words.length} mots de ${child.prenom || "l'élève"} pour recommencer à zéro ?\n(la progression des sessions, badges et hontes est conservée)\n\nTape SUPPRIMER pour confirmer :`);
+  if ((ok || "").trim().toUpperCase() !== "SUPPRIMER") { toast("Suppression annulée."); return; }
+  try {
+    const list = [...words];
+    for (let i = 0; i < list.length; i += 400) {
+      const b = writeBatch(db);
+      list.slice(i, i + 400).forEach(w => b.delete(doc(wordsCol(), w.id)));
+      await b.commit();
+    }
+    toast(`${list.length} mot(s) supprimé(s). Tu peux réimporter ton fichier 📥`);
   } catch (e) { toast(errMsg(e), "err"); }
 };
 $("#btnExport").onclick = () => {
@@ -484,6 +533,54 @@ $("#btnShuffle").onclick = async () => {
   try { await saveQueue(q); toast("Ordre mélangé 🎲 — surprise !"); } catch (e) { toast(errMsg(e), "err"); }
 };
 
+/* ---------------- Séries, points & puzzle (V02-001) ---------------- */
+/** Séries de 20 d'un jour (les anciennes sessions à 20/20 comptent pour 1 série) */
+function seriesOf(s) {
+  if (!s) return [];
+  if (Array.isArray(s.series) && s.series.length) return s.series;
+  if (s.completed) { const e = s.errors || 0; return [{ n: 1, errors: e, helped: s.helped || 0, acc: accuracy(e), points: seriesPoints(e, s.helped || 0) }]; }
+  return [];
+}
+function renderSeriesDash() {
+  if (!child || !$("#dSeries")) return;
+  $$(".pzName").forEach(e => e.textContent = child.prenom || child.username);
+  const t = sessions.find(s => s.day === today), ser = seriesOf(t);
+  let h = `<p><b>Aujourd'hui :</b> ${ser.length} série(s) · ⭐ <b>${ser.reduce((a, x) => a + x.points, 0)}</b> points${t?.cur?.attempts ? ` <span class="chip w">série n°${ser.length + 1} en cours : ${(t.cur.frEn || 0) + (t.cur.enFr || 0)}/20</span>` : ""}</p>`;
+  if (ser.length) h += `<div class="series-pills" style="justify-content:flex-start">${ser.map(x => `<span>#${x.n} · ⭐ ${x.points} · ${x.acc}%</span>`).join("")}</div>`;
+  const rows = [];
+  for (let i = 0; i < 7; i++) {
+    const k = dayKeyOffset(today, -i), sr = seriesOf(sessions.find(x => x.day === k));
+    rows.push(`<tr><td>${esc(fmtDay(k))}</td><td>${sr.length || "—"}</td><td>${sr.map(x => x.points).join(" + ") || "—"}</td><td><b>${sr.reduce((a, x) => a + x.points, 0) || ""}</b></td></tr>`);
+  }
+  h += `<div class="table-wrap" style="margin-top:10px"><table><thead><tr><th>Jour</th><th>Séries</th><th>Points par série</th><th>Total</th></tr></thead><tbody>${rows.join("")}</tbody></table></div>
+    <p class="small muted">Points : 100 par série, −5 par erreur, −2 par aide, +20 si zéro faute (minimum 10). La 1re série est obligatoire, les suivantes au choix (toujours par blocs de 20).</p>`;
+  $("#dSeries").innerHTML = h;
+  const st = puzzleState(puzzle.pieces || 0);
+  $("#dPuzzle").innerHTML = puzzleGrid(st.img, st.shown) + `<p class="center" style="margin-top:8px"><b>${st.inCur}/${PIECES}</b> morceaux · ${st.done} puzzle(s) terminé(s) · ${st.total} morceau(x) au total</p>
+    <p class="small muted">Un morceau par série de 20 réussie à plus de 90 % (2 erreurs maximum).</p>`;
+}
+function renderCe1dDash() {
+  if (!child || !$("#dCe1d")) return;
+  if (!ce1d.length) { $("#dCe1d").innerHTML = `<p class="muted small">Aucun exercice CE1D fait pour l'instant. ${esc(child.prenom || "")} les trouve dans son espace, bloc « 📚 Préparer le CE1D ».</p>`; return; }
+  const cards = SUBJECTS.map(sub => {
+    const xs = ce1d.filter(x => x.subject === sub.id);
+    if (!xs.length) return `<div class="stat"><div class="v">—</div><div class="l">${sub.icon} ${esc(sub.name)}</div></div>`;
+    const ok = xs.reduce((a, x) => a + (x.ok || 0), 0), tot = xs.reduce((a, x) => a + (x.total || 0), 0);
+    return `<div class="stat"><div class="v">${Math.round(ok / Math.max(1, tot) * 100)}%</div><div class="l">${sub.icon} ${esc(sub.name)} · ${xs.length} série(s)</div></div>`;
+  }).join("");
+  const last = ce1d.slice(0, 12).map(x => {
+    const sub = SUBJECTS.find(s => s.id === x.subject);
+    return `<tr><td>${esc(fmtDay(x.day))}</td><td>${sub ? sub.icon + " " + esc(sub.name) : esc(x.subject)}</td><td>${esc(x.themeName || "Tous les thèmes")}</td><td><b>${x.ok}/${x.total}</b> (${x.score}%)</td><td class="actions">${(x.wrong || []).length ? `<button class="btn ghost sm" data-ce1d="${x.id}">Erreurs</button>` : ""}</td></tr>`;
+  }).join("");
+  $("#dCe1d").innerHTML = `<div class="grid g4 keep2">${cards}</div>
+    <div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>Date</th><th>Matière</th><th>Thème</th><th>Score</th><th></th></tr></thead><tbody>${last}</tbody></table></div>`;
+  $$("[data-ce1d]").forEach(b => b.onclick = () => {
+    const x = ce1d.find(y => y.id === b.dataset.ce1d);
+    openOverlay(`<h3>❌ Erreurs CE1D du ${esc(fmtDay(x.day))}</h3><div class="table-wrap"><table><thead><tr><th>Question</th><th>Réponse donnée</th><th>Bonne réponse</th></tr></thead><tbody>${
+      (x.wrong || []).map(w => `<tr><td>${esc(w.q)}</td><td class="muted">${esc(w.given || "—")}</td><td><b>${esc(w.answer)}</b></td></tr>`).join("")}</tbody></table></div>`);
+  });
+}
+
 /* ---------------- Historique ---------------- */
 function renderHist() {
   if (!child) return;
@@ -492,10 +589,10 @@ function renderHist() {
     const rate = s.attempts ? Math.round(ok / s.attempts * 100) : 0;
     return `<tr><td><b>${esc(fmtDay(s.day))}</b><div class="small muted">${esc(s.day)}</div></td>
       <td>${s.frEn || 0}/${PER_DIRECTION}</td><td>${s.enFr || 0}/${PER_DIRECTION}</td><td>${s.attempts || 0}</td><td>${s.errors || 0}</td>
-      <td>${rate}%</td><td>${s.helped || 0}${s.qcm ? ` <span class="small muted">(+${s.qcm} QCM auto)</span>` : ""}</td><td>${s.bonus || 0}</td>
+      <td>${rate}%</td><td>${s.helped || 0}${s.qcm ? ` <span class="small muted">(+${s.qcm} QCM auto)</span>` : ""}</td><td>${seriesOf(s).length || ""}</td><td class="small">${seriesOf(s).map(x => `<span class="chip" title="${x.errors} erreur(s) · ${x.acc}%">#${x.n} ⭐ ${x.points}</span>`).join(" ")}${seriesOf(s).length > 1 ? ` <b>= ${seriesOf(s).reduce((a, x) => a + x.points, 0)}</b>` : ""}${s.bonus ? `<div class="muted">+${s.bonus} bonus</div>` : ""}</td>
       <td>${s.completed ? '<span class="chip g">20/20 ✅</span>' : (s.attempts ? '<span class="chip w">en cours</span>' : "")}</td>
       <td class="actions">${(s.wrong || []).length ? `<button class="btn ghost sm" data-wrong="${s.day}">Erreurs</button>` : ""}</td></tr>`;
-  }).join("") || `<tr><td colspan="10" class="muted center">Aucune session pour l'instant.</td></tr>`;
+  }).join("") || `<tr><td colspan="11" class="muted center">Aucune session pour l'instant.</td></tr>`;
   $$("[data-wrong]").forEach(b => b.onclick = () => {
     const s = sessions.find(x => x.day === b.dataset.wrong);
     openOverlay(`<h3>❌ Erreurs du ${esc(fmtDay(s.day))}</h3><div class="table-wrap"><table><thead><tr><th>Sens</th><th>Question</th><th>Réponse donnée</th><th>Attendu</th></tr></thead><tbody>${
@@ -617,7 +714,9 @@ function weekStats() {
   const doneSet = new Set(sessions.filter(s => s.completed).map(s => s.day));
   const bw = BADGES.filter(b => inWeek(badgesUnlocked[b.id] || ""));
   const sum = k => ss.reduce((a, s) => a + (s?.[k] || 0), 0);
-  return { bw, verbs: sum("verbs"), verbsOk: sum("verbsOk"), dictee: sum("dictee"), dicteeOk: sum("dicteeOk"),
+  const ser = ss.flatMap(s => seriesOf(s));
+  const cx = ce1d.filter(x => inWeek(x.day || ""));
+  return { ser, serPts: ser.reduce((a, x) => a + x.points, 0), cx, bw, verbs: sum("verbs"), verbsOk: sum("verbsOk"), dictee: sum("dictee"), dicteeOk: sum("dicteeOk"),
     duels: duels.filter(d => inWeek(d.day || "") && duelWinner(d)), days, ss, done, good, attempts, errors, helped, mastered, hard, xs, sh, streak: computeStreak(doneSet, today, dayKeyOffset) };
 }
 function renderBilan() {
@@ -647,6 +746,16 @@ function renderBilan() {
       <div class="stat"><div class="v">${st.good}</div><div class="l">✅ bonnes réponses</div></div>
       <div class="stat"><div class="v">${rate}%</div><div class="l">🎯 taux de réussite (${st.errors} erreur${st.errors > 1 ? "s" : ""})</div></div>
       <div class="stat"><div class="v">${st.streak}</div><div class="l">🔥 série actuelle</div></div>
+    </div>
+    <div class="grid g2" style="margin-top:16px">
+      <div class="card">
+        <h3>🔁 Séries de 20 &amp; points <span class="chip g">⭐ ${st.serPts}</span></h3>
+        <p class="small">${st.days.map((k, i) => { const sr = seriesOf(st.ss[i]); return `<b>${names[i]}</b> : ${sr.length ? `${sr.length} série(s) — ${sr.map(x => x.points).join(" + ")} pts` : "—"}`; }).join("<br>")}</p>
+      </div>
+      <div class="card">
+        <h3>📚 CE1D cette semaine <span class="chip">${st.cx.length} série(s)</span></h3>
+        ${st.cx.length ? st.cx.map(x => { const sub = SUBJECTS.find(s => s.id === x.subject); return `<p class="small">${sub ? sub.icon + " " + esc(sub.name) : ""} — ${esc(x.themeName || "tous thèmes")} : <b>${x.ok}/${x.total}</b> (${x.score}%)</p>`; }).join("") : `<p class="muted small">Pas d'exercice CE1D cette semaine.</p>`}
+      </div>
     </div>
     <div class="grid g2" style="margin-top:16px">
       <div class="card">
@@ -690,6 +799,8 @@ function bilanText() {
   L.push(`Jours à 20/20 : ${st.done}/7  (${st.ss.map((s, i) => ["L", "M", "M", "J", "V", "S", "D"][i] + (s?.completed ? "✅" : s?.attempts ? "🟠" : "·")).join(" ")})`);
   L.push(`Bonnes réponses : ${st.good} — taux de réussite ${rate}% (${st.errors} erreurs)`);
   L.push(`Série actuelle : ${st.streak} jour(s)`);
+  L.push(`Séries de 20 : ${st.ser.length} — ${st.serPts} points (${st.ss.map((s, i) => { const sr = seriesOf(s); return sr.length ? ["L", "M", "M", "J", "V", "S", "D"][i] + " " + sr.map(x => x.points).join("+") : ""; }).filter(Boolean).join(" ; ") || "aucune"})`);
+  if (st.cx.length) L.push(`CE1D : ${st.cx.map(x => `${(SUBJECTS.find(s => s.id === x.subject) || {}).name || x.subject} ${x.ok}/${x.total}`).join(" ; ")}`);
   L.push(`Mots maîtrisés cette semaine : ${st.mastered.length}${st.mastered.length ? " — " + st.mastered.slice(0, 20).map(m => m.en).join(", ") : ""}`);
   if (st.hard.length) L.push(`Mots difficiles : ${st.hard.map(h => `${h.en} (${h.fr})`).join(", ")}`);
   if (st.xs.length) L.push(`Contrôles blancs : ${st.xs.map(x => `${(x.themes || []).join("/")} ${x.ok}/${x.total} (${x.score}%)`).join(" ; ")}`);
@@ -730,7 +841,7 @@ function renderBadges() {
 /* ---------------- Verbes & dictée (tableau de bord) ---------------- */
 function renderPracticeDash() {
   if (!child || !$("#dPractice")) return;
-  const verbs = irregularVerbs(words);
+  const verbs = irregularVerbs(words, findIrregular);
   const vTot = sessions.reduce((a, s) => a + (s.verbs || 0), 0), vOk = sessions.reduce((a, s) => a + (s.verbsOk || 0), 0);
   const dTot = sessions.reduce((a, s) => a + (s.dictee || 0), 0), dOk = sessions.reduce((a, s) => a + (s.dicteeOk || 0), 0);
   const hardV = verbs.filter(v => (v.word.vKo || 0) > 0).sort((a, b) => (b.word.vKo || 0) - (a.word.vKo || 0)).slice(0, 6);

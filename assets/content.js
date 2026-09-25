@@ -226,7 +226,31 @@ export const DEFAULT_CONTENT = [
   // --- Footer
   { g: "Pied de page", key: "footer.l1", label: "Ligne 1", value: "© {annee} Hélène Laruelle — Tous droits réservés. Toute copie du site ou de son code est interdite." },
   { g: "Pied de page", key: "footer.l2", label: "Ligne 2", value: "Site développé par Hélène Laruelle." },
-  { g: "Pied de page", key: "footer.l3", label: "Ligne 3", value: "Contenu sous la responsabilité de {owner}" }
+  { g: "Pied de page", key: "footer.l3", label: "Ligne 3", value: "Contenu sous la responsabilité de {owner}" },
+  { g: "CE1D", key: "ce1d.title", label: "Titre du bloc", value: "📚 Préparer le CE1D" },
+  { g: "CE1D", key: "ce1d.help", label: "Sous-titre", value: "Des exercices dans l'esprit des épreuves externes de fin de 2e secondaire. Séries de 10 questions, avec l'explication après chaque réponse." },
+  { g: "CE1D", key: "ce1d.new", label: "Matière jamais travaillée", value: "✨ À découvrir" },
+  { g: "CE1D", key: "ce1d.choose", label: "Choix du thème", value: "Choisis un thème, ou mélange tout pour t'entraîner comme le jour J." },
+  { g: "CE1D", key: "ce1d.mix", label: "Option tout mélanger", value: "Tout mélanger (comme à l'examen)" },
+  { g: "CE1D", key: "ce1d.listen", label: "Bouton écouter", value: "Écouter" },
+  { g: "CE1D", key: "ce1d.ok", label: "Bonne réponse", value: "Wesh, c'est juste ! 🎉" },
+  { g: "CE1D", key: "ce1d.ko", label: "Mauvaise réponse", value: "Pas tout à fait… La bonne réponse :" },
+  { g: "CE1D", key: "ce1d.end.great", label: "Fin ≥ 80 %", value: "Excellent ! Tu es prête pour le CE1D 💪" },
+  { g: "CE1D", key: "ce1d.end.good", label: "Fin ≥ 50 %", value: "Pas mal du tout ! Relis les explications et retente." },
+  { g: "CE1D", key: "ce1d.end.try", label: "Fin < 50 %", value: "On ne lâche rien : chaque erreur t'apprend quelque chose. 🔁" },
+  { g: "CE1D", key: "ce1d.again", label: "Bouton recommencer", value: "Une autre série" },
+  { g: "Séries & puzzle", key: "series.new", label: "Bouton nouvelle série", value: "🔁 Nouvelle série de 20 (série n°{n})" },
+  { g: "Séries & puzzle", key: "series.continue", label: "Bouton reprendre série", value: "▶️ Continuer la série n°{n}" },
+  { g: "Séries & puzzle", key: "series.mode", label: "Libellé du mode", value: "Série n°{n}" },
+  { g: "Séries & puzzle", key: "series.done", label: "Titre fin de série", value: "Série n°{n} terminée ! 🎉" },
+  { g: "Séries & puzzle", key: "series.today", label: "Résumé du jour", value: "{n} série(s) aujourd'hui · ⭐ {pts} points" },
+  { g: "Séries & puzzle", key: "series.optional", label: "Texte séries en plus", value: "Ta série obligatoire est faite ✅ Tu peux en refaire autant que tu veux, par blocs de 20 — chaque série rapporte des points." },
+  { g: "Séries & puzzle", key: "puzzle.title", label: "Titre du puzzle", value: "🧩 Mon puzzle Margaux" },
+  { g: "Séries & puzzle", key: "puzzle.won", label: "Morceau gagné", value: "🧩 Nouveau morceau de puzzle ! ({n}/12)" },
+  { g: "Séries & puzzle", key: "puzzle.complete", label: "Puzzle complété", value: "🧩 PUZZLE COMPLET ! Une nouvelle image commence." },
+  { g: "Séries & puzzle", key: "puzzle.rule", label: "Règle", value: "20/20 avec plus de 90 % de réussite (2 erreurs max) = 1 morceau de puzzle." },
+  { g: "Séries & puzzle", key: "puzzle.pieces", label: "Unité morceaux", value: "morceaux" },
+  { g: "Séries & puzzle", key: "puzzle.gallery", label: "Puzzles terminés", value: "🖼️ Puzzles terminés" }
 ];
 
 /* Suggestions d'expressions de la honte (espace parent → « Ajouter des idées ») */

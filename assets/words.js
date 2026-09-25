@@ -61,6 +61,12 @@ export function checkAnswer(expected, given, lang) {
   const noAcc = s => stripAccents(s).replace(/\s+/g, " ");
   const gva = new Set([...gv].map(noAcc));
   for (const v of vs) if (gva.has(noAcc(v))) return { ok: true, accent: true };
+  // On ignore les espaces et les caractères spéciaux (tirets, apostrophes, ponctuation…)
+  const sq = s => String(s).toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+  const gs = new Set([...gv].map(sq));
+  for (const v of vs) if (gs.has(sq(v))) return { ok: true, accent: false };
+  const gsa = new Set([...gv].map(x => sq(stripAccents(x))));
+  for (const v of vs) if (gsa.has(sq(stripAccents(v)))) return { ok: true, accent: true };
   return { ok: false, accent: false };
 }
 
@@ -153,6 +159,38 @@ export async function parseVocabFile(file) {
   if (!head.includes("fr") || !head.includes("en")) { map = ["fr", "en", "cat", "nature", "ex", "note"]; start = head.some(Boolean) ? 1 : 0; }
   const out = [];
   for (let i = start; i < rows.length; i++) {
+    const o = {};
+    rows[i].forEach((v, j) => { if (map[j]) o[map[j]] = v; });
+    const w = cleanRow(o);
+    if (w.fr && w.en) out.push(w);
+  }
+  return out;
+}
+/* ---------- Import en 2 temps : lecture brute puis choix des colonnes (V02-001) ---------- */
+export const IMPORT_FIELDS = [
+  ["", "— ignorer —"], ["fr", "🇫🇷 Français"], ["en", "🇬🇧 Anglais"], ["cat", "Catégorie / thème"],
+  ["nature", "Nature"], ["ex", "Exemple"], ["note", "Note"], ["conj", "Formes (verbe irrégulier)"], ["irr", "Irrégulier (oui/non)"]
+];
+/** Lit la 1re feuille « vocab » (ou la 1re) et renvoie les lignes brutes */
+export async function readSheet(file) {
+  if (!window.XLSX) throw new Error("Module Excel non chargé (connexion internet requise).");
+  const wb = window.XLSX.read(await file.arrayBuffer(), { type: "array" });
+  const name = wb.SheetNames.find(n => /vocab/i.test(n)) || wb.SheetNames[0];
+  const rows = window.XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: "" })
+    .filter(r => r.some(c => String(c).trim() !== ""));
+  return { rows, sheet: name, sheets: wb.SheetNames };
+}
+/** Devine le rôle de chaque colonne à partir de la ligne de titres */
+export function guessMapping(rows) {
+  const head = (rows[0] || []).map(keyOf);
+  const hasHeader = head.filter(Boolean).length >= 2;
+  const n = Math.max(...rows.slice(0, 20).map(r => r.length), 0);
+  let map = hasHeader ? Array.from({ length: n }, (_, i) => head[i] || "") : Array.from({ length: n }, (_, i) => ["fr", "en", "cat", "nature", "ex", "note"][i] || "");
+  return { map, hasHeader };
+}
+export function rowsFromMapping(rows, map, hasHeader) {
+  const out = [];
+  for (let i = hasHeader ? 1 : 0; i < rows.length; i++) {
     const o = {};
     rows[i].forEach((v, j) => { if (map[j]) o[map[j]] = v; });
     const w = cleanRow(o);
@@ -272,10 +310,11 @@ export function parseForms(conj) {
   return parts.length === 3 ? parts : null;
 }
 /** Regroupe les mots par verbe irrégulier (une entrée par base verbale) */
-export function irregularVerbs(words) {
+export function irregularVerbs(words, findIrr) {
   const map = new Map();
   for (const w of words) {
-    const f = parseForms(w.conj);
+    let f = parseForms(w.conj);
+    if (!f && findIrr) { const v = findIrr(w.en, w.nature); if (v) f = [v[0], v[1], v[2]]; }
     if (!f) continue;
     const key = f[0].toLowerCase();
     const cur = map.get(key);

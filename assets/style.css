@@ -376,3 +376,29 @@ details summary { cursor: pointer; font-weight: 800; }
 .prop-box { text-align: left; background: var(--bg2); border: 1px solid var(--line); border-radius: 14px; padding: 12px; margin-top: 10px; }
 .prop-box input { font-size: .95rem; padding: .55em .7em; }
 .prop-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px; border: 1px solid rgba(255, 176, 32, .45); background: rgba(255, 176, 32, .07); border-radius: 14px; margin-top: 8px; }
+.hl-badge img { width: 52px; height: 52px; border-radius: 50%; display: block; box-shadow: 0 0 0 2px rgba(212, 169, 60, .55); }
+/* ---------- V02-001 : puzzle & séries ---------- */
+.puzzle { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; aspect-ratio: 1; max-width: 360px; margin: 0 auto; background: var(--line); padding: 3px; border-radius: 16px; overflow: hidden; }
+.pz { background: linear-gradient(135deg, #DDE7FF, #C7D6FF); background-size: 400% 300%; display: grid; place-items: center; font: 700 1.6rem var(--font-h); color: rgba(30, 63, 174, .35); border-radius: 6px; }
+.pz.on { background-size: 400% 300%; }
+.pz.new { animation: pzin 1s cubic-bezier(.2, 1.4, .4, 1); box-shadow: 0 0 0 3px var(--pink); position: relative; z-index: 2; }
+@keyframes pzin { from { transform: scale(.2) rotate(-25deg); opacity: 0; } to { transform: none; opacity: 1; } }
+.pz-gallery { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.pz-gallery img { width: 64px; height: 64px; border-radius: 12px; box-shadow: var(--shadow); }
+.series-pills { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; margin: 8px 0; }
+.series-pills span { background: var(--card2); border: 1px solid var(--line); border-radius: 999px; padding: .2em .7em; font-weight: 800; font-size: .82rem; }
+
+/* ---------- Préparer le CE1D (V02-001) ---------- */
+.btn.green { background: var(--green); color: #06301F; box-shadow: none; }
+.ce1d-subjects { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; margin-top: 10px; }
+.ce1d-sub { display: grid; gap: 4px; text-align: left; background: var(--bg2); border: 1.5px solid var(--line); border-radius: 18px; padding: 14px; cursor: pointer; color: var(--text); font: 600 .95rem var(--font); transition: border-color .15s, transform .1s; }
+.ce1d-sub:hover { border-color: var(--blue); transform: translateY(-1px); }
+.ce1d-sub .ic { font-size: 1.8rem; }
+.ce1d-bar { display: block; height: 6px; background: var(--line); border-radius: 99px; overflow: hidden; }
+.ce1d-bar i { display: block; height: 100%; background: var(--grad); }
+.ce1d-themes { display: grid; gap: 8px; max-height: 60vh; overflow-y: auto; }
+.ce1d-themes .choice .k { flex-basis: 44px; width: auto; font-size: .78rem; }
+.ce1d-ctx { background: var(--bg2); border-left: 4px solid var(--blue); border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; font-size: .95rem; line-height: 1.5; max-height: 38vh; overflow-y: auto; white-space: normal; }
+.ce1d-question { font: 700 1.12rem var(--font-h); margin: 6px 0 14px; line-height: 1.4; }
+.ce1d-ex { background: rgba(255, 210, 122, .15); border-radius: 12px; padding: 10px 12px; margin-top: 10px; font-size: .92rem; text-align: left; }
+.ce1d-q .answer { max-width: 320px; }
