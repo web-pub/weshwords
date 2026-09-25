@@ -1,6 +1,6 @@
 // =====================================================================
 //  Projet : Wesh Words (Firebase « weshwords »)
-//  Version du site : V03-006
+//  Version du site : V03-007
 //  Règles Firestore — © Hélène Laruelle — Tous droits réservés
 // ---------------------------------------------------------------------
 //  Rôles : superadmin (config/app.superAdminUid) · parent · enfant
@@ -80,7 +80,7 @@ service cloud.firestore {
 
     // ---------- Version des règles (utilisé par diagnostic.html) ----------
     match /rulesinfo/{v} {
-      allow get: if v == 'V03-006';
+      allow get: if v == 'V03-007';
     }
 
     // ---------- Profils ----------
@@ -158,6 +158,12 @@ service cloud.firestore {
         allow read: if isSelf(uid) || canManage(uid);
         allow create: if isSelf(uid);
         allow delete: if canManage(uid);
+      }
+
+      // --- Exercices CE1D ajoutés par le parent (V03-007), en plus des banques intégrées
+      match /ce1dCustom/{cid} {
+        allow read: if isSelf(uid) || canManage(uid);
+        allow create, update, delete: if canManage(uid);
       }
 
       // --- Duels parent / enfant (chacun n'écrit que son propre résultat)

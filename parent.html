@@ -33,8 +33,7 @@
       <nav class="tabs" id="tabs">
         <button class="tab on" data-tab="dash">📊 Tableau de bord</button>
         <button class="tab" data-tab="bilan">📅 Bilan</button>
-        <button class="tab" data-tab="vocab">🇬🇧 Anglais</button>
-        <button class="tab" data-tab="nl">🇳🇱 Néerlandais</button>
+        <button class="tab" data-tab="cours">📚 Cours</button>
         <button class="tab" data-tab="shame">💀 Mots de la honte</button>
         <button class="tab" data-tab="duel">⚔️ Duel</button>
         <button class="tab" data-tab="hist">🕓 Historique</button>
@@ -110,8 +109,18 @@
         <div id="bilanBody"></div>
       </section>
 
+      <!-- COURS : Anglais / Néerlandais / Maths / Français / Sciences regroupés (V03-007) -->
+      <section class="panel" id="p-cours">
+        <nav class="tabs" id="coursSubtabs">
+          <button class="tab on" data-sub="vocab">🇬🇧 Anglais</button>
+          <button class="tab" data-sub="nl">🇳🇱 Néerlandais</button>
+          <button class="tab" data-sub="math">📐 Mathématiques</button>
+          <button class="tab" data-sub="francais">📖 Français</button>
+          <button class="tab" data-sub="sciences">🔬 Sciences</button>
+        </nav>
+
       <!-- VOCABULAIRE -->
-      <section class="panel" id="p-vocab">
+      <section class="subpanel on" id="p-vocab">
         <div class="grid g2">
           <div class="card">
             <h3>➕ Ajouter un mot</h3>
@@ -178,7 +187,7 @@
       </section>
 
       <!-- NÉERLANDAIS (V03-002) : même principe que le Vocabulaire anglais -->
-      <section class="panel" id="p-nl">
+      <section class="subpanel" id="p-nl">
         <p class="note">🇳🇱 Vocabulaire néerlandais, en plus de l'anglais. Ton enfant peut faire des séries de 20 mots quand il veut (pas d'obligation quotidienne) : mêmes points, mêmes pièces de puzzle. Les outils « dictée », « duel » et « contrôle blanc » restent pour l'instant réservés à l'anglais.</p>
         <div class="grid g2">
           <div class="card">
@@ -231,6 +240,22 @@
           <div class="pager" id="nPager"></div>
         </div>
       </section>
+
+      <!-- EXERCICES CE1D PERSO : Maths / Français / Sciences (V03-007) -->
+      <section class="subpanel" id="p-math">
+        <p class="note">📐 Ajoute tes propres exercices de mathématiques CE1D : ils s'ajoutent aux exercices déjà prévus dans l'appli, dans le thème choisi.</p>
+        <div id="ceHost-math"></div>
+      </section>
+      <section class="subpanel" id="p-francais">
+        <p class="note">📖 Ajoute tes propres exercices de français CE1D : ils s'ajoutent aux exercices déjà prévus dans l'appli, dans le thème choisi.</p>
+        <div id="ceHost-francais"></div>
+      </section>
+      <section class="subpanel" id="p-sciences">
+        <p class="note">🔬 Ajoute tes propres exercices de sciences CE1D : ils s'ajoutent aux exercices déjà prévus dans l'appli, dans le thème choisi.</p>
+        <div id="ceHost-sciences"></div>
+      </section>
+
+      </section><!-- /p-cours -->
 
       <!-- MOTS DE LA HONTE -->
       <section class="panel" id="p-shame">
@@ -320,6 +345,14 @@
             </div>
           </div>
           <p class="small muted" style="margin-top:8px">Une matière décochée disparaît de l'espace élève. Le vocabulaire aujourd'hui disponible est tout au niveau 2 ; les niveaux 4 et 6 se rempliront au fur et à mesure des imports (colonne « Niveau » du fichier).</p>
+        </div>
+        <div class="card">
+          <h3>🗣️ Langue obligatoire</h3>
+          <p class="muted small">En secondaire, chaque élève a une seule langue germanique obligatoire (anglais ou néerlandais selon l'école). C'est cette langue qui porte la série quotidienne des 20 mots, le calendrier, la série de gardée et les badges. L'autre langue reste disponible en séries libres, sans obligation.</p>
+          <div class="field">
+            <label>Langue étudiée en 1er (obligatoire) pour <span id="stChildName3"></span></label>
+            <select id="stMainLang"><option value="en">🇬🇧 Anglais</option><option value="nl">🇳🇱 Néerlandais</option></select>
+          </div>
         </div>
         <div class="card">
           <h3>🎯 Thèmes à réviser</h3>

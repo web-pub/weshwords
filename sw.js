@@ -1,7 +1,7 @@
-/* Wesh Words — service worker (V03-006)
+/* Wesh Words — service worker (V03-007)
    Réseau d'abord pour les pages, cache en secours → l'app s'ouvre même hors connexion.
    Les données Firestore ont leur propre cache hors connexion (IndexedDB). */
-const CACHE = "weshwords-V03-006";
+const CACHE = "weshwords-V03-007";
 const CORE = [
   "./", "index.html", "connexion.html", "eleve.html", "parent.html", "admin.html", "legal.html", "diagnostic.html",
   "manifest.webmanifest",
