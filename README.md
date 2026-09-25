@@ -1,4 +1,4 @@
-# Wesh Words — V02-001
+# Wesh Words — V03-002
 
 Révisions de vocabulaire anglais 🇫🇷 ↔ 🇬🇧 : 20 bonnes réponses par jour (10 FR→EN + 10 EN→FR), et au 20/20… le **mot de la honte**. 💀
 
@@ -40,8 +40,8 @@ assets/               CSS, JS, logo, icônes, personnage Margaux (margaux-*.webp
 1. Décompresser le ZIP sur le PC (clic droit → Extraire tout).
 2. Sur https://github.com/web-pub/weshwords → **Add file** → **Upload files**.
 3. Ouvrir le dossier décompressé, **sélectionner tout son contenu** (Ctrl + A : les pages HTML, `sw.js`, `favicon.ico`… **et le dossier `assets`**) et le glisser dans la page GitHub.
-   Les fichiers doivent arriver **à la racine** du dépôt (pas dans un sous-dossier « WeshWords-V02-001 »).
-4. En bas : message « Wesh Words V02-001 » → **Commit changes**.
+   Les fichiers doivent arriver **à la racine** du dépôt (pas dans un sous-dossier « WeshWords-V03-002 »).
+4. En bas : message « Wesh Words V03-002 » → **Commit changes**.
 5. Première fois seulement : **Settings** → **Pages** → Source « Deploy from a branch » → Branch **main** / **(root)** → Save.
 6. Attendre 1 à 2 minutes. Adresse du site : `https://web-pub.github.io/weshwords/`
 
@@ -55,7 +55,7 @@ git clone https://github.com/web-pub/weshwords.git
 cd weshwords
 # décompresser le ZIP ici (fichiers à la racine + dossier assets/)
 git add -A
-git commit -m "Wesh Words V02-001"
+git commit -m "Wesh Words V03-002"
 git push origin main
 ```
 
@@ -70,7 +70,7 @@ Ouvrir **`https://web-pub.github.io/weshwords/diagnostic.html`**. Elle teste et 
 |---|---|
 | Site en ligne, dossier `assets` présent | renvoyer le dossier `assets` à la racine du dépôt |
 | Base Firestore créée | étape A.3 |
-| Règles publiées **et à jour** (V02-001) | étape A.4 |
+| Règles publiées **et à jour** (V03-002) | étape A.4 |
 | Méthode E-mail/Mot de passe active | étape A.1 |
 | Super Admin installé | ouvrir `connexion.html` → Installation initiale |
 | Application installable | recharger la page une fois |
@@ -121,7 +121,14 @@ Astuce : après une mise à jour, si l'ancienne version s'affiche encore, rechar
 | Réponses (V02-001) | espaces, apostrophes, tirets et caractères spéciaux ignorés (« ice-cream » = « icecream », « I'm » = « im »). |
 | Import (V02-001) | étape « associer les colonnes » : chaque colonne du fichier est reliée à un champ (Français, Anglais, Catégorie…), avec aperçu. Bouton 🗑️ « Tout supprimer et recommencer à zéro » (taper SUPPRIMER). |
 | Verbes irréguliers (V02-001) | bouton « 🔤 Liste des verbes irréguliers (113) » : ajoute la liste de référence (nature « verbe irrégulier »). Dans le quiz, un mot du vocabulaire qui contient un verbe irrégulier (« to keep in touch ») affiche ses 3 formes après la réponse. |
+| Historique navigable (V03-001) | espace parent → 🕓 Historique : boutons « Mois précédent / suivant » et « Tout afficher » pour remonter dans le temps, en plus de l'affichage habituel. |
+| Fiches modifiables (V03-001) | espace parent (fiche de son/ses enfant(s)) et Super Admin (tous les membres) → « ✏️ Modifier la fiche » : prénom, nom, naissance, GSM, et un formulaire séparé pour changer l'adresse e-mail / l'identifiant (mot de passe actuel requis). |
+| Suivi des connexions (V03-001) | Super Admin → Membres : colonnes « Dernière visite » (dès que la personne ouvre une page de l'appli, même reconnectée automatiquement sans retaper son mot de passe) et « Dernière connexion » (dernière fois où le mot de passe a été tapé avec succès). Le mot de passe réellement tapé à la connexion est aussi réenregistré automatiquement dans l'onglet Mots de passe. |
+| Mots de la honte 2026 (V03-001) | 67 nouvelles expressions d'argot ajoutées (wesh, six seven / 67, rizz, aura farming, la hess, pain brioché, GOAT absolu…), dont plusieurs variantes autour du fameux « six seven » (67). Bouton « 💡 Ajouter des idées toutes prêtes » dans Vocabulaire → Mots de la honte. |
 | Mot de la honte | 1 révélation max par jour, uniquement après le 20/20, dans l'ordre de la file du parent. Jamais visible par l'élève avant révélation (règles Firestore). Ne consomme aucune question et ne touche pas aux niveaux. |
+| Néerlandais (V03-002) | Nouvel onglet « 🇳🇱 Néerlandais », en plus de l'anglais : vocabulaire, ajout, import/export et vérification séparés (espace parent → onglet dédié), séries de 20 **libres** (pas d'obligation quotidienne comme pour l'anglais), mêmes points et mêmes pièces de puzzle. Vocabulaire de départ fourni : 1500 mots CE1D A1-A2 + 119 verbes forts/irréguliers, à importer via « 📦 Vocabulaire néerlandais CE1D » et « 🔤 Liste des verbes irréguliers ». Les outils dictée audio, duel et contrôle blanc restent pour l'instant réservés à l'anglais. |
+| Vérification automatique (V03-002) | 🤖 Assistant intégré au site (pas un service d'IA externe payant : le site n'a pas de serveur pour garder une clé API en sécurité) qui relit chaque mot ajouté à la main ou importé (anglais et néerlandais) et signale ce qui semble louche : colonnes inversées, mot vide, texte identique en français et dans l'autre langue, phrase entière collée par erreur… Un avertissement n'empêche pas d'ajouter/importer, il demande juste une confirmation. |
+| Puzzle « Six Seven » (V03-002) | Un 7e puzzle à collectionner (image de Margaux façon « SIX SEVEN », le mème TikTok) rejoint la rotation des 6 puzzles existants. Un petit sticker animé de Margaux « Six Seven » apparaît aussi à côté de la carte Néerlandais dans l'espace élève. |
 
 ## 6. Données Firestore
 
@@ -131,7 +138,7 @@ content/site                   { texts: { clé: texte personnalisé } }
 usernames/{utilisateur}        { email, uid }
 secrets/{uid}                  { username, email, password }   ← Super Admin uniquement
 demandes/{id}                  { nom, prenom, gsm, email, statut }
-users/{uid}                    { prenom, nom, username, email, role, parentUid, birth, gsm }
+users/{uid}                    { prenom, nom, username, email, realEmail, role, parentUid, birth, gsm, lastSeen, lastLogin }   ← lastSeen/lastLogin V03-001
 users/{uid}/proposals/{id}     { type: alt|fix, wordId, dir, given, oldFr, oldEn, fr, en, note, status, decidedDay }
 users/{uid}/words/{id}         { fr, en, altFr[], altEn[], cat, nature, ex, conj, level, ok, ko, seen, lastSeen, lastKo, vLevel, vOk, vKo, dOk, dKo }
 users/{uid}/sessions/{AAAA-MM-JJ} { frEn, enFr, attempts, errors, completed, wrong[], helped, qcm, bonus, exam, mastered[], verbs, verbsOk, dictee, dicteeOk,
@@ -144,6 +151,8 @@ users/{uid}/meta/badges        { unlocked: { idBadge: AAAA-MM-JJ } }
 users/{uid}/meta/puzzle        { pieces, log[{day, n, points}] }                      ← V02-001
 users/{uid}/ce1d/{id}          { subject, theme, themeName, day, ok, total, score, wrong[], seen[], durationSec }   ← V02-001
 users/{uid}/meta/settings      { hints, autoQcm, qcmMinWords, themes[], themesLocked, themesUntil, childThemes[] }
+users/{uid}/wordsNl/{id}       { fr, en (= mot néerlandais), cat, nature, ex, conj, level, ok, ko, seen, lastSeen, lastKo }   ← V03-002
+users/{uid}/sessionsNl/{AAAA-MM-JJ} { series[{n, attempts, errors, helped, acc, points}], cur }                              ← V03-002, séries toujours libres
 ```
 
 ⚠️ Les mots de passe sont également stockés en clair dans `secrets` (lecture Super Admin uniquement) — risque connu et accepté.

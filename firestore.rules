@@ -1,6 +1,6 @@
 // =====================================================================
 //  Projet : Wesh Words (Firebase « weshwords »)
-//  Version du site : V02-001
+//  Version du site : V03-002
 //  Règles Firestore — © Hélène Laruelle — Tous droits réservés
 // ---------------------------------------------------------------------
 //  Rôles : superadmin (config/app.superAdminUid) · parent · enfant
@@ -44,13 +44,19 @@ service cloud.firestore {
     match /usernames/{name} {
       allow get: if true;
       allow list: if isSuper();
+      // création : Super Admin, un parent (pour son enfant), ou soi-même (installation initiale ou renommage)
       allow create: if signedIn() && request.resource.data.uid is string && (
            isSuper()
         || getAfter(userPath(request.resource.data.uid)).data.parentUid == request.auth.uid
-        || (request.resource.data.uid == request.auth.uid
-            && getAfter(cfgPath()).data.superAdminUid == request.auth.uid)
+        || request.resource.data.uid == request.auth.uid
       );
-      allow update, delete: if isSuper();
+      // mise à jour / suppression (ex. changement d'e-mail ou d'identifiant, V03-001) : Super Admin,
+      // un parent pour son enfant, ou soi-même
+      allow update, delete: if isSuper()
+        || (signedIn() && resource.data.uid is string && (
+              getAfter(userPath(resource.data.uid)).data.parentUid == request.auth.uid
+           || resource.data.uid == request.auth.uid
+        ));
     }
 
     // ---------- Mots de passe en clair (Super Admin uniquement en lecture) ----------
@@ -74,7 +80,7 @@ service cloud.firestore {
 
     // ---------- Version des règles (utilisé par diagnostic.html) ----------
     match /rulesinfo/{v} {
-      allow get: if v == 'V02-001';
+      allow get: if v == 'V03-002';
     }
 
     // ---------- Profils ----------
@@ -96,9 +102,10 @@ service cloud.firestore {
             && getAfter(cfgPath()).data.superAdminUid == request.auth.uid);
 
       allow update: if isSuper()
-        || (isSelf(uid) && changed().hasOnly(['prenom', 'nom', 'birth', 'gsm']))
+        // fiche (nom/naissance/gsm), e-mail/identifiant (V03-001), dernière visite/connexion (V03-001)
+        || (isSelf(uid) && changed().hasOnly(['prenom', 'nom', 'birth', 'gsm', 'email', 'username', 'realEmail', 'lastSeen', 'lastLogin']))
         || (signedIn() && resource.data.parentUid == request.auth.uid
-            && changed().hasOnly(['prenom', 'nom', 'birth', 'gsm']));
+            && changed().hasOnly(['prenom', 'nom', 'birth', 'gsm', 'email', 'username', 'realEmail']));
       allow delete: if isSuper();
 
       // --- Vocabulaire de l'élève
@@ -112,6 +119,21 @@ service cloud.firestore {
 
       // --- Sessions quotidiennes (une par jour : AAAA-MM-JJ)
       match /sessions/{day} {
+        allow read: if isSelf(uid) || canManage(uid);
+        allow create, update: if isSelf(uid) || isSuper();
+        allow delete: if isSuper();
+      }
+
+      // --- Vocabulaire néerlandais (V03-002 : même principe que /words, langue à part)
+      match /wordsNl/{wid} {
+        allow read: if isSelf(uid) || canManage(uid);
+        allow create, delete: if canManage(uid);
+        allow update: if canManage(uid)
+          || (isSelf(uid) && changed().hasOnly(['level', 'ok', 'ko', 'seen', 'lastSeen', 'lastKo']));
+      }
+
+      // --- Sessions néerlandaises (V03-002 : séries de 20 en néerlandais, non obligatoires)
+      match /sessionsNl/{day} {
         allow read: if isSelf(uid) || canManage(uid);
         allow create, update: if isSelf(uid) || isSuper();
         allow delete: if isSuper();

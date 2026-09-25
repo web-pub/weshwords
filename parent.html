@@ -34,6 +34,7 @@
         <button class="tab on" data-tab="dash">📊 Tableau de bord</button>
         <button class="tab" data-tab="bilan">📅 Bilan</button>
         <button class="tab" data-tab="vocab">📚 Vocabulaire</button>
+        <button class="tab" data-tab="nl">🇳🇱 Néerlandais</button>
         <button class="tab" data-tab="shame">💀 Mots de la honte</button>
         <button class="tab" data-tab="duel">⚔️ Duel</button>
         <button class="tab" data-tab="hist">🕓 Historique</button>
@@ -176,6 +177,61 @@
         </div>
       </section>
 
+      <!-- NÉERLANDAIS (V03-002) : même principe que le Vocabulaire anglais -->
+      <section class="panel" id="p-nl">
+        <p class="note">🇳🇱 Vocabulaire néerlandais, en plus de l'anglais. Ton enfant peut faire des séries de 20 mots quand il veut (pas d'obligation quotidienne) : mêmes points, mêmes pièces de puzzle. Les outils « dictée », « duel » et « contrôle blanc » restent pour l'instant réservés à l'anglais.</p>
+        <div class="grid g2">
+          <div class="card">
+            <h3>➕ Ajouter un mot</h3>
+            <form id="addWordNl" autocomplete="off">
+              <div class="grid g2">
+                <div class="field"><label>Français <span class="req">*</span></label><input type="text" id="nwFr" required></div>
+                <div class="field"><label>Néerlandais <span class="req">*</span></label><input type="text" id="nwNl" required></div>
+              </div>
+              <div class="grid g2">
+                <div class="field"><label>Catégorie</label><input type="text" id="nwCat" list="nCatList"></div>
+                <div class="field"><label>Nature</label>
+                  <select id="nwNat"><option value="">—</option><option>nom</option><option>verbe</option><option>adjectif</option><option>expression</option><option>mot / expression</option></select></div>
+              </div>
+              <div class="field"><label>Exemple</label><input type="text" id="nwEx"></div>
+              <div class="field"><label>Conjugaison / formes</label><input type="text" id="nwConj" placeholder="ex. gaan: ik ga, jij gaat; ging; gegaan"></div>
+              <p class="small muted">* Champs obligatoires · 🤖 chaque mot est vérifié automatiquement avant d'être ajouté</p>
+              <button class="btn" type="submit">Ajouter</button>
+            </form>
+            <datalist id="nCatList"></datalist>
+          </div>
+          <div class="card">
+            <h3>📥 Importer / 📤 Exporter</h3>
+            <p class="muted small">Fichiers acceptés : .xlsx, .xls, .csv. Après le choix du fichier, tu indiques à quoi correspond chaque colonne. 🤖 Une vérification automatique relit chaque mot (colonnes inversées, doublons…) avant l'import.</p>
+            <div class="field"><input type="file" id="impFileNl" accept=".xlsx,.xls,.csv"></div>
+            <div id="impPreviewNl"></div>
+            <hr class="sep">
+            <div class="row">
+              <button class="btn soft" id="btnSeedNl">📦 Vocabulaire néerlandais CE1D (1 500 mots)</button>
+              <button class="btn soft" id="btnIrrNl">🔤 Liste des verbes irréguliers (119)</button>
+              <button class="btn soft" id="btnExportNl">📤 Exporter en Excel</button>
+            </div>
+            <hr class="sep">
+            <button class="btn danger sm" id="btnWipeNl">🗑️ Tout supprimer et recommencer à zéro</button>
+            <p class="small muted" style="margin-top:6px">Supprime tout le vocabulaire néerlandais (pas les séries ni les points). Utile si un import s'est mal passé.</p>
+          </div>
+        </div>
+        <div class="card">
+          <div class="row between">
+            <h3 style="margin:0">🇳🇱 Liste de vocabulaire néerlandais <span class="chip" id="nCount"></span></h3>
+            <div class="row">
+              <input type="search" id="nSearch" placeholder="Rechercher…" style="width:200px">
+              <select id="nCat" style="width:200px"><option value="">Toutes les catégories</option></select>
+              <select id="nLvl" style="width:150px"><option value="">Tous niveaux</option><option value="0">Niveau 0</option><option value="1">Niveau 1</option><option value="2">Niveau 2</option><option value="3">Niveau 3</option><option value="4">Niveau 4</option><option value="5">Niveau 5</option></select>
+            </div>
+          </div>
+          <div class="table-wrap" style="margin-top:12px">
+            <table><thead><tr><th>Français</th><th>Néerlandais</th><th>Catégorie</th><th>Niveau</th><th>✅/❌</th><th></th></tr></thead><tbody id="nBody"></tbody></table>
+          </div>
+          <div class="pager" id="nPager"></div>
+        </div>
+      </section>
+
       <!-- MOTS DE LA HONTE -->
       <section class="panel" id="p-shame">
         <div class="card">
@@ -190,7 +246,7 @@
           </form>
           <p class="small muted">Astuce : <code>{prenom}</code> dans la phrase est remplacé par le prénom de ton enfant.</p>
           <div class="row" style="margin-top:8px">
-            <button class="btn soft sm" id="btnIdeas">💡 Ajouter 20 idées toutes prêtes</button>
+            <button class="btn soft sm" id="btnIdeas">💡 Ajouter des idées toutes prêtes (67 dispo)</button>
             <button class="btn soft sm" id="btnShuffle">🎲 Mélanger l'ordre (surprise)</button>
             <label class="check small"><input type="checkbox" id="chkHide"> Mode surprise : me cacher les expressions en attente</label>
           </div>
@@ -224,7 +280,15 @@
       <!-- HISTORIQUE -->
       <section class="panel" id="p-hist">
         <div class="card">
-          <h3>🕓 Historique des sessions</h3>
+          <div class="row between" style="align-items:center;flex-wrap:wrap;gap:8px">
+            <h3 style="margin:0">🕓 Historique des sessions</h3>
+            <div class="row" style="gap:6px">
+              <button class="btn ghost sm" id="hPrev">← Mois précédent</button>
+              <span class="chip" id="hLabel" style="min-width:150px;text-align:center"></span>
+              <button class="btn ghost sm" id="hNext">Mois suivant →</button>
+              <button class="btn ghost sm" id="hAll">Tout afficher</button>
+            </div>
+          </div>
           <div class="table-wrap"><table><thead><tr><th>Date</th><th>🇫🇷→🇬🇧</th><th>🇬🇧→🇫🇷</th><th>Tentatives</th><th>Erreurs</th><th>Réussite</th><th>Avec aide</th><th>Séries</th><th>Points par série</th><th>Statut</th><th></th></tr></thead><tbody id="hBody"></tbody></table></div>
         </div>
         <div class="card">
@@ -273,6 +337,21 @@
           <div class="card">
             <h3>👧 Compte de <span id="acChildName"></span></h3>
             <p class="muted small" id="acChildInfo"></p>
+            <h4 style="margin-top:14px">✏️ Modifier la fiche</h4>
+            <form id="childInfoForm" class="grid g2">
+              <div class="field"><label>Prénom</label><input type="text" id="ciPrenom"></div>
+              <div class="field"><label>Nom</label><input type="text" id="ciNom"></div>
+              <div class="field"><label>Date de naissance</label><input type="date" id="ciBirth"></div>
+              <div class="field"><label>GSM</label><input type="tel" id="ciGsm"></div>
+              <div class="field" style="grid-column:1/-1"><button class="btn soft" type="submit">💾 Enregistrer la fiche</button></div>
+            </form>
+            <h4 style="margin-top:14px">📧 Changer son e-mail / identifiant</h4>
+            <form id="childEmailForm" class="grid g2">
+              <div class="field"><label>Adresse e-mail</label><input type="email" id="ceEmail"></div>
+              <div class="field"><label>Identifiant</label><input type="text" id="ceUser" autocapitalize="none"></div>
+              <div class="field" style="grid-column:1/-1"><label>Mot de passe actuel de l'enfant <span class="req">*</span></label><input type="password" id="ceOld" required></div>
+              <div class="field" style="grid-column:1/-1"><button class="btn soft" type="submit">Enregistrer</button></div>
+            </form>
             <h4 style="margin-top:14px">Changer son mot de passe</h4>
             <form id="childPwdForm">
               <div class="field"><label>Mot de passe actuel de l'enfant</label><input type="password" id="cpOld" required></div>
