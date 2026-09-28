@@ -25,7 +25,7 @@ export function ce1dStats(results) {
 
 /** Carte « Préparer le CE1D » de l'accueil élève.
     enabledIds (V03-004) : liste des ids de matières à afficher (choisies par le parent) — null/absent = toutes.
-    customItems (V04-001) : exercices ajoutés par le parent, [{ subject, theme, q, t, c?, a, ex, … }]. */
+    customItems (V04-003) : exercices ajoutés par le parent, [{ subject, theme, q, t, c?, a, ex, … }]. */
 export function renderCe1dCard(el, results, onSave, enabledIds = null, customItems = []) {
   const st = ce1dStats(results);
   const subs = enabledIds ? SUBJECTS.filter(s => enabledIds.includes(s.id)) : SUBJECTS;
@@ -71,7 +71,7 @@ function runSeries(subId, themeId, results, onSave, customItems = []) {
     let input = "";
     if (it.t === "qcm") input = `<div class="choices">${it.c.map((c, k) => `<button type="button" class="choice" data-k="${k}"><span class="k">${"ABCD"[k] || k + 1}</span><span>${esc(c)}</span></button>`).join("")}</div>`;
     else if (it.t === "vf") input = `<div class="row" style="justify-content:center"><button type="button" class="btn soft big" data-vf="1">✅ Vrai</button><button type="button" class="btn soft big" data-vf="0">❌ Faux</button></div>`;
-    else input = `<div class="row" style="justify-content:center;flex-wrap:nowrap"><input type="text" class="answer" id="c1In" ${it.t === "num" ? 'inputmode="decimal"' : ""} autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="${it.t === "num" ? "Ta réponse (nombre)…" : "Ta réponse…"}">${it.unit ? `<b style="margin-left:8px">${esc(it.unit)}</b>` : ""}</div>
+    else input = `<div class="row" style="justify-content:center;flex-wrap:nowrap">${it.t === "num" ? `<button type="button" class="btn ghost sm" id="c1Sign" style="margin-right:6px" title="Nombre négatif">± </button>` : ""}<input type="text" class="answer" id="c1In" ${it.t === "num" ? 'inputmode="decimal"' : ""} autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="${it.t === "num" ? "Ta réponse (nombre)…" : "Ta réponse…"}">${it.unit ? `<b style="margin-left:8px">${esc(it.unit)}</b>` : ""}</div>
       <div class="row" style="justify-content:center;margin-top:10px"><button class="btn" id="c1Go">Valider ✔</button></div>`;
     show(`<div class="card practice ce1d-q">
       <div class="row between"><span class="chip b">${sub.icon} ${esc(it.themeName)}</span><span class="small muted">${st.i + 1} / ${list.length} · ✅ ${st.ok}</span></div>
@@ -97,6 +97,12 @@ function runSeries(subId, themeId, results, onSave, customItems = []) {
       const go = () => { if (st.answered) return next(); if (!inp.value.trim()) return inp.focus(); check(inp.value, inp.value); };
       $("#c1Go").onclick = go;
       inp.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); go(); } });
+      // V04-003 : le clavier numérique mobile (inputmode="decimal") n'affiche pas toujours le signe "−"
+      // (absent sur iOS notamment) → bouton dédié pour basculer le signe de la réponse.
+      $("#c1Sign")?.addEventListener("click", () => {
+        inp.value = inp.value.trim().startsWith("-") ? inp.value.trim().slice(1) : "-" + inp.value.trim();
+        inp.focus();
+      });
     }
   }
   function check(given, label) {

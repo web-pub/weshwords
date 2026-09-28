@@ -9,6 +9,7 @@ import { accuracy, seriesPoints, earnsPiece, puzzleState, puzzleGrid, pieceOrder
 import { renderCe1dCard } from "./ce1d-ui.js";
 import { renderStudyCard } from "./study.js";
 import { badgeStats, evaluateBadges, badgesGrid } from "./badges.js";
+import { evaluateStreakFreeze, DEFAULT_STREAKFREEZE, isFrozenDay } from "./streakfreeze.js";
 import { runVerbs, runDictee, playDuel, buildDuelItems, duelWinner, fmtTime, DUEL_PENALTIES } from "./practice.js";
 import { irregularVerbs, wordCount } from "./words.js";
 import {
@@ -38,6 +39,8 @@ let puzzle = { pieces: 0, log: [] }, puzzleLoaded = false;
 let wordsNl = [], sessionsNl = {}, readyNl = { w: false, s: false };
 let holdBadges = false; // pas de pop-up de badge pendant un écran de fin
 let exams = [], badgesMeta = { unlocked: {} }, badgesLoaded = { m: false, x: false }, badgeQueue = [];
+// --- 🪂 Parachute de série (V04-003) : voir assets/streakfreeze.js pour la mécanique complète.
+let freeze = { ...DEFAULT_STREAKFREEZE }, freezeLoaded = false, freezeChecked = false, freezeQueue = [];
 const pool = () => filterByThemes(words, activeThemes(settings, today).list);
 
 /* ---------------- Matières & niveaux (V03-004) : réglages choisis par le parent ---------------- */
@@ -72,7 +75,7 @@ function saveSessionNl() {
   setDoc(sessionRefNl(), { ...s }, { merge: true }).catch(e => console.warn(e));
 }
 
-/* ---------------- Langue obligatoire (V04-001) ----------------
+/* ---------------- Langue obligatoire (V04-003) ----------------
    Jusqu'ici, la série quotidienne obligatoire de 20 mots était toujours en anglais (collection
    "words"/"sessions"), et le néerlandais (collection "wordsNl"/"sessionsNl") était toujours la
    langue « libre » (pas d'obligation). Un enfant peut avoir le néerlandais comme langue 1 à
@@ -191,6 +194,12 @@ onSnapshot(doc(db, "users", uid, "meta", "badges"), s => {
   if (ready.w && ready.s) renderHome();
 }, () => { badgesLoaded.m = true; });
 
+onSnapshot(doc(db, "users", uid, "meta", "streakFreeze"), s => {
+  freeze = { ...DEFAULT_STREAKFREEZE, ...(s.exists() ? s.data() : {}) };
+  freezeLoaded = true;
+  boot();
+}, () => { freezeLoaded = true; boot(); });
+
 onSnapshot(collection(db, "users", uid, "duels"), s => {
   duels = s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.createdAt?.seconds || 9e12) - (a.createdAt?.seconds || 9e12));
   if (ready.w && ready.s) renderHome();
@@ -204,7 +213,7 @@ onSnapshot(doc(db, "users", uid, "meta", "puzzle"), s => {
 
 /* ---------------- Préparer le CE1D (V02-001) ---------------- */
 let ce1dResults = [];
-let ce1dCustom = []; // V04-001 : exercices ajoutés par le parent, en plus des banques intégrées
+let ce1dCustom = []; // V04-003 : exercices ajoutés par le parent, en plus des banques intégrées
 const saveCe1d = res => addDoc(collection(db, "users", uid, "ce1d"), { ...res, day: today, createdAt: serverTimestamp() });
 /** Filtre les matières CE1D affichées selon les matières choisies par le parent (V03-004) ;
     masque toute la carte si aucune matière CE1D n'est activée. */
@@ -226,18 +235,49 @@ onSnapshot(collection(db, "users", uid, "ce1dCustom"), s => {
 refreshCe1d();
 
 function boot() {
-  if (!ready.w || !ready.s) return;
+  if (!ready.w || !ready.s || !freezeLoaded) return;
   // Si la langue obligatoire de l'enfant est le néerlandais, on attend aussi que son vocabulaire
-  // et ses sessions néerlandaises soient chargés avant le premier affichage (V04-001).
+  // et ses sessions néerlandaises soient chargés avant le premier affichage (V04-003).
   if (mandLang() === "nl" && (!readyNl.w || !readyNl.s)) return;
   $("#loader").classList.add("hidden");
   $("#main").classList.remove("hidden");
   if (!quiz.active) renderHome();
+  checkStreakFreeze();
+}
+
+/** Fait avancer le compteur de Parachutes (une seule fois par ouverture de l'app) : voir
+    assets/streakfreeze.js. N'affiche rien directement — met les événements en attente dans
+    freezeQueue, affichés par showNextFreezeEvent() (appelée depuis renderHome()). */
+function checkStreakFreeze() {
+  if (freezeChecked) return;
+  freezeChecked = true;
+  const { state, events } = evaluateStreakFreeze(freeze, mandSessions(), today, dayKeyOffset, profile.birth);
+  const changed = JSON.stringify(state) !== JSON.stringify(freeze);
+  freeze = state;
+  if (changed) setDoc(doc(db, "users", uid, "meta", "streakFreeze"), state).catch(e => console.warn(e));
+  if (events.length) { freezeQueue.push(...events); showNextFreezeEvent(); }
+}
+function showNextFreezeEvent() {
+  // on n'affiche jamais par-dessus un badge/une honte déjà à l'écran : on retentera au prochain renderHome()
+  if (!freezeQueue.length || !$("#overlay").classList.contains("hidden")) return;
+  const e = freezeQueue.shift();
+  confetti();
+  const key = e.type; // "earned" | "used" | "birthday"
+  openOverlay(`<div class="card center badge-pop">
+    <img class="shame-art" src="${MOODS[key === "birthday" ? "hero" : "joyeuse"]}" alt="">
+    <h2 style="color:var(--pink)">${esc(T(`freeze.${key}.title`, vars))}</h2>
+    <div class="big-badge">🪂</div>
+    <p class="muted">${esc(T(`freeze.${key}.text`, { ...vars, n: freeze.count }))}</p>
+    <button class="btn big" id="fzNext">${esc(T("freeze.ok"))}${freezeQueue.length ? ` (+${freezeQueue.length})` : ""}</button>
+  </div>`);
+  $("#fzNext").onclick = () => { closeOverlay(); showNextFreezeEvent(); };
 }
 
 /* ---------------- Accueil ---------------- */
 function streak() {
   const done = new Set(Object.values(mandSessions()).filter(s => s.completed).map(s => s.day));
+  // 🪂 un jour sauvé par un Parachute compte comme un jour de série (V04-003).
+  Object.keys(freeze.frozen || {}).forEach(k => done.add(k));
   return computeStreak(done, today, dayKeyOffset);
 }
 function barsHTML(s, lang = "en") {
@@ -308,14 +348,18 @@ function renderHome() {
   $("#stMaster").textContent = mw.filter(w => (w.level || 0) >= MAX_LEVEL).length;
   $("#stWords").textContent = mw.length;
   $("#stShame").textContent = revealed.length;
+  if ($("#stFreeze")) $("#stFreeze").textContent = freeze.count;
 
   // calendrier 28 jours
   const msess = mandSessions();
   let cells = "";
   for (let i = 27; i >= 0; i--) {
-    const k = dayKeyOffset(today, -i), ss = msess[k];
-    const cls = ss?.completed ? "ok" : (ss?.attempts ? "part" : "");
-    cells += `<div class="day ${cls} ${i === 0 ? "today" : ""}" title="${esc(fmtDay(k))}">${Number(k.slice(8))}</div>`;
+    const k = dayKeyOffset(today, -i);
+    const ss = msess[k];
+    const frozen = isFrozenDay(freeze, k);
+    const cls = frozen ? "frozen" : ss?.completed ? "ok" : (ss?.attempts ? "part" : "");
+    const title = frozen ? `${esc(fmtDay(k))} — ${esc(T("freeze.calendar.title"))}` : esc(fmtDay(k));
+    cells += `<div class="day ${cls} ${i === 0 ? "today" : ""}" title="${title}">${frozen ? "🪂" : Number(k.slice(8))}</div>`;
   }
   $("#days").innerHTML = cells;
 
@@ -329,6 +373,7 @@ function renderHome() {
   $("#badgeCount").textContent = `${bl.filter(b => b.done).length} / ${bl.length}`;
   $("#badgeGrid").innerHTML = badgesGrid(bl, badgesMeta.unlocked, T, esc, fmtDay);
   checkBadges(bl);
+  showNextFreezeEvent();
   renderPractice();
   renderProposalsNote();
 
@@ -915,7 +960,7 @@ function answer(given, skipped = false, opt = {}) {
     }
   }
   // Le contrôle blanc ne compte pour l'objectif quotidien que si la langue obligatoire est
-  // l'anglais (contrôle blanc = outil anglais uniquement, cf. V04-001) : sinon il reste à part.
+  // l'anglais (contrôle blanc = outil anglais uniquement, cf. V04-003) : sinon il reste à part.
   const countsDaily = quiz.mode === "daily" || (quiz.mode === "exam" && mandLang() === "en" && !s.completed);
   if (countsDaily) {
     s.attempts = (s.attempts || 0) + 1;

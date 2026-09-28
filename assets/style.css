@@ -229,6 +229,7 @@ td.actions { white-space: nowrap; text-align: right; }
 .day { aspect-ratio: 1; border-radius: 10px; background: var(--bg2); border: 1px solid var(--line); display: grid; place-items: center; font-size: .75rem; font-weight: 800; color: var(--muted); }
 .day.ok { background: var(--grad); color: #fff; border: 0; }
 .day.part { background: rgba(255, 176, 32, .2); color: var(--warn); border-color: rgba(255, 176, 32, .4); }
+.day.frozen { background: rgba(230, 51, 122, .16); color: var(--pink); border-color: rgba(230, 51, 122, .4); font-size: .95rem; }
 .day.today { outline: 2px solid var(--blue); outline-offset: 1px; }
 
 /* Graph barres simple */
