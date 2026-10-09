@@ -4,6 +4,7 @@
    Contenus → groupe « Badges ») : clés badge.<id>.t / .d
    ========================================================= */
 import { dayKeyOffset } from "./app.js";
+import { duelWinner } from "./practice.js";
 
 /* need : seuil à atteindre · val : valeur actuelle (pour la barre de progression) */
 export const BADGES = [
@@ -29,7 +30,19 @@ export const BADGES = [
   { id: "controle100",icon: "🏆", need: 100, val: s => s.bestExam },
   { id: "bonus50",    icon: "🏋️", need: 50,  val: s => s.totalBonus },
   { id: "honte5",     icon: "💀", need: 5,   val: s => s.revealed },
-  { id: "honte20",    icon: "☠️", need: 20,  val: s => s.revealed }
+  { id: "honte20",    icon: "☠️", need: 20,  val: s => s.revealed },
+  // --- Badges « progression » (V04-006) : récompensent une évolution, pas juste du volume ---
+  { id: "record1",    icon: "🥇", need: 1,   val: s => s.examRecords },
+  { id: "record3",    icon: "🏆", need: 3,   val: s => s.examRecords },
+  { id: "rachat",     icon: "🔁", need: 3,   val: s => s.comebackWords },
+  { id: "sansaide15", icon: "🧘", need: 15,  val: s => s.noHelpDays },
+  { id: "rebond",     icon: "🌈", need: 2,   val: s => s.longRuns },
+  { id: "serie60",    icon: "🌙", need: 60,  val: s => s.bestStreak },
+  // --- Badges liés aux outils récents (V04-006) ---
+  { id: "duel1",       icon: "⚔️", need: 1,  val: s => s.duelWins },
+  { id: "duel10",      icon: "🛡️", need: 10, val: s => s.duelWins },
+  { id: "parachute1",  icon: "🪂", need: 1,  val: s => s.freezeEarned },
+  { id: "ce1dmulti",   icon: "🎓", need: 3,  val: s => s.ce1dSubjectsGood }
 ];
 
 const weekday = k => { const [y, m, d] = k.split("-").map(Number); return new Date(y, m - 1, d).getDay(); };
@@ -37,16 +50,19 @@ const weekday = k => { const [y, m, d] = k.split("-").map(Number); return new Da
 /**
  * sessions : tableau de sessions {day, completed, errors, helped, bonus}
  * words : vocabulaire · exams : contrôles blancs · revealed : nb de hontes révélées
+ * duels : duels enfant/parent (V03-xxx) · ce1dList : séries « Préparer le CE1D » (V02-001)
+ * freezeEarned : total de 🪂 Parachutes jamais gagnés (hors celui de départ) (V04-006)
  */
-export function badgeStats({ sessions = [], words = [], exams = [], revealed = 0 }) {
+export function badgeStats({ sessions = [], words = [], exams = [], revealed = 0, duels = [], ce1dList = [], freezeEarned = 0 }) {
   const done = new Set(sessions.filter(s => s.completed).map(s => s.day));
   const days = [...done].sort();
-  let best = 0;
+  let best = 0, longRuns = 0;
   for (const d of days) {
     if (done.has(dayKeyOffset(d, -1))) continue; // pas un début de série
     let n = 0, k = d;
     while (done.has(k)) { n++; k = dayKeyOffset(k, 1); }
     best = Math.max(best, n);
+    if (n >= 7) longRuns++; // V04-006 : nombre de fois où une série d'au moins 7 jours a été atteinte
   }
   let fullWeeks = 0, weekends = 0;
   for (const d of days) {
@@ -56,18 +72,35 @@ export function badgeStats({ sessions = [], words = [], exams = [], revealed = 0
   }
   const comp = sessions.filter(s => s.completed);
   const bigExams = exams.filter(x => (x.total || 0) >= 10);
+  // V04-006 : nombre de fois où un contrôle blanc a battu le meilleur score obtenu jusque-là
+  // (le tout premier contrôle ne compte pas comme un « record battu », il n'y avait rien avant lui).
+  const examsByDay = [...bigExams].sort((a, b) => (a.day || "").localeCompare(b.day || "") || (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
+  let examRecords = 0, runningBest = -1;
+  examsByDay.forEach((x, i) => {
+    const sc = x.score || 0;
+    if (i > 0 && sc > runningBest) examRecords++;
+    runningBest = Math.max(runningBest, sc);
+  });
   return {
     completedDays: done.size,
     bestStreak: best,
+    longRuns,
     fullWeeks, weekends,
     perfectDays: comp.filter(s => !s.errors).length,
     noHelpDays: comp.filter(s => !s.helped).length,
     mastered: words.filter(w => (w.level || 0) >= 5).length,
+    // V04-006 : mots qui ont eu au moins 3 erreurs un jour, et qui sont maintenant maîtrisés (niveau 5)
+    comebackWords: words.filter(w => (w.ko || 0) >= 3 && (w.level || 0) >= 5).length,
     catsPracticed: new Set(words.filter(w => (w.seen || 0) > 0 && w.cat).map(w => w.cat)).size,
     exams: exams.length,
+    examRecords,
     bestExam: bigExams.reduce((m, x) => Math.max(m, x.score || 0), 0),
     totalBonus: sessions.reduce((a, s) => a + (s.bonus || 0), 0),
-    revealed
+    revealed,
+    duelWins: duels.filter(d => duelWinner(d) === "child").length,
+    // V04-006 : nombre de matières CE1D différentes où au moins une série a été réussie à 80 % ou plus
+    ce1dSubjectsGood: new Set(ce1dList.filter(x => (x.score || 0) >= 80).map(x => x.subject)).size,
+    freezeEarned
   };
 }
 export function evaluateBadges(stats) {

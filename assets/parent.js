@@ -34,8 +34,8 @@ let settings = { ...DEFAULT_SETTINGS }, settingsDirty = false;
 let exams = [], weekOffset = 0, badgesUnlocked = {}, duels = [], proposals = [], puzzle = { pieces: 0, log: [] }, ce1d = [];
 let histMonth = null; // null = toutes les sessions ; sinon "AAAA-MM" pour remonter dans le temps
 let wordsNl = [], sessionsNl = []; // Néerlandais (V03-002)
-let ce1dCustom = []; // Exercices CE1D perso (V04-005)
-let freeze = { ...DEFAULT_STREAKFREEZE }; // 🪂 Parachute de série (V04-005)
+let ce1dCustom = []; // Exercices CE1D perso (V04-006)
+let freeze = { ...DEFAULT_STREAKFREEZE }; // 🪂 Parachute de série (V04-006)
 let unsubs = [];
 let loaded = { shame: false, meta: false };
 let firstLoad = true;
@@ -162,7 +162,7 @@ function selectChild(c) {
     sessionsNl = s.docs.map(d => ({ day: d.id, ...d.data() })).sort((a, b) => b.day.localeCompare(a.day));
     renderSeriesDash();
   }, () => {}));
-  // --- Exercices CE1D perso (V04-005)
+  // --- Exercices CE1D perso (V04-006)
   unsubs.push(onSnapshot(collection(db, ...base, "ce1dCustom"), s => {
     ce1dCustom = s.docs.map(d => ({ id: d.id, ...d.data() }));
     renderCe1dCustomAll();
@@ -178,7 +178,7 @@ $$("#tabs .tab").forEach(t => t.onclick = () => {
   $$("#tabs .tab").forEach(x => x.classList.toggle("on", x === t));
   $$(".panel").forEach(p => p.classList.toggle("on", p.id === "p-" + t.dataset.tab));
 });
-/* ---------------- Sous-onglets « Cours » (V04-005) ---------------- */
+/* ---------------- Sous-onglets « Cours » (V04-006) ---------------- */
 function gotoCours(sub) {
   $$("#tabs .tab").forEach(x => x.classList.toggle("on", x.dataset.tab === "cours"));
   $$(".panel").forEach(p => p.classList.toggle("on", p.id === "p-cours"));
@@ -589,7 +589,7 @@ $("#btnExportNl")?.addEventListener("click", () => {
   catch (e) { toast(errMsg(e), "err"); }
 });
 
-/* ---------------- Exercices CE1D perso (V04-005) ----------------
+/* ---------------- Exercices CE1D perso (V04-006) ----------------
    Maths / Français / Sciences : les exercices sont normalement fixes (écrits dans le code
    de l'appli). Ici, le parent peut ajouter ses propres exercices par matière/thème : ils
    viennent s'ajouter aux exercices déjà prévus, dans le thème choisi, quand l'enfant joue une série. */
@@ -637,7 +637,7 @@ function ce1dAnswerFields(subId, type) {
     w.innerHTML = `<label>Réponse (nombre) <span class="req">*</span></label>
     <div class="row" style="flex-wrap:nowrap"><button type="button" class="btn ghost sm" id="ceSign-${subId}" style="margin-right:6px" title="Nombre négatif">± </button><input type="text" id="ceNum-${subId}" inputmode="decimal" required></div>
     <label style="margin-top:6px">Unité <span class="small muted">(facultatif, ex. cm)</span></label><input type="text" id="ceUnit-${subId}">`;
-    // V04-005 : le clavier numérique mobile n'affiche pas toujours le signe "−" (absent sur iOS notamment).
+    // V04-006 : le clavier numérique mobile n'affiche pas toujours le signe "−" (absent sur iOS notamment).
     $(`#ceSign-${subId}`).onclick = () => {
       const inp = $(`#ceNum-${subId}`);
       inp.value = inp.value.trim().startsWith("-") ? inp.value.trim().slice(1) : "-" + inp.value.trim();
@@ -1219,7 +1219,7 @@ $("#bMail").onclick = () => {
 /* ---------------- Badges ---------------- */
 function renderBadges() {
   if (!child || !$("#bgGrid")) return;
-  const bl = evaluateBadges(badgeStats({ sessions, words, exams, revealed: shames.filter(x => x.revealed).length }));
+  const bl = evaluateBadges(badgeStats({ sessions, words, exams, revealed: shames.filter(x => x.revealed).length, duels, ce1dList: ce1d, freezeEarned: freeze.totalEarned || 0 }));
   $("#bgName").textContent = child.prenom || child.username;
   $("#bgCount").textContent = `${bl.filter(b => b.done).length} / ${bl.length}`;
   $("#bgGrid").innerHTML = badgesGrid(bl, badgesUnlocked, T, esc, fmtDay);

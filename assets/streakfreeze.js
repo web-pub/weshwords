@@ -14,7 +14,7 @@
 
 export const FREEZE_TARGET = 10;
 
-export const DEFAULT_STREAKFREEZE = { count: 1, progress: 0, frozen: {}, lastEvalDay: null, lastBirthdayYear: null };
+export const DEFAULT_STREAKFREEZE = { count: 1, progress: 0, frozen: {}, lastEvalDay: null, lastBirthdayYear: null, totalEarned: 0 };
 
 /**
  * Fait avancer l'état du Parachute jour par jour, du dernier jour déjà évalué jusqu'à hier
@@ -46,6 +46,7 @@ export function evaluateStreakFreeze(prev, sessionsByDay, today, offsetFn, birth
         state.progress++;
         if (state.progress >= FREEZE_TARGET) {
           state.count++;
+          state.totalEarned++;
           state.progress = 0;
           events.push({ type: "earned", day: d });
         }
@@ -66,6 +67,7 @@ export function evaluateStreakFreeze(prev, sessionsByDay, today, offsetFn, birth
     const year = Number(today.slice(0, 4));
     if (state.lastBirthdayYear !== year) {
       state.count++;
+      state.totalEarned++;
       state.lastBirthdayYear = year;
       events.push({ type: "birthday", day: today });
     }
