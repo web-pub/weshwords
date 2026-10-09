@@ -25,7 +25,7 @@ export function ce1dStats(results) {
 
 /** Carte « Préparer le CE1D » de l'accueil élève.
     enabledIds (V03-004) : liste des ids de matières à afficher (choisies par le parent) — null/absent = toutes.
-    customItems (V04-003) : exercices ajoutés par le parent, [{ subject, theme, q, t, c?, a, ex, … }]. */
+    customItems (V04-005) : exercices ajoutés par le parent, [{ subject, theme, q, t, c?, a, ex, … }]. */
 export function renderCe1dCard(el, results, onSave, enabledIds = null, customItems = []) {
   const st = ce1dStats(results);
   const subs = enabledIds ? SUBJECTS.filter(s => enabledIds.includes(s.id)) : SUBJECTS;
@@ -97,7 +97,7 @@ function runSeries(subId, themeId, results, onSave, customItems = []) {
       const go = () => { if (st.answered) return next(); if (!inp.value.trim()) return inp.focus(); check(inp.value, inp.value); };
       $("#c1Go").onclick = go;
       inp.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); go(); } });
-      // V04-003 : le clavier numérique mobile (inputmode="decimal") n'affiche pas toujours le signe "−"
+      // V04-005 : le clavier numérique mobile (inputmode="decimal") n'affiche pas toujours le signe "−"
       // (absent sur iOS notamment) → bouton dédié pour basculer le signe de la réponse.
       $("#c1Sign")?.addEventListener("click", () => {
         inp.value = inp.value.trim().startsWith("-") ? inp.value.trim().slice(1) : "-" + inp.value.trim();

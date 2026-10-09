@@ -31,7 +31,7 @@ let sessions = {};
 let revealed = [];
 let meta = { queue: [], lastRevealDay: "" };
 let ready = { w: false, s: false };
-let settings = { ...DEFAULT_SETTINGS };
+let settings = { ...DEFAULT_SETTINGS }, settingsLoaded = false;
 let duels = [];
 let puzzle = { pieces: 0, log: [] }, puzzleLoaded = false;
 // --- Néerlandais (V03-002) : même moteur de quiz que l'anglais, vocabulaire et sessions séparés,
@@ -39,7 +39,7 @@ let puzzle = { pieces: 0, log: [] }, puzzleLoaded = false;
 let wordsNl = [], sessionsNl = {}, readyNl = { w: false, s: false };
 let holdBadges = false; // pas de pop-up de badge pendant un écran de fin
 let exams = [], badgesMeta = { unlocked: {} }, badgesLoaded = { m: false, x: false }, badgeQueue = [];
-// --- 🪂 Parachute de série (V04-003) : voir assets/streakfreeze.js pour la mécanique complète.
+// --- 🪂 Parachute de série (V04-005) : voir assets/streakfreeze.js pour la mécanique complète.
 let freeze = { ...DEFAULT_STREAKFREEZE }, freezeLoaded = false, freezeChecked = false, freezeQueue = [];
 const pool = () => filterByThemes(words, activeThemes(settings, today).list);
 
@@ -75,7 +75,7 @@ function saveSessionNl() {
   setDoc(sessionRefNl(), { ...s }, { merge: true }).catch(e => console.warn(e));
 }
 
-/* ---------------- Langue obligatoire (V04-003) ----------------
+/* ---------------- Langue obligatoire (V04-005) ----------------
    Jusqu'ici, la série quotidienne obligatoire de 20 mots était toujours en anglais (collection
    "words"/"sessions"), et le néerlandais (collection "wordsNl"/"sessionsNl") était toujours la
    langue « libre » (pas d'obligation). Un enfant peut avoir le néerlandais comme langue 1 à
@@ -176,11 +176,13 @@ onSnapshot(doc(db, "users", uid, "meta", "shame"), s => {
 
 onSnapshot(doc(db, "users", uid, "meta", "settings"), s => {
   settings = { ...DEFAULT_SETTINGS, ...(s.exists() ? s.data() : {}) };
+  settingsLoaded = true;
   applyLevelFilter();
   if (ready.w && ready.s) renderHome();
   if (readyNl.w && readyNl.s && !quiz.active) renderNl();
   refreshCe1d();
-}, () => {});
+  boot();
+}, () => { settingsLoaded = true; boot(); });
 
 onSnapshot(collection(db, "users", uid, "exams"), s => {
   exams = s.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -213,7 +215,7 @@ onSnapshot(doc(db, "users", uid, "meta", "puzzle"), s => {
 
 /* ---------------- Préparer le CE1D (V02-001) ---------------- */
 let ce1dResults = [];
-let ce1dCustom = []; // V04-003 : exercices ajoutés par le parent, en plus des banques intégrées
+let ce1dCustom = []; // V04-005 : exercices ajoutés par le parent, en plus des banques intégrées
 const saveCe1d = res => addDoc(collection(db, "users", uid, "ce1d"), { ...res, day: today, createdAt: serverTimestamp() });
 /** Filtre les matières CE1D affichées selon les matières choisies par le parent (V03-004) ;
     masque toute la carte si aucune matière CE1D n'est activée. */
@@ -235,9 +237,13 @@ onSnapshot(collection(db, "users", uid, "ce1dCustom"), s => {
 refreshCe1d();
 
 function boot() {
-  if (!ready.w || !ready.s || !freezeLoaded) return;
+  // settingsLoaded est indispensable AVANT tout le reste : mandLang() lit settings.mainLang, et tant
+  // que les réglages du parent ne sont pas arrivés, mandLang() répond "en" par défaut — ce qui, pour un
+  // enfant dont la langue obligatoire est le néerlandais, faisait passer à tort la vérification suivante
+  // (readyNl non attendu) et faisait tourner le Parachute de série sur les mauvaises sessions (V04-005).
+  if (!ready.w || !ready.s || !freezeLoaded || !settingsLoaded) return;
   // Si la langue obligatoire de l'enfant est le néerlandais, on attend aussi que son vocabulaire
-  // et ses sessions néerlandaises soient chargés avant le premier affichage (V04-003).
+  // et ses sessions néerlandaises soient chargés avant le premier affichage (V04-005).
   if (mandLang() === "nl" && (!readyNl.w || !readyNl.s)) return;
   $("#loader").classList.add("hidden");
   $("#main").classList.remove("hidden");
@@ -254,7 +260,13 @@ function checkStreakFreeze() {
   const { state, events } = evaluateStreakFreeze(freeze, mandSessions(), today, dayKeyOffset, profile.birth);
   const changed = JSON.stringify(state) !== JSON.stringify(freeze);
   freeze = state;
-  if (changed) setDoc(doc(db, "users", uid, "meta", "streakFreeze"), state).catch(e => console.warn(e));
+  if (changed) setDoc(doc(db, "users", uid, "meta", "streakFreeze"), state).catch(e => {
+    console.warn(e);
+    // Si l'enregistrement échoue (règles Firestore pas encore publiées, hors-ligne…), on le signale
+    // au lieu de laisser le Parachute paraître « cassé » en silence (V04-005) : sans cette sauvegarde,
+    // le prochain chargement repart de l'ancien état et ré-évalue les mêmes jours.
+    toast(errMsg(e) || "Le Parachute de série n'a pas pu être enregistré.", "err");
+  });
   if (events.length) { freezeQueue.push(...events); showNextFreezeEvent(); }
 }
 function showNextFreezeEvent() {
@@ -276,7 +288,7 @@ function showNextFreezeEvent() {
 /* ---------------- Accueil ---------------- */
 function streak() {
   const done = new Set(Object.values(mandSessions()).filter(s => s.completed).map(s => s.day));
-  // 🪂 un jour sauvé par un Parachute compte comme un jour de série (V04-003).
+  // 🪂 un jour sauvé par un Parachute compte comme un jour de série (V04-005).
   Object.keys(freeze.frozen || {}).forEach(k => done.add(k));
   return computeStreak(done, today, dayKeyOffset);
 }
@@ -960,7 +972,7 @@ function answer(given, skipped = false, opt = {}) {
     }
   }
   // Le contrôle blanc ne compte pour l'objectif quotidien que si la langue obligatoire est
-  // l'anglais (contrôle blanc = outil anglais uniquement, cf. V04-003) : sinon il reste à part.
+  // l'anglais (contrôle blanc = outil anglais uniquement, cf. V04-005) : sinon il reste à part.
   const countsDaily = quiz.mode === "daily" || (quiz.mode === "exam" && mandLang() === "en" && !s.completed);
   if (countsDaily) {
     s.attempts = (s.attempts || 0) + 1;
