@@ -1,6 +1,6 @@
 // =====================================================================
 //  Projet : Wesh Words (Firebase « weshwords »)
-//  Version du site : V04-005
+//  Version du site : V04-006
 //  Règles Firestore — © Hélène Laruelle — Tous droits réservés
 // ---------------------------------------------------------------------
 //  Rôles : superadmin (config/app.superAdminUid) · parent · enfant
@@ -80,7 +80,7 @@ service cloud.firestore {
 
     // ---------- Version des règles (utilisé par diagnostic.html) ----------
     match /rulesinfo/{v} {
-      allow get: if v == 'V04-005';
+      allow get: if v == 'V04-006';
     }
 
     // ---------- Profils ----------
@@ -160,7 +160,7 @@ service cloud.firestore {
         allow delete: if canManage(uid);
       }
 
-      // --- Exercices CE1D ajoutés par le parent (V04-005), en plus des banques intégrées
+      // --- Exercices CE1D ajoutés par le parent (V04-006), en plus des banques intégrées
       match /ce1dCustom/{cid} {
         allow read: if isSelf(uid) || canManage(uid);
         allow create, update, delete: if canManage(uid);
@@ -193,12 +193,13 @@ service cloud.firestore {
         allow create, update: if isSelf(uid) && mid == 'badges'
           && request.resource.data.keys().hasOnly(['unlocked'])
           && request.resource.data.unlocked is map;
-        // 🪂 l'élève met à jour son propre état de Parachute de série (V04-005)
+        // 🪂 l'élève met à jour son propre état de Parachute de série (V04-006)
         allow create, update: if isSelf(uid) && mid == 'streakFreeze'
-          && request.resource.data.keys().hasOnly(['count', 'progress', 'frozen', 'lastEvalDay', 'lastBirthdayYear'])
+          && request.resource.data.keys().hasOnly(['count', 'progress', 'frozen', 'lastEvalDay', 'lastBirthdayYear', 'totalEarned'])
           && request.resource.data.count is int && request.resource.data.count >= 0
           && request.resource.data.progress is int && request.resource.data.progress >= 0
-          && request.resource.data.frozen is map;
+          && request.resource.data.frozen is map
+          && (!('totalEarned' in request.resource.data) || (request.resource.data.totalEarned is int && request.resource.data.totalEarned >= 0));
         // l'élève enregistre ses morceaux de puzzle (V02-001) : le compteur ne peut que monter d'un
         allow create: if isSelf(uid) && mid == 'puzzle'
           && request.resource.data.keys().hasOnly(['pieces', 'log'])
