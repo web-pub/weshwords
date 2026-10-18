@@ -134,7 +134,10 @@ onSnapshot(collection(db, "users", uid, "sessions"), snap => {
   // on ne remplace pas la session en cours si elle est plus avancée localement
   if (local && quiz.active && (!sessions[today] || (sessions[today].attempts || 0) < (local.attempts || 0))) sessions[today] = local;
   // séries en plus : la série en cours locale prime tant qu'elle est plus avancée que celle du serveur
-  else if (local && quiz.active && quiz.mode === "extra" && sessions[today]) {
+  // (mode "extra" = série bonus dans la langue obligatoire ; mode "nl" = pratique libre quand cette
+  // collection sert de langue libre, ex. anglais libre pour un enfant dont la langue obligatoire est le
+  // néerlandais, V04-011 : avant, seul "extra" était couvert ici)
+  else if (local && quiz.active && (quiz.mode === "extra" || quiz.mode === "nl") && sessions[today]) {
     const srv = sessions[today], ls = (local.series || []).length, ss = (srv.series || []).length;
     if (ls > ss || (ls === ss && (local.cur?.attempts || 0) >= (srv.cur?.attempts || 0))) { srv.series = local.series; srv.cur = local.cur; }
   }
@@ -153,9 +156,14 @@ onSnapshot(collection(db, "users", uid, "sessionsNl"), snap => {
   const local = sessionsNl[today];
   sessionsNl = {};
   snap.docs.forEach(d => sessionsNl[d.id] = { day: d.id, ...d.data() });
-  if (local && quiz.active && quiz.mode === "nl") {
-    const srv = sessionsNl[today] || (sessionsNl[today] = emptySessionNl());
-    const ls = (local.series || []).length, ss = (srv.series || []).length;
+  // V04-011 : depuis le choix de langue obligatoire par enfant (V04-006), sessionsNl n'est plus
+  // réservée à la pratique libre — elle porte aussi la série OBLIGATOIRE (modes "daily"/"extra") pour
+  // un enfant dont la langue obligatoire est le néerlandais (ex. Rose). La protection anti-régression
+  // ci-dessous ne couvrait que le mode "nl" (pratique libre) ; elle est désormais alignée sur la
+  // protection équivalente de la collection "sessions" (anglais), ci-dessus.
+  if (local && quiz.active && (!sessionsNl[today] || (sessionsNl[today].attempts || 0) < (local.attempts || 0))) sessionsNl[today] = local;
+  else if (local && quiz.active && (quiz.mode === "extra" || quiz.mode === "nl") && sessionsNl[today]) {
+    const srv = sessionsNl[today], ls = (local.series || []).length, ss = (srv.series || []).length;
     if (ls > ss || (ls === ss && (local.cur?.attempts || 0) >= (srv.cur?.attempts || 0))) { srv.series = local.series; srv.cur = local.cur; }
   }
   readyNl.s = true;
@@ -339,9 +347,12 @@ function renderHome() {
   $("#homeAction").innerHTML = act;
   $("#btnExam")?.addEventListener("click", openExamSetup);
   renderThemeBar();
-  // Personnage selon la situation
-  const yest = sessions[dayKeyOffset(today, -1)];
-  const hadHistory = Object.keys(sessions).some(k => k < today);
+  // Personnage selon la situation (V04-011 : doit regarder l'historique de la langue obligatoire de
+  // l'enfant, pas toujours l'anglais — sinon un enfant en néerlandais ne voit jamais le personnage
+  // "raté" après un jour manqué, et "hadHistory" reste toujours faux).
+  const msessHome = mandSessions();
+  const yest = msessHome[dayKeyOffset(today, -1)];
+  const hadHistory = Object.keys(msessHome).some(k => k < today);
   let art = "ensemble", cls = "home-art scene-img";
   if (s.completed) art = "bravo";
   else if (s.attempts) { art = "reflechie"; cls = "home-art"; }
@@ -363,7 +374,7 @@ function renderHome() {
   if ($("#stFreeze")) $("#stFreeze").textContent = freeze.count;
 
   // calendrier 28 jours
-  const msess = mandSessions();
+  const msess = msessHome;
   let cells = "";
   for (let i = 27; i >= 0; i--) {
     const k = dayKeyOffset(today, -i);

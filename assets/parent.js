@@ -152,6 +152,11 @@ function selectChild(c) {
   unsubs.push(onSnapshot(doc(db, ...base, "meta", "settings"), s => {
     settings = { ...DEFAULT_SETTINGS, ...(s.exists() ? s.data() : {}) };
     if (!settingsDirty) renderSettings(); else renderChildChoice();
+    // V04-009 : la langue obligatoire (settings.mainLang) décide quelles sessions/mots sont "ceux du
+    // jour" (mandSessions/mandWords) pour tout le tableau de bord parent. Comme pour l'élève (V04-005),
+    // ce réglage peut arriver après les sessions/mots : sans ce re-rendu, le tableau de bord resterait
+    // affiché avec la mauvaise langue (toujours vide) jusqu'au prochain changement de session.
+    renderDash(); renderHist(); renderBilan(); // renderDash() enchaîne déjà badges/séries/CE1D/entraînements
   }, () => {}));
   // --- Néerlandais (V03-002)
   unsubs.push(onSnapshot(collection(db, ...base, "wordsNl"), s => {
@@ -199,21 +204,41 @@ function closeOverlay() { $("#overlay").classList.add("hidden"); }
 const lvlDots = l => `<span class="lvl" title="Niveau ${l || 0}">${Array.from({ length: MAX_LEVEL }, (_, i) => `<i class="${i < (l || 0) ? "on" : ""}"></i>`).join("")}</span>`;
 const wordsCol = (lang = "en") => collection(db, "users", child.uid, lang === "nl" ? "wordsNl" : "words");
 
+/* ---------------- Langue obligatoire (V04-009) ----------------
+   Depuis le choix de langue obligatoire par enfant (V04-006), la série quotidienne de 20 mots
+   « obligatoire » peut être en anglais OU en néerlandais selon l'enfant — mais le tableau de
+   bord parent était resté câblé en dur sur l'anglais (sessions/words), comme avant cette
+   fonctionnalité. Un enfant dont la langue obligatoire est le néerlandais faisait donc tout
+   correctement sans que son parent le voie nulle part (tableau de bord, badges, historique,
+   bilan de la semaine) : ces écrans affichaient les sessions anglaises, toujours vides.
+   Ces fonctions reproduisent mandLang()/mandWords()/mandSessions() de l'espace élève (eleve.js)
+   pour que le parent voie toujours les bonnes données, quelle que soit la langue obligatoire. */
+const mandLang = () => settings.mainLang === "nl" ? "nl" : "en";
+const mandWords = () => mandLang() === "nl" ? wordsNl : words;
+const mandSessions = () => mandLang() === "nl" ? sessionsNl : sessions;
+const mandFlag = () => mandLang() === "nl" ? "🇳🇱" : "🇬🇧";
+const freeLang = () => mandLang() === "nl" ? "en" : "nl";
+const freeWords = () => freeLang() === "nl" ? wordsNl : words;
+const freeSessions = () => freeLang() === "nl" ? sessionsNl : sessions;
+const freeFlag = () => freeLang() === "nl" ? "🇳🇱" : "🇬🇧";
+const freeLangName = () => freeLang() === "nl" ? "néerlandais" : "anglais";
+
 /* ---------------- Tableau de bord ---------------- */
 function renderDash() {
   if (!child) return;
-  const t = sessions.find(s => s.day === today);
+  const mw = mandWords(), msess = mandSessions();
+  const t = msess.find(s => s.day === today);
   const tot = t ? Math.min(DAILY_GOAL, (t.frEn || 0) + (t.enFr || 0)) : 0;
   $("#dToday").textContent = `${tot}/${DAILY_GOAL}${t?.completed ? " ✅" : ""}`;
-  const done = new Set(sessions.filter(s => s.completed).map(s => s.day));
+  const done = new Set(msess.filter(s => s.completed).map(s => s.day));
   $("#dStreak").textContent = computeStreak(done, today, dayKeyOffset);
-  $("#dMaster").textContent = words.filter(w => (w.level || 0) >= MAX_LEVEL).length;
-  $("#dWords").textContent = words.length;
+  $("#dMaster").textContent = mw.filter(w => (w.level || 0) >= MAX_LEVEL).length;
+  $("#dWords").textContent = mw.length;
   if ($("#dFreeze")) $("#dFreeze").textContent = freeze.count;
 
   let bars = "";
   for (let i = 6; i >= 0; i--) {
-    const k = dayKeyOffset(today, -i), s = sessions.find(x => x.day === k);
+    const k = dayKeyOffset(today, -i), s = msess.find(x => x.day === k);
     const ok = s ? Math.min(DAILY_GOAL, (s.frEn || 0) + (s.enFr || 0)) : 0, ko = s?.errors || 0;
     bars += `<div class="b" title="${esc(fmtDay(k))} : ${ok}/20, ${ko} erreur(s)">
       <div style="display:flex;gap:2px;align-items:flex-end;height:100%;width:100%;justify-content:center">
@@ -223,17 +248,17 @@ function renderDash() {
   }
   $("#dBars").innerHTML = bars;
 
-  const counts = Array.from({ length: MAX_LEVEL + 1 }, (_, l) => words.filter(w => (w.level || 0) === l).length);
+  const counts = Array.from({ length: MAX_LEVEL + 1 }, (_, l) => mw.filter(w => (w.level || 0) === l).length);
   const max = Math.max(1, ...counts);
   $("#dLevels").innerHTML = counts.map((n, l) => `
     <div class="row" style="margin:6px 0;flex-wrap:nowrap"><span style="width:70px" class="small"><b>Niv. ${l}</b></span>
     <div class="track" style="flex:1;height:12px;background:var(--bg2);border-radius:99px;overflow:hidden"><div style="height:100%;width:${n / max * 100}%;background:var(--grad)"></div></div>
     <span class="small" style="width:44px;text-align:right">${n}</span></div>`).join("");
 
-  const hard = words.filter(w => (w.ko || 0) > 0)
+  const hard = mw.filter(w => (w.ko || 0) > 0)
     .sort((a, b) => ((b.ko || 0) - (b.ok || 0) * .5) - ((a.ko || 0) - (a.ok || 0) * .5)).slice(0, 10);
   renderBadges(); renderPracticeDash(); renderSeriesDash(); renderCe1dDash();
-  $("#dHard").innerHTML = hard.length ? `<div class="table-wrap"><table><thead><tr><th>Français</th><th>Anglais</th><th>Niveau</th><th>✅</th><th>❌</th></tr></thead><tbody>${
+  $("#dHard").innerHTML = hard.length ? `<div class="table-wrap"><table><thead><tr><th>Français</th><th>${mandLang() === "nl" ? "Néerlandais" : "Anglais"}</th><th>Niveau</th><th>✅</th><th>❌</th></tr></thead><tbody>${
     hard.map(w => `<tr><td>${esc(w.fr)}</td><td><b>${esc(w.en)}</b></td><td>${lvlDots(w.level)}</td><td>${w.ok || 0}</td><td>${w.ko || 0}</td></tr>`).join("")}</tbody></table></div>`
     : `<p class="muted">Pas encore de mot difficile.</p>`;
 }
@@ -867,22 +892,23 @@ function seriesOf(s) {
 function renderSeriesDash() {
   if (!child || !$("#dSeries")) return;
   $$(".pzName").forEach(e => e.textContent = child.prenom || child.username);
-  const t = sessions.find(s => s.day === today), ser = seriesOf(t);
-  let h = `<p><b>Aujourd'hui :</b> ${ser.length} série(s) · ⭐ <b>${ser.reduce((a, x) => a + x.points, 0)}</b> points${t?.cur?.attempts ? ` <span class="chip w">série n°${ser.length + 1} en cours : ${(t.cur.frEn || 0) + (t.cur.enFr || 0)}/20</span>` : ""}</p>`;
+  const msess = mandSessions(), fsess = freeSessions();
+  const t = msess.find(s => s.day === today), ser = seriesOf(t);
+  let h = `<p><b>${mandFlag()} Aujourd'hui :</b> ${ser.length} série(s) · ⭐ <b>${ser.reduce((a, x) => a + x.points, 0)}</b> points${t?.cur?.attempts ? ` <span class="chip w">série n°${ser.length + 1} en cours : ${(t.cur.frEn || 0) + (t.cur.enFr || 0)}/20</span>` : ""}</p>`;
   if (ser.length) h += `<div class="series-pills" style="justify-content:flex-start">${ser.map(x => `<span>#${x.n} · ⭐ ${x.points} · ${x.acc}%</span>`).join("")}</div>`;
   const rows = [];
   for (let i = 0; i < 7; i++) {
-    const k = dayKeyOffset(today, -i), sr = seriesOf(sessions.find(x => x.day === k));
+    const k = dayKeyOffset(today, -i), sr = seriesOf(msess.find(x => x.day === k));
     rows.push(`<tr><td>${esc(fmtDay(k))}</td><td>${sr.length || "—"}</td><td>${sr.map(x => x.points).join(" + ") || "—"}</td><td><b>${sr.reduce((a, x) => a + x.points, 0) || ""}</b></td></tr>`);
   }
   h += `<div class="table-wrap" style="margin-top:10px"><table><thead><tr><th>Jour</th><th>Séries</th><th>Points par série</th><th>Total</th></tr></thead><tbody>${rows.join("")}</tbody></table></div>
     <p class="small muted">Points : 100 par série, −5 par erreur, −2 par aide, +20 si zéro faute (minimum 10). La 1re série est obligatoire, les suivantes au choix (toujours par blocs de 20).</p>`;
-  // Néerlandais (V03-002) : séries toujours libres, points et puzzle partagés avec l'anglais
-  const tn = sessionsNl.find(s => s.day === today), serN = seriesOf(tn);
-  const totalSerN = sessionsNl.reduce((a, s) => a + seriesOf(s).length, 0);
-  const totalPtsN = sessionsNl.reduce((a, s) => a + seriesOf(s).reduce((x, y) => x + y.points, 0), 0);
-  h += `<hr class="sep"><p style="margin-bottom:4px"><b>🇳🇱 Néerlandais — aujourd'hui :</b> ${serN.length} série(s) · ⭐ <b>${serN.reduce((a, x) => a + x.points, 0)}</b> points${tn?.cur?.attempts ? ` <span class="chip w">série n°${serN.length + 1} en cours : ${(tn.cur.frEn || 0) + (tn.cur.enFr || 0)}/20</span>` : ""}</p>
-    <p class="small muted">Depuis le début : ${totalSerN} série(s) · ⭐ ${totalPtsN} points au total. Séries toujours libres (pas d'obligation quotidienne) ; ${wordsNl.length} mot(s) néerlandais au programme.</p>`;
+  // Langue libre (celle qui n'est pas la langue obligatoire de cet enfant, V04-006) : séries toujours libres, points et puzzle partagés
+  const tn = fsess.find(s => s.day === today), serN = seriesOf(tn);
+  const totalSerN = fsess.reduce((a, s) => a + seriesOf(s).length, 0);
+  const totalPtsN = fsess.reduce((a, s) => a + seriesOf(s).reduce((x, y) => x + y.points, 0), 0);
+  h += `<hr class="sep"><p style="margin-bottom:4px"><b>${freeFlag()} ${freeLangName() === "néerlandais" ? "Néerlandais" : "Anglais"} — aujourd'hui :</b> ${serN.length} série(s) · ⭐ <b>${serN.reduce((a, x) => a + x.points, 0)}</b> points${tn?.cur?.attempts ? ` <span class="chip w">série n°${serN.length + 1} en cours : ${(tn.cur.frEn || 0) + (tn.cur.enFr || 0)}/20</span>` : ""}</p>
+    <p class="small muted">Depuis le début : ${totalSerN} série(s) · ⭐ ${totalPtsN} points au total. Séries toujours libres (pas d'obligation quotidienne) ; ${freeWords().length} mot(s) ${freeLangName()} au programme.</p>`;
   $("#dSeries").innerHTML = h;
   const st = puzzleState(puzzle.pieces || 0);
   $("#dPuzzle").innerHTML = puzzleGrid(st.img, st.shown) + `<p class="center" style="margin-top:8px"><b>${st.inCur}/${PIECES}</b> morceaux · ${st.done} puzzle(s) terminé(s) · ${st.total} morceau(x) au total</p>
@@ -919,9 +945,12 @@ function addMonths(ym, n) {
 }
 function renderHist() {
   if (!child) return;
-  const shown = histMonth ? sessions.filter(s => s.day.slice(0, 7) === histMonth) : sessions;
+  const msess = mandSessions(), isNl = mandLang() === "nl";
+  const shown = histMonth ? msess.filter(s => s.day.slice(0, 7) === histMonth) : msess;
   const curMonth = today.slice(0, 7);
   $("#hLabel").textContent = histMonth ? `${MONTH_NAMES[Number(histMonth.slice(5, 7)) - 1]} ${histMonth.slice(0, 4)}` : "Toutes les sessions";
+  if ($("#hDir1")) $("#hDir1").textContent = isNl ? "🇫🇷→🇳🇱" : "🇫🇷→🇬🇧";
+  if ($("#hDir2")) $("#hDir2").textContent = isNl ? "🇳🇱→🇫🇷" : "🇬🇧→🇫🇷";
   $("#hNext").disabled = !histMonth || histMonth >= curMonth;
   $("#hAll").disabled = !histMonth;
   $("#hBody").innerHTML = shown.map(s => {
@@ -934,9 +963,10 @@ function renderHist() {
       <td class="actions">${(s.wrong || []).length ? `<button class="btn ghost sm" data-wrong="${s.day}">Erreurs</button>` : ""}</td></tr>`;
   }).join("") || `<tr><td colspan="11" class="muted center">${histMonth ? "Aucune session ce mois-là." : "Aucune session pour l'instant."}</td></tr>`;
   $$("[data-wrong]").forEach(b => b.onclick = () => {
-    const s = sessions.find(x => x.day === b.dataset.wrong);
+    const s = msess.find(x => x.day === b.dataset.wrong);
+    const flag2 = isNl ? "🇳🇱" : "🇬🇧";
     openOverlay(`<h3>❌ Erreurs du ${esc(fmtDay(s.day))}</h3><div class="table-wrap"><table><thead><tr><th>Sens</th><th>Question</th><th>Réponse donnée</th><th>Attendu</th></tr></thead><tbody>${
-      (s.wrong || []).map(w => `<tr><td>${w.dir === "frEn" ? "🇫🇷→🇬🇧" : "🇬🇧→🇫🇷"}${w.help ? " 💡" : ""}</td><td>${esc(w.dir === "frEn" ? w.fr : w.en)}</td><td class="muted">${esc(w.given || "—")}</td><td><b>${esc(w.dir === "frEn" ? w.en : w.fr)}</b></td></tr>`).join("")
+      (s.wrong || []).map(w => `<tr><td>${w.dir === "frEn" ? `🇫🇷→${flag2}` : `${flag2}→🇫🇷`}${w.help ? " 💡" : ""}</td><td>${esc(w.dir === "frEn" ? w.fr : w.en)}</td><td class="muted">${esc(w.given || "—")}</td><td><b>${esc(w.dir === "frEn" ? w.en : w.fr)}</b></td></tr>`).join("")
     }</tbody></table></div>`);
   });
 }
@@ -1086,7 +1116,8 @@ function weekDays(offset) {
 function weekStats() {
   const days = weekDays(weekOffset);
   const inWeek = k => k >= days[0] && k <= days[6];
-  const ss = days.map(k => sessions.find(s => s.day === k) || null);
+  const msess = mandSessions();
+  const ss = days.map(k => msess.find(s => s.day === k) || null);
   const done = ss.filter(s => s?.completed).length;
   const good = ss.reduce((a, s) => a + (s ? Math.min(DAILY_GOAL, (s.frEn || 0) + (s.enFr || 0)) : 0), 0);
   const attempts = ss.reduce((a, s) => a + (s?.attempts || 0), 0);
@@ -1098,7 +1129,7 @@ function weekStats() {
   const hard = [...cnt.values()].sort((a, b) => b.n - a.n).slice(0, 8);
   const xs = exams.filter(x => inWeek(x.day || ""));
   const sh = shames.filter(x => x.revealed && inWeek(x.revealedDay || ""));
-  const doneSet = new Set(sessions.filter(s => s.completed).map(s => s.day));
+  const doneSet = new Set(msess.filter(s => s.completed).map(s => s.day));
   const bw = BADGES.filter(b => inWeek(badgesUnlocked[b.id] || ""));
   const sum = k => ss.reduce((a, s) => a + (s?.[k] || 0), 0);
   const ser = ss.flatMap(s => seriesOf(s));
@@ -1219,7 +1250,7 @@ $("#bMail").onclick = () => {
 /* ---------------- Badges ---------------- */
 function renderBadges() {
   if (!child || !$("#bgGrid")) return;
-  const bl = evaluateBadges(badgeStats({ sessions, words, exams, revealed: shames.filter(x => x.revealed).length, duels, ce1dList: ce1d, freezeEarned: freeze.totalEarned || 0 }));
+  const bl = evaluateBadges(badgeStats({ sessions: mandSessions(), words: mandWords(), exams, revealed: shames.filter(x => x.revealed).length, duels, ce1dList: ce1d, freezeEarned: freeze.totalEarned || 0 }));
   $("#bgName").textContent = child.prenom || child.username;
   $("#bgCount").textContent = `${bl.filter(b => b.done).length} / ${bl.length}`;
   $("#bgGrid").innerHTML = badgesGrid(bl, badgesUnlocked, T, esc, fmtDay);

@@ -1,7 +1,16 @@
 /* =========================================================
    Wesh Words — points des séries & puzzle à collectionner (V02-001)
    ========================================================= */
-export const PUZZLES = ["assets/puzzle-1.webp", "assets/puzzle-2.webp", "assets/puzzle-3.webp", "assets/puzzle-4.webp", "assets/puzzle-5.webp", "assets/puzzle-6.webp", "assets/puzzle-7.webp"];
+export const PUZZLES = [
+  "assets/puzzle-1.webp", "assets/puzzle-2.webp", "assets/puzzle-3.webp", "assets/puzzle-4.webp",
+  "assets/puzzle-5.webp", "assets/puzzle-6.webp", "assets/puzzle-7.webp",
+  // --- 10 nouveaux visuels "ado tendance" (V04-007) ---
+  "assets/puzzle-8.webp", "assets/puzzle-9.webp", "assets/puzzle-10.webp", "assets/puzzle-11.webp",
+  "assets/puzzle-12.webp", "assets/puzzle-13.webp", "assets/puzzle-14.webp", "assets/puzzle-15.webp",
+  "assets/puzzle-16.webp", "assets/puzzle-17.webp",
+  // --- 4 visuels "Margaux" façon pochette d'album (V04-008) ---
+  "assets/puzzle-18.webp", "assets/puzzle-19.webp", "assets/puzzle-20.webp", "assets/puzzle-21.webp"
+];
 export const PIECES = 12; // 4 colonnes × 3 lignes
 const ORDER = [5, 0, 10, 3, 8, 1, 11, 6, 2, 9, 4, 7]; // ordre d'apparition des morceaux
 
