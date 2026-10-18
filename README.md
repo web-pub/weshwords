@@ -1,4 +1,4 @@
-# Wesh Words — V04-006
+# Wesh Words — V04-011
 
 Révisions de vocabulaire anglais 🇫🇷 ↔ 🇬🇧 : 20 bonnes réponses par jour (10 FR→EN + 10 EN→FR), et au 20/20… le **mot de la honte**. 💀
 
@@ -40,8 +40,8 @@ assets/               CSS, JS, logo, icônes, personnage Margaux (margaux-*.webp
 1. Décompresser le ZIP sur le PC (clic droit → Extraire tout).
 2. Sur https://github.com/web-pub/weshwords → **Add file** → **Upload files**.
 3. Ouvrir le dossier décompressé, **sélectionner tout son contenu** (Ctrl + A : les pages HTML, `sw.js`, `favicon.ico`… **et le dossier `assets`**) et le glisser dans la page GitHub.
-   Les fichiers doivent arriver **à la racine** du dépôt (pas dans un sous-dossier « WeshWords-V04-006 »).
-4. En bas : message « Wesh Words V04-006 » → **Commit changes**.
+   Les fichiers doivent arriver **à la racine** du dépôt (pas dans un sous-dossier « WeshWords-V04-011 »).
+4. En bas : message « Wesh Words V04-011 » → **Commit changes**.
 5. Première fois seulement : **Settings** → **Pages** → Source « Deploy from a branch » → Branch **main** / **(root)** → Save.
 6. Attendre 1 à 2 minutes. Adresse du site : `https://web-pub.github.io/weshwords/`
 
@@ -55,7 +55,7 @@ git clone https://github.com/web-pub/weshwords.git
 cd weshwords
 # décompresser le ZIP ici (fichiers à la racine + dossier assets/)
 git add -A
-git commit -m "Wesh Words V04-006"
+git commit -m "Wesh Words V04-011"
 git push origin main
 ```
 
@@ -70,7 +70,7 @@ Ouvrir **`https://web-pub.github.io/weshwords/diagnostic.html`**. Elle teste et 
 |---|---|
 | Site en ligne, dossier `assets` présent | renvoyer le dossier `assets` à la racine du dépôt |
 | Base Firestore créée | étape A.3 |
-| Règles publiées **et à jour** (V04-006) | étape A.4 |
+| Règles publiées **et à jour** (V04-011) | étape A.4 |
 | Méthode E-mail/Mot de passe active | étape A.1 |
 | Super Admin installé | ouvrir `connexion.html` → Installation initiale |
 | Application installable | recharger la page une fois |
@@ -146,6 +146,11 @@ Astuce : après une mise à jour, si l'ancienne version s'affiche encore, rechar
 | 🪂 Parachutes visibles côté parent (V04-006) | Correction : le nombre de Parachutes n'apparaissait que dans l'espace élève. Il s'affiche maintenant aussi dans le Tableau de bord de l'espace parent (nouvelle case « 🪂 Parachutes », à côté de « jours de série » / « mots maîtrisés » / « mots au total »), en lecture seule. |
 | 🪂 Correction : le Parachute ne se déclenchait pas toujours après un jour manqué (V04-006) | Bug trouvé et corrigé : au chargement de l'espace élève, le réglage « langue obligatoire » du parent (anglais/néerlandais) pouvait arriver un instant après les autres données. Pendant ce court instant, le Parachute de série (et le reste de l'écran d'accueil) risquait de se baser par erreur sur les séries d'anglais même pour un enfant dont la langue obligatoire est le néerlandais — ce qui pouvait empêcher un Parachute de se déclencher correctement après un jour manqué, ou fausser le compteur des 10 jours. L'application attend maintenant que ce réglage soit bien arrivé avant de vérifier le Parachute (et avant le tout premier affichage de l'écran d'accueil). Un enfant dont la langue obligatoire est l'anglais n'était pas concerné par ce bug. **Autre amélioration liée :** si l'enregistrement du Parachute échoue (par ex. règles Firestore pas encore publiées après une mise à jour), un message d'erreur s'affiche désormais à l'enfant au lieu de rester silencieux. |
 | 10 nouveaux badges « progression » (V04-006) | En plus des badges existants (volume de séries, de mots, etc.), 10 nouveaux badges récompensent une **évolution** plutôt qu'un simple cumul : **Progrès réels** — 🥇 *Nouveau record* / 🏆 *Toujours plus loin* (battre son meilleur score à un contrôle blanc, 1 puis 3 fois), 🔁 *Revanche* (3 mots qui posaient souvent problème, maintenant maîtrisés), 🧘 *Autonome* (15 jours sans le moindre indice), 🌈 *Rebond* (relancer une série d'au moins 7 jours, 2 fois différentes — se relever compte aussi) ; **Régularité** — 🌙 *Régulière comme une horloge* (60 jours de suite à 20/20) ; **Nouveaux outils** — ⚔️ *Première victoire* / 🛡️ *Invincible* (gagner 1 puis 10 duels), 🪂 *Mérité* (gagner un Parachute de série par les 10 jours, en plus de celui de départ), 🎓 *Touche-à-tout* (réussir une série « Préparer le CE1D » à 80 % ou plus dans 3 matières différentes). Comme tous les badges, titres et descriptions sont modifiables depuis Super Admin → Contenus du site, groupe « Badges ». **Limite assumée :** faute d'historique détaillé antérieur à cette mise à jour, certains badges (record de contrôle, mots « revanche », rebonds de série) ne comptent que les progrès réalisés à partir de maintenant. |
+| 10 nouveaux visuels de puzzle « ado tendance » (V04-007) | Le puzzle à collectionner (récompense des séries de 20 réussies à plus de 90 %) passe de 7 à 17 images différentes, avec 10 nouveaux visuels dans l'esprit « ado » (musique, ambiance concert, casque audio, copines, chambre cosy, style). Fournis par la famille. **Note :** deux visuels proposés représentaient des chanteuses réelles de façon très réaliste — ils n'ont pas été repris (droit à l'image). |
+| 4 nouveaux visuels de puzzle « pochette d'album » (V04-008) | Le puzzle passe de 17 à 21 images : 4 nouveaux visuels reprenant le personnage « Margaux » déjà utilisé dans les tout premiers puzzles, façon pochette d'album (Rap ×2, Pop, K-Pop). Fournis par la famille. |
+| 🪲 Correction : le tableau de bord parent ignorait la langue obligatoire de l'enfant (V04-009) | Bug trouvé et corrigé : depuis l'ajout du choix de langue obligatoire par enfant (anglais **ou** néerlandais, V04-006), l'espace élève avait bien été adapté, mais **tout le tableau de bord parent** (Accueil, Historique des sessions, Bilan de la semaine à imprimer/copier/envoyer, et les badges) était resté câblé sur l'anglais. Résultat : pour un enfant dont la langue obligatoire est le néerlandais, le parent voyait "0/20", une série à 0 jour et un historique vide — même quand l'enfant faisait très bien sa série quotidienne (en néerlandais). Tous ces écrans utilisent désormais la bonne langue automatiquement ; les colonnes de l'historique (🇫🇷→🇬🇧 / 🇬🇧→🇫🇷) s'adaptent aussi en 🇫🇷↔🇳🇱 le cas échéant. Les outils volontairement réservés à l'anglais (verbes irréguliers, dictée, contrôle blanc, duel) ne sont pas concernés, comme documenté depuis V04-006. Un enfant dont la langue obligatoire est l'anglais (ex. Margaux) n'était pas affecté par ce bug. |
+| 🪲 Correction : le « mot de la honte » ne pouvait pas s'ouvrir pour un enfant en néerlandais (V04-010) | Bug trouvé et corrigé, dans le même esprit que V04-009 mais côté règles de sécurité Firestore cette fois : la règle qui autorise l'élève à révéler un mot de la honte vérifiait toujours que la série du jour était complétée dans la collection anglaise, même pour un enfant dont la langue obligatoire est le néerlandais. Pour un enfant comme Rose, cela bloquait silencieusement l'ouverture du coffre (« Impossible d'ouvrir le coffre pour l'instant ») même quand sa série du jour était bien réussie et que le parent avait pourtant bien préparé des expressions à l'avance. La règle vérifie désormais la bonne collection de sessions selon la langue obligatoire de l'enfant. **Important :** comme pour toute mise à jour des règles Firestore, il faut republier le fichier `firestore.rules` (étape A.4 du guide) pour que cette correction prenne effet. |
+| 🪲 Audit complet « multi-langue » + 2 corrections côté élève (V04-011) | Suite aux bugs trouvés en V04-009 et V04-010, tout le site a été relu méthodiquement pour repérer d'éventuels autres endroits câblés en dur sur l'anglais au lieu de respecter la langue obligatoire choisie par enfant. **Puzzle à collectionner :** vérifié sain — les pièces de puzzle et les points sont partagés entre les deux langues depuis le début, aucune correction nécessaire. **Deux problèmes trouvés et corrigés côté espace élève :** (1) le personnage animé de l'accueil (content·e, réfléchie, déçue…) regardait toujours l'historique des séries en anglais pour décider si l'enfant avait « raté » la veille — un enfant en néerlandais ne voyait donc jamais le personnage déçu après un jour manqué ; (2) un filet de sécurité qui protège une série en cours de révision contre un rafraîchissement serveur mal synchronisé existait pour l'anglais mais était incomplet pour le néerlandais depuis que celui-ci peut aussi porter la série obligatoire (V04-006) — risque rare mais réel de perdre un peu de progression en cours de série dans ce cas précis. Les autres outils vérifiés (étude/fiches, séries libres, verbes irréguliers, dictée, duel, contrôle blanc, suppression de compte) étaient déjà corrects ou volontairement réservés à l'anglais, comme documenté depuis V04-006. |
 
 ## 6. Données Firestore
 

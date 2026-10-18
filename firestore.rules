@@ -1,6 +1,6 @@
 // =====================================================================
 //  Projet : Wesh Words (Firebase « weshwords »)
-//  Version du site : V04-006
+//  Version du site : V04-011
 //  Règles Firestore — © Hélène Laruelle — Tous droits réservés
 // ---------------------------------------------------------------------
 //  Rôles : superadmin (config/app.superAdminUid) · parent · enfant
@@ -23,6 +23,22 @@ service cloud.firestore {
     // Adresse(s) autorisée(s) à faire l'installation initiale (compte Super Admin).
     // Empêche un inconnu de « prendre la place » avant l'installation. À modifier si besoin.
     function canInstall() { return request.auth.token.email in ['helene2406@gmail.com']; }
+    // Langue obligatoire de l'enfant (V04-006 : anglais par défaut, ou néerlandais si réglé ainsi) et
+    // vérification que sa session du jour obligatoire est bien complétée — dans la BONNE collection
+    // (sessions = anglais, sessionsNl = néerlandais). Utilisé par la règle « mot de la honte » ci-dessous
+    // (V04-010) : avant cette correction, elle vérifiait toujours /sessions (anglais), ce qui bloquait
+    // la révélation pour un enfant dont la langue obligatoire est le néerlandais (ex. Rose), même quand
+    // sa série du jour était bien réussie.
+    function mainLangOf(uid) {
+      return exists(/databases/$(database)/documents/users/$(uid)/meta/settings)
+        ? get(/databases/$(database)/documents/users/$(uid)/meta/settings).data.get('mainLang', 'en')
+        : 'en';
+    }
+    function mandSessionCompleted(uid, day) {
+      return mainLangOf(uid) == 'nl'
+        ? (exists(/databases/$(database)/documents/users/$(uid)/sessionsNl/$(day)) && get(/databases/$(database)/documents/users/$(uid)/sessionsNl/$(day)).data.completed == true)
+        : (exists(/databases/$(database)/documents/users/$(uid)/sessions/$(day)) && get(/databases/$(database)/documents/users/$(uid)/sessions/$(day)).data.completed == true);
+    }
 
     // ---------- Configuration (identifie le Super Admin) ----------
     match /config/app {
@@ -80,7 +96,7 @@ service cloud.firestore {
 
     // ---------- Version des règles (utilisé par diagnostic.html) ----------
     match /rulesinfo/{v} {
-      allow get: if v == 'V04-006';
+      allow get: if v == 'V04-011';
     }
 
     // ---------- Profils ----------
@@ -228,7 +244,7 @@ service cloud.firestore {
               && changed().hasOnly(['revealed', 'revealedAt', 'revealedDay'])
               && sid in get(/databases/$(database)/documents/users/$(uid)/meta/shame).data.queue
               && get(/databases/$(database)/documents/users/$(uid)/meta/shame).data.get('dates', {}).get(sid, '') <= request.resource.data.revealedDay
-              && get(/databases/$(database)/documents/users/$(uid)/sessions/$(request.resource.data.revealedDay)).data.completed == true);
+              && mandSessionCompleted(uid, request.resource.data.revealedDay));
       }
     }
   }
