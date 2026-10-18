@@ -1,0 +1,3910 @@
+import {
+  auth, db, onAuthStateChanged, signOut,
+  updatePassword, reauthenticateWithCredential, EmailAuthProvider,
+  creerCompteMembre, reinitialiserMotDePasseCompte, supprimerCompteAuthMembre, identifiantValide, motDePasseValide,
+  doc, getDoc, setDoc, updateDoc, deleteDoc, getDocs, collection, addDoc, query, where, orderBy, serverTimestamp
+} from "./firebase-config.js";
+import { meteoPour, alerteMeteo, iconeCode } from "./meteo.js";
+
+const VERSION_SITE = 'V01-042';
+document.getElementById('versionTag').textContent = VERSION_SITE;
+
+function dateISOLocale(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const j = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${j}`;
+}
+// Valeur sûre à insérer dans un attribut onclick='...' : ne garde que lettres, chiffres, - _ : .
+function idSur(v) { return String(v ?? '').replace(/[^\w:.\-]/g, ''); }
+function capitalize(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function lundiDeLaSemaine(d) {
+  const date = new Date(d); date.setHours(0,0,0,0);
+  const jour = date.getDay();
+  const decalage = jour === 0 ? -6 : 1 - jour;
+  date.setDate(date.getDate() + decalage);
+  return date;
+}
+
+// ==========================================================================
+// ACCORD DE COLLABORATION — texte stocké côté admin uniquement, jamais sur
+// une page publique. Affiché à Lara (role "admin") tant qu'elle n'a pas
+// accepté la version en cours ; jamais affiché au Super Admin.
+// ==========================================================================
+const TEXTE_ACCORD_PAR_DEFAUT = `Entre Hélène Laruelle (« la Développeuse ») et Lara Rossoux, gérante de Lar'Allegria by Lara Rossoux ASBL (« la Gérante »), il est convenu ce qui suit :
+
+Article 1 — Propriété du code
+Le code source du site (pages, scripts, règles de sécurité, architecture technique) est la propriété exclusive de la Développeuse. Toute copie, modification ou réutilisation par un tiers nécessite son autorisation écrite préalable.
+
+Article 2 — Propriété et responsabilité du contenu
+Le contenu du site (textes, photos, tarifs, informations sur les activités, données relatives aux membres et à leurs chevaux) appartient à la Gérante et reste sous son entière responsabilité, y compris son exactitude et sa mise à jour.
+
+Article 3 — Protection des données (RGPD)
+La Gérante est seule responsable du traitement des données personnelles collectées via le site, au sens du RGPD (information des personnes concernées, durée de conservation, droits d'accès et de suppression). La Développeuse intervient uniquement comme prestataire technique bénévole et n'est pas responsable d'un manquement de la Gérante à ses obligations légales.
+
+Article 4 — Maintenance
+La maintenance technique du site est assurée exclusivement par la Développeuse, à titre gracieux, sans garantie de délai ni de disponibilité.
+
+Article 5 — Gratuité
+Le site reste gratuit pour la Gérante tant que c'est possible. Si des frais d'hébergement ou d'infrastructure deviennent nécessaires, la Développeuse peut d'abord y ajouter de la publicité pour les couvrir, sans frais supplémentaire pour la Gérante. Si cela ne suffit pas, la Développeuse prévient la Gérante par email (lara.rossoux@hotmail.com) avec un délai d'une semaine ; la Gérante dispose d'une semaine pour répondre si elle accepte de prendre en charge les frais. En cas de refus, d'absence de réponse, ou si la Gérante souhaite elle-même mettre fin au site, il est mis fin au site avec un délai d'une semaine notifié par email dans les deux sens (adresse de la Développeuse : helene.laruelle@gmail.com).
+
+Article 6 — Durée
+Cet accord reste valable tant que la Développeuse assure la maintenance du site.
+
+Article 7 — Usage à des fins de démonstration
+La Développeuse peut utiliser le site comme exemple de son travail (portfolio, démonstration à des tiers), via un compte de démonstration dédié, vide de toute donnée réelle, sans accès aux données des vrais membres du club. La Gérante ne peut ni archiver ce compte, ni en changer le mot de passe — il est géré exclusivement par la Développeuse.
+
+Article 8 — Récupération des données en fin de site
+En cas de fin du site, la Développeuse fournit à la Gérante un export de ses données (membres, paiements, factures) dans un délai d'une semaine.
+
+Article 9 — Confidentialité
+La Développeuse s'engage à ne jamais utiliser ni partager les données des membres en dehors de ce qui est strictement nécessaire au fonctionnement du site.
+
+Article 10 — Responsabilité
+Le site est fourni tel quel, à titre bénévole, sans garantie de disponibilité, d'absence d'erreur ou de résultat. La Développeuse ne peut être tenue responsable d'un dommage résultant d'un bug, d'une interruption ou d'une perte de données.
+
+Article 11 — Notification en cas d'incident
+La Développeuse s'engage à prévenir la Gérante sans délai de tout incident de sécurité touchant les données du site.
+
+Article 12 — Mesures de sécurité
+La Développeuse met en œuvre des mesures de sécurité raisonnables pour protéger les données du site, sans garantie absolue de résultat.
+
+Article 13 — Acceptation
+Cet accord est accepté électroniquement par la Gérante depuis son espace d'administration, ce qui vaut signature entre les parties.`;
+
+let contratCourant = null; // { version, texte, dateModification, signeLe }
+function labelVersionContrat(n) { return 'V' + n; }
+
+// Lit la version en vigueur (la plus haute). Si aucune n'existe encore, le
+// Super Admin la crée (version 1 = texte par défaut) ; Lara voit un état vide
+// tant que ce n'est pas fait.
+async function chargerContratCourant() {
+  const snap = await getDocs(query(collection(db, 'contrat_versions'), orderBy('version', 'desc')));
+  const versions = [];
+  snap.forEach(d => versions.push({ ...d.data(), id: d.id }));
+  if (!versions.length && compteActuel.role === 'superadmin') {
+    const v1 = { version: 1, texte: TEXTE_ACCORD_PAR_DEFAUT, dateModification: serverTimestamp(), motif: 'Version initiale' };
+    await setDoc(doc(db, 'contrat_versions', 'V1'), v1);
+    return chargerContratCourant();
+  }
+  return versions;
+}
+
+function formatDateContrat(ts) {
+  if (!ts) return '—';
+  const d = ts.toDate ? ts.toDate() : new Date(ts);
+  return d.toLocaleDateString('fr-BE') + ' ' + d.toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' });
+}
+function texteContratEnHtml(t) {
+  return '<p>' + escapeHtml(t).replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br>') + '</p>';
+}
+
+async function signerContrat(version) {
+  await updateDoc(doc(db, 'contrat_versions', labelVersionContrat(version)), {
+    signeLe: serverTimestamp(),
+    signeVersion: version
+  });
+  await updateDoc(doc(db, 'membres', auth.currentUser.uid), {
+    accordAccepte: true,
+    accordAccepteVersion: labelVersionContrat(version),
+    accordAccepteDate: serverTimestamp()
+  });
+  compteActuel.accordAccepteVersion = labelVersionContrat(version);
+}
+
+// Fenêtre bloquante pour Lara tant que la version en vigueur n'est pas signée.
+function afficherSignatureContrat(c) {
+  if (document.getElementById('overlayAccordCollaboration')) return;
+  const html = `
+    <div class="modal-overlay" id="overlayAccordCollaboration" style="z-index:2000;">
+      <div class="modal-box" style="max-width:640px;">
+        <h3>Contrat de collaboration — version ${c.version} à lire et signer</h3>
+        <p style="color:var(--terre); font-size:0.85rem; margin-bottom:12px;">${c.version > 1 ? 'Le contrat a été modifié. ' : ''}Merci de le lire et de le signer électroniquement pour continuer.</p>
+        <div style="max-height:360px; overflow-y:auto; border:1px solid #E9DEC8; border-radius:var(--radius); padding:14px 16px; font-size:0.9rem; line-height:1.6; background:var(--paper-warm);">${texteContratEnHtml(c.texte)}</div>
+        <div class="modal-actions">
+          <button class="btn-sm primary" id="btnAccepterAccordCollaboration">J'ai lu et je signe la version ${c.version}</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+  document.getElementById('btnAccepterAccordCollaboration').addEventListener('click', async () => {
+    try {
+      await signerContrat(c.version);
+      document.getElementById('overlayAccordCollaboration').remove();
+      if (ongletsCharges.has('contrat')) renderContrat();
+    } catch (err) {
+      alert('Erreur lors de l\'enregistrement : ' + (err.code || err.message));
+    }
+  });
+}
+
+async function afficherAccordCollaborationSiBesoin() {
+  if (compteActuel.role === 'superadmin') { // crée la V1 dès la connexion si absente
+    try { await chargerContratCourant(); } catch (err) { console.warn('Contrat :', err); }
+    return;
+  }
+  if (compteActuel.role !== 'admin') return;
+  try {
+    const versions = await chargerContratCourant();
+    if (!versions.length) return;
+    contratCourant = versions[0];
+    if (compteActuel.accordAccepteVersion !== labelVersionContrat(contratCourant.version)) afficherSignatureContrat(contratCourant);
+  } catch (err) { console.warn('Contrat :', err); }
+}
+
+// ----- Onglet Contrat (Lara : lecture + signature ; Super Admin : édition) -----
+async function renderContrat() {
+  const zone = document.getElementById('zoneContrat');
+  let versions;
+  try { versions = await chargerContratCourant(); }
+  catch (err) { zone.innerHTML = '<div class="empty-state">Lecture impossible : ' + escapeHtml(err.code || err.message) + '</div>'; return; }
+  if (!versions.length) { zone.innerHTML = '<div class="empty-state">Le contrat n\'est pas encore publié. Il sera disponible ici dès qu\'il aura été mis en ligne.</div>'; return; }
+  contratCourant = versions[0];
+  const c = contratCourant;
+  const estSuper = compteActuel.role === 'superadmin';
+  const signe = !!c.signeLe;
+  const statut = signe
+    ? `<span class="badge badge-ok">Signé le ${formatDateContrat(c.signeLe)}</span>`
+    : `<span class="badge badge-warn">En attente de signature</span>`;
+  const editeur = estSuper ? `
+    <div class="app-panel" style="margin-top:16px;">
+      <h3>Modifier le contrat (crée la version ${c.version + 1})</h3>
+      <p style="color:var(--terre); font-size:0.85rem; margin-bottom:10px;">Toute modification crée une nouvelle version qui devra être signée par la Gérante. Les versions précédentes sont conservées.</p>
+      <textarea id="contratTexteEdition" rows="16" style="width:100%; font-family:inherit; line-height:1.5;">${escapeHtml(c.texte)}</textarea>
+      <input type="text" id="contratMotif" placeholder="Motif de la modification (visible dans l'historique)" style="width:100%; margin-top:8px;">
+      <div class="modal-actions" style="margin-top:10px;"><button class="btn-sm primary" id="btnPublierContrat">Publier la version ${c.version + 1}</button></div>
+    </div>` : '';
+  const histo = versions.map(v => `
+    <div class="data-row">
+      <div class="data-main">
+        <div class="data-title">Version ${v.version} — ${formatDateContrat(v.dateModification)}</div>
+        <div class="data-sub">${escapeHtml(v.motif || '')} · ${v.signeLe ? 'Signée le ' + formatDateContrat(v.signeLe) : 'Non signée'}</div>
+      </div>
+      <div class="data-actions"><button class="btn-sm" data-voir-contrat="${v.version}">Voir</button></div>
+    </div>`).join('');
+  zone.innerHTML = `
+    <div class="app-panel">
+      <div class="section-heading"><h2>📄 Contrat de collaboration — version ${c.version}</h2> ${statut}</div>
+      <p style="color:var(--terre); font-size:0.85rem; margin-bottom:10px;">Dernière modification : ${formatDateContrat(c.dateModification)}</p>
+      <div style="border:1px solid #E9DEC8; border-radius:var(--radius); padding:14px 16px; font-size:0.9rem; line-height:1.6; background:var(--paper-warm);">${texteContratEnHtml(c.texte)}</div>
+      ${(!estSuper && !signe) ? `<div class="modal-actions" style="margin-top:12px;"><button class="btn-sm primary" id="btnSignerContratOnglet">Signer la version ${c.version}</button></div>` : ''}
+    </div>
+    ${editeur}
+    <div class="app-panel"><h3>Historique des versions</h3><div class="data-list">${histo}</div></div>`;
+  const btnSign = document.getElementById('btnSignerContratOnglet');
+  if (btnSign) btnSign.addEventListener('click', async () => {
+    try { await signerContrat(c.version); const o = document.getElementById('overlayAccordCollaboration'); if (o) o.remove(); renderContrat(); }
+    catch (err) { alert('Erreur : ' + (err.code || err.message)); }
+  });
+  const btnPub = document.getElementById('btnPublierContrat');
+  if (btnPub) btnPub.addEventListener('click', async () => {
+    const texte = document.getElementById('contratTexteEdition').value.trim();
+    const motif = document.getElementById('contratMotif').value.trim();
+    if (!texte) { alert('Le texte est vide.'); return; }
+    if (texte === c.texte.trim()) { alert('Aucune modification du texte.'); return; }
+    if (!motif) { alert('Indique un motif de modification.'); return; }
+    if (!confirm(`Publier la version ${c.version + 1} ? La Gérante devra la signer.`)) return;
+    try {
+      const n = c.version + 1;
+      await setDoc(doc(db, 'contrat_versions', labelVersionContrat(n)), { version: n, texte, motif, dateModification: serverTimestamp() });
+      renderContrat();
+    } catch (err) { alert('Erreur : ' + (err.code || err.message)); }
+  });
+  zone.querySelectorAll('[data-voir-contrat]').forEach(b => b.addEventListener('click', () => {
+    const v = versions.find(x => x.version === Number(b.dataset.voirContrat));
+    const html = `<div class="modal-overlay" id="overlayVoirContrat" style="z-index:2000;"><div class="modal-box" style="max-width:640px;"><h3>Contrat — version ${v.version}</h3>
+      <div style="max-height:400px; overflow-y:auto; border:1px solid #E9DEC8; border-radius:var(--radius); padding:14px 16px; font-size:0.9rem; line-height:1.6; background:var(--paper-warm);">${texteContratEnHtml(v.texte)}</div>
+      <div class="modal-actions"><button class="btn-sm" onclick="document.getElementById('overlayVoirContrat').remove()">Fermer</button></div></div></div>`;
+    document.body.insertAdjacentHTML('beforeend', html);
+  }));
+}
+
+let membresCache = [];
+let membresParUid = {};
+let compteActuel = null; // { role, identifiant, ... } du compte connecté
+const ongletsCharges = new Set(); // évite de recharger les mêmes données à chaque clic d'onglet
+
+// Chaque onglet ne charge ses données Firestore que la première fois qu'on
+// l'ouvre (au lieu de tout charger d'un coup à la connexion) — ça réduit
+// fortement le nombre de lectures Firestore par visite, important pour
+// rester dans le quota gratuit (plan Spark).
+const CHARGEURS_PAR_ONGLET = {
+  reservations: () => { chargerMeteoResume(); chargerReservationsAttente(); renderPlanningSemaine(); chargerRecurrencesAdmin(); chargerCalendrierDeuxSemaines(); },
+  membres: () => { chargerDemandesInscription(); renderMembres(); },
+  chevaux: () => chargerChevauxAdmin(),
+  planningchevaux: () => chargerPlanningChevaux(),
+  nettoyage: () => { chargerBoxes(); chargerNettoyages(); },
+  tarifs: () => chargerTarifs(),
+  activites: () => { chargerActivites(); chargerProgrammesActivites(); },
+  evenements: () => chargerEvenementsAdmin(),
+  blog: () => chargerBlogAdmin(),
+  livreor: () => chargerLivreOrAdmin(),
+  boutique: () => { chargerBoutiqueAdmin(); chargerCommandesAdmin(); },
+  stock: () => { chargerStockAdmin(); chargerStockSignalements(); },
+  'planning-benevoles': () => chargerPlanningBenevolesAdmin(),
+  messages: () => chargerConversations(),
+  contenu: () => chargerContenuAdmin(),
+  parametres: () => { chargerDisponibilitesAdmin(); chargerExceptionsAdmin(); chargerIban(); },
+  livrecaisse: () => { initSelecteurAnneeCaisse(); chargerSoldeDepartCaisse(); chargerLivreCaisse(); },
+  comptabilite: () => { initSelecteurAnneeCompta(); chargerPlanComptable(); chargerCompta(); },
+  livrerecettes: () => { initSelecteurAnneeRecettes(); chargerCategoriesRecettes(); chargerLivreRecettes(); },
+  motsdepasse: () => { chargerMotsDePasseAdmin(); chargerSauvegardesMdp(); },
+  partenaires: () => chargerPartenairesAdmin(),
+  contrat: () => renderContrat(),
+  maintenance: () => {}
+};
+function chargerOngletSiBesoin(nomOnglet) {
+  if (ongletsCharges.has(nomOnglet)) return;
+  ongletsCharges.add(nomOnglet);
+  const chargeur = CHARGEURS_PAR_ONGLET[nomOnglet];
+  if (chargeur) chargeur();
+}
+
+onAuthStateChanged(auth, async (user) => {
+  if (!user) { window.location.href = 'connexion.html'; return; }
+  const mDoc = await getDoc(doc(db, 'membres', user.uid));
+  if (!mDoc.exists() || !['admin', 'superadmin'].includes(mDoc.data().role)) {
+    window.location.href = 'connexion.html';
+    return;
+  }
+  compteActuel = mDoc.data();
+  document.getElementById('adminNom').textContent = compteActuel.prenom || 'Lara';
+  if (compteActuel.role === 'superadmin') {
+    document.getElementById('tabMotsDePasseBtn').classList.remove('hidden');
+    document.getElementById('tabMaintenanceBtn').classList.remove('hidden');
+  }
+  await chargerMembres();
+  afficherAccordCollaborationSiBesoin();
+  synchroniserAbonnements(); // décompte les cours validés et prestés
+  chargerAlerteStockAdmin();
+  chargerOngletSiBesoin('reservations'); // onglet ouvert par défaut à l'arrivée
+});
+
+document.getElementById('logoutBtn').addEventListener('click', () => signOut(auth).then(() => window.location.href = 'connexion.html'));
+
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
+    btn.classList.add('active');
+    document.getElementById('panel-' + btn.dataset.tab).classList.remove('hidden');
+    chargerOngletSiBesoin(btn.dataset.tab);
+  });
+});
+
+window.fermerModal = () => { document.getElementById('modalZone').innerHTML = ''; };
+
+// ==========================================================================
+// MÉTÉO — résumé des prochains jours
+// ==========================================================================
+async function chargerMeteoResume() {
+  const zone = document.getElementById('meteoResume');
+  const jours = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(); d.setDate(d.getDate() + i);
+    jours.push(d);
+  }
+  const blocs = await Promise.all(jours.map(async (d) => {
+    const dateISO = dateISOLocale(d);
+    const m = await meteoPour(dateISO, '13:00');
+    const alerte = alerteMeteo(m);
+    return `<div class="data-row" style="min-width:0;">
+      <div class="data-main">
+        <div class="data-title">${capitalize(d.toLocaleDateString('fr-BE', {weekday:'short', day:'numeric'}))}</div>
+        <div class="data-sub">${m ? `${iconeCode(m.code)} ${m.temperature}°C` : 'Météo indisponible'}</div>
+        ${alerte ? `<div class="badge" style="margin-top:4px; background:${alerte.couleur}; border-color:${alerte.couleur}; color:#fff; text-transform:none; letter-spacing:0; white-space:normal; line-height:1.25; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; border-radius:6px; padding:4px 8px;">${alerte.texte}</div>` : ''}
+      </div>
+    </div>`;
+  }));
+  zone.innerHTML = `<div class="meteo-resume-grid">${blocs.join('')}</div>`;
+}
+
+// ==========================================================================
+// MEMBRES (cache utilisé par plusieurs sections)
+// ==========================================================================
+// Sans argument : recharge toute la liste (1 lecture par membre). Avec un
+// uid : ne relit que cette fiche (1 seule lecture) — utilisé après chaque
+// modification pour rester dans le quota gratuit Firestore.
+async function chargerMembres(uidUnique) {
+  if (uidUnique) {
+    const d = await getDoc(doc(db, 'membres', uidUnique));
+    membresCache = membresCache.filter(x => x.id !== uidUnique);
+    delete membresParUid[uidUnique];
+    if (d.exists()) {
+      const m = { ...d.data(), id: d.id };
+      if (m.role !== 'admin' && m.role !== 'superadmin') membresCache.push(m);
+      membresParUid[d.id] = m;
+    }
+    return;
+  }
+  // Lara (admin) ne peut pas lire la fiche du Super Admin : on filtre côté requête.
+  const snap = compteActuel.role === 'superadmin'
+    ? await getDocs(collection(db, 'membres'))
+    : await getDocs(query(collection(db, 'membres'), where('role', '!=', 'superadmin')));
+  membresCache = [];
+  membresParUid = {};
+  snap.forEach(d => {
+    const m = { ...d.data(), id: d.id };
+    if (m.role !== 'admin' && m.role !== 'superadmin') membresCache.push(m);
+    membresParUid[d.id] = m;
+  });
+}
+function retirerAccents(s) {
+  return (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+// Identifiant suggéré par défaut : prenom.1ereLettreDuNom (sans accent, sans
+// caractère spécial). Ex: "Hélène Laruelle" -> "helene.l"
+function suggererIdentifiant(prenom, nom) {
+  const p = retirerAccents(prenom).toLowerCase().replace(/[^a-z]/g, '');
+  const n = retirerAccents(nom).toLowerCase().replace(/[^a-z]/g, '');
+  if (!p) return '';
+  return n ? `${p}.${n[0]}` : p;
+}
+// Mot de passe suggéré par défaut : 3 premières lettres du prénom + 3
+// premières lettres du nom + date de naissance en JJMM.
+// Ex: "Jean Dupont", né le 03/07/1990 -> "jeandup0307"
+function suggererMotDePasse(prenom, nom, dateNaissanceISO) {
+  const p = retirerAccents(prenom).toLowerCase().replace(/[^a-z]/g, '').slice(0, 3);
+  const n = retirerAccents(nom).toLowerCase().replace(/[^a-z]/g, '').slice(0, 3);
+  let ddmm = '';
+  const m = (dateNaissanceISO || '').match(/^\d{4}-(\d{2})-(\d{2})$/);
+  if (m) ddmm = m[2] + m[1];
+  return `${p}${n}${ddmm}`;
+}
+
+function nomMembre(uid) {
+  const m = membresParUid[uid];
+  if (m) return `${m.prenom || ''} ${m.nom || ''}`.trim() || m.identifiant || uid;
+  return uid ? `Compte introuvable (${uid})` : '—';
+}
+// Pour un essai réservé sous un compte partagé (ex: "Nouveau Client"), affiche
+// aussi le nom de la personne qui teste, gardé sur la réservation elle-même
+// sans qu'il faille créer une fiche membre à chaque fois.
+function nomAffichageReservation(r) {
+  const base = nomMembre(r.membreId);
+  return r.nomClientEssai ? `${base} — ${r.nomClientEssai}` : base;
+}
+function labelTypeMembre(type) {
+  if (type === 'pension') return 'Membre demi-pension';
+  if (type === 'benevole') return 'Membre bénévole';
+  return 'Membre cours';
+}
+
+// ==========================================================================
+// RÉSERVATIONS — validation (une seule personne à la fois sur la piste)
+// ==========================================================================
+// Prévient automatiquement le membre par message interne quand Lara valide,
+// refuse ou annule une de ses réservations.
+async function notifierMembreReservation(membreId, texte) {
+  if (!membreId) return;
+  const maintenant = new Date().toISOString();
+  try {
+    await addDoc(collection(db, 'conversations', membreId, 'messages'), { texte, expediteur: 'admin', dateEnvoi: maintenant, lu: false });
+    await setDoc(doc(db, 'conversations', membreId), { dernierMessage: texte, dateDernierMessage: maintenant, nonLuMembre: true }, { merge: true });
+  } catch (err) { /* ne bloque jamais l'action principale de réservation */ }
+}
+function libelleDateHeure(dateISO, heure) {
+  const dateLabel = capitalize(new Date(dateISO + 'T00:00:00').toLocaleDateString('fr-BE', {weekday:'long', day:'numeric', month:'long'}));
+  return `${dateLabel} à ${heure}`;
+}
+
+async function chargerReservationsAttente() {
+  const snap = await getDocs(query(collection(db, 'reservations'), where('statut', '==', 'en_attente')));
+  let resa = [];
+  snap.forEach(d => resa.push({ ...d.data(), id: d.id }));
+  resa.sort((a, b) => (a.date + a.heureDebut).localeCompare(b.date + b.heureDebut));
+
+  const wrap = document.getElementById('listeReservationsAttente');
+  if (resa.length === 0) {
+    wrap.innerHTML = '<div class="empty-state">Aucune demande en attente.</div>';
+    return;
+  }
+
+  const lignes = await Promise.all(resa.map(async (r) => {
+    const dateLabel = capitalize(new Date(r.date + 'T00:00:00').toLocaleDateString('fr-BE', {weekday:'long', day:'numeric', month:'long'}));
+    const m = await meteoPour(r.date, r.heureDebut);
+    const alerte = alerteMeteo(m);
+    const meteoHtml = m ? `<span class="badge badge-neutral">${iconeCode(m.code)} ${m.temperature}°C</span>` : '';
+    return `
+    <div class="data-row">
+      <div class="data-main">
+        <div class="data-title">${escapeHtml(nomAffichageReservation(r))} — ${dateLabel} ${escapeHtml(r.heureDebut)}</div>
+        <div class="data-sub">${r.type === 'libre' ? 'Piste libre' : 'Cours de dressage'} ${r.chevalSouhaiteNom ? `· 🐴 Souhait : ${escapeHtml(r.chevalSouhaiteNom)}` : ''} ${meteoHtml}</div>
+        ${alerte ? `<div class="banner-alert" style="margin-top:6px; padding:6px 10px; background:${alerte.couleur}1a; border-color:${alerte.couleur}; color:${alerte.couleur};">${alerte.texte}</div>` : ''}
+      </div>
+      <div class="data-actions">
+        <button class="btn-sm primary" onclick="window.validerReservation('${idSur(r.id)}','${idSur(r.date)}','${idSur(r.heureDebut)}','${idSur(r.membreId)}','${idSur(r.type)}')">Valider</button>
+        <button class="btn-sm danger" onclick="window.refuserReservation('${idSur(r.id)}','${idSur(r.date)}','${idSur(r.heureDebut)}','${idSur(r.membreId)}')">Refuser</button>
+      </div>
+    </div>`;
+  }));
+  wrap.innerHTML = lignes.join('');
+}
+
+window.validerReservation = async (id, dateISO, heure, membreId, type) => {
+  const snap = await getDocs(query(collection(db, 'reservations'), where('date', '==', dateISO), where('heureDebut', '==', heure), where('statut', '==', 'validee')));
+  if (!snap.empty) {
+    alert("Attention : une autre réservation est déjà validée sur ce créneau (une seule personne à la fois sur la piste). Refuse-la d'abord si tu veux valider celle-ci à la place.");
+    return;
+  }
+  await updateDoc(doc(db, 'reservations', id), { statut: 'validee' });
+  // Le cours n'est décompté de l'abonnement qu'une fois PRESTÉ (voir synchroniserAbonnements).
+  if (type === 'cours' && coursEstPreste(dateISO)) consommerCoursAbonnement(membreId, dateISO);
+  notifierMembreReservation(membreId, `✅ Votre réservation du ${libelleDateHeure(dateISO, heure)} a été validée par Lara.`);
+  chargerReservationsAttente();
+  renderPlanningSemaine();
+};
+window.refuserReservation = async (id, dateISO, heure, membreId) => {
+  await updateDoc(doc(db, 'reservations', id), { statut: 'refusee' });
+  notifierMembreReservation(membreId, `❌ Votre demande de réservation du ${libelleDateHeure(dateISO, heure)} a été refusée par Lara.`);
+  chargerReservationsAttente();
+  renderPlanningSemaine();
+};
+
+let semaineAdminAffichee = lundiDeLaSemaine(new Date());
+document.getElementById('resaAdminSemainePrec').addEventListener('click', () => {
+  semaineAdminAffichee.setDate(semaineAdminAffichee.getDate() - 7);
+  renderPlanningSemaine();
+});
+document.getElementById('resaAdminSemaineSuiv').addEventListener('click', () => {
+  semaineAdminAffichee.setDate(semaineAdminAffichee.getDate() + 7);
+  renderPlanningSemaine();
+});
+
+async function renderPlanningSemaine() {
+  const jours = [];
+  for (let i = 0; i < 7; i++) { const d = new Date(semaineAdminAffichee); d.setDate(d.getDate()+i); jours.push(d); }
+  document.getElementById('resaAdminSemaineLabel').textContent =
+    `Semaine du ${jours[0].toLocaleDateString('fr-BE', {day:'numeric', month:'long'})} au ${jours[6].toLocaleDateString('fr-BE', {day:'numeric', month:'long'})}`;
+
+  const dateDebut = dateISOLocale(jours[0]);
+  const dateFin = dateISOLocale(jours[6]);
+  const snap = await getDocs(query(collection(db, 'reservations'), where('date', '>=', dateDebut), where('date', '<=', dateFin)));
+  let resa = [];
+  snap.forEach(d => { const r = d.data(); if (r.statut === 'validee' || r.statut === 'en_attente') resa.push({ id: d.id, ...r }); });
+  resa.sort((a,b) => (a.date+a.heureDebut).localeCompare(b.date+b.heureDebut));
+
+  const wrap = document.getElementById('listePlanningSemaine');
+  if (resa.length === 0) {
+    wrap.innerHTML = '<div class="empty-state">Aucune réservation cette semaine.</div>';
+    return;
+  }
+  wrap.innerHTML = resa.map(r => {
+    const dateLabel = capitalize(new Date(r.date + 'T00:00:00').toLocaleDateString('fr-BE', {weekday:'long', day:'numeric', month:'long'}));
+    const badge = r.statut === 'validee' ? '<span class="badge badge-ok">Validée</span>' : '<span class="badge badge-warn">En attente</span>';
+    return `
+    <div class="data-row">
+      <div class="data-main">
+        <div class="data-title">${dateLabel} ${escapeHtml(r.heureDebut)} — ${escapeHtml(nomAffichageReservation(r))}</div>
+        <div class="data-sub">${r.type === 'libre' ? 'Piste libre' : 'Cours de dressage'} ${badge}</div>
+      </div>
+      <div class="data-actions">
+        <button class="btn-sm danger" onclick="window.annulerReservationAdmin('${r.id}')">Annuler</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+window.annulerReservationAdmin = async (id) => {
+  if (!confirm('Annuler cette réservation ?')) return;
+  const avant = await getDoc(doc(db, 'reservations', id));
+  await updateDoc(doc(db, 'reservations', id), { statut: 'annulee', annulePar: 'admin' });
+  if (avant.exists()) {
+    const r = avant.data();
+    if (r.type === 'cours' && r.statut === 'validee') rendreCoursAbonnement(r.membreId, r.date);
+    notifierMembreReservation(r.membreId, `⚠️ Votre réservation du ${libelleDateHeure(r.date, r.heureDebut)} a été annulée par Lara.`);
+  }
+  chargerReservationsAttente();
+  renderPlanningSemaine();
+  chargerRecurrencesAdmin();
+  chargerCalendrierDeuxSemaines();
+};
+
+// ==========================================================================
+// AJOUT MANUEL D'UNE RÉSERVATION (admin/super-admin) + CALENDRIER 2 SEMAINES
+// ==========================================================================
+function creneauxHorairesAdmin(heureDebut, heureFin) {
+  const [hD, mD] = (heureDebut || '09:00').split(':').map(Number);
+  const [hF, mF] = (heureFin || '19:00').split(':').map(Number);
+  const creneaux = [];
+  let h = hD, m = mD || 0;
+  while (h < hF || (h === hF && m < mF)) {
+    creneaux.push(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
+    h += 1;
+  }
+  return creneaux;
+}
+async function exceptionJourAdmin(dateISO) {
+  const d = await getDoc(doc(db, 'disponibilites_exceptions', dateISO));
+  return d.exists() ? d.data() : null;
+}
+
+document.getElementById('btnAjouterReservation').addEventListener('click', () => window.ouvrirModalAjouterReservation());
+document.getElementById('calBlocPrec').addEventListener('click', () => { calBlocOffset -= 15; chargerCalendrierDeuxSemaines(); });
+document.getElementById('calBlocSuiv').addEventListener('click', () => { calBlocOffset += 15; chargerCalendrierDeuxSemaines(); });
+
+// ==========================================================================
+// HISTORIQUE DES RÉSERVATIONS (contrôle) — recherche libre par période
+// ==========================================================================
+window._historiqueResa = [];
+async function rechercherHistoriqueResa() {
+  const dateDebut = document.getElementById('hr-dateDebut').value;
+  const dateFin = document.getElementById('hr-dateFin').value;
+  const wrap = document.getElementById('listeHistoriqueResa');
+  if (!dateDebut || !dateFin) { alert('Merci de choisir une date de début et une date de fin.'); return; }
+  if (dateDebut > dateFin) { alert('La date de début doit être avant la date de fin.'); return; }
+  wrap.innerHTML = '<div class="empty-state">Recherche en cours...</div>';
+  const snap = await getDocs(query(collection(db, 'reservations'), where('date', '>=', dateDebut), where('date', '<=', dateFin)));
+  let resultats = [];
+  snap.forEach(d => resultats.push({ ...d.data(), id: d.id }));
+  resultats.sort((a, b) => a.date.localeCompare(b.date) || (a.heureDebut || '').localeCompare(b.heureDebut || ''));
+  window._historiqueResa = resultats;
+  if (resultats.length === 0) { wrap.innerHTML = '<div class="empty-state">Aucune réservation sur cette période.</div>'; return; }
+  wrap.innerHTML = resultats.map(r => {
+    const dateLabel = capitalize(new Date(r.date + 'T00:00:00').toLocaleDateString('fr-BE', {weekday:'long', day:'numeric', month:'long', year:'numeric'}));
+    const badge = r.statut === 'validee' ? '<span class="badge badge-ok">Validée</span>'
+      : r.statut === 'en_attente' ? '<span class="badge badge-warn">En attente</span>'
+      : r.statut === 'refusee' ? '<span class="badge badge-danger">Refusée</span>'
+      : '<span class="badge badge-neutral">Annulée</span>';
+    return `<div class="data-row"><div class="data-main">
+      <div class="data-title">${dateLabel} — ${r.heureDebut || ''} — ${escapeHtml(nomAffichageReservation(r))}</div>
+      <div class="data-sub">${r.type === 'libre' ? 'Piste libre' : 'Cours'} ${badge}${r.recurrenceId ? ' <span class="badge badge-neutral">Récurrence</span>' : ''}</div>
+    </div></div>`;
+  }).join('');
+}
+document.getElementById('btnRechercherHistorique').addEventListener('click', rechercherHistoriqueResa);
+document.getElementById('btnExporterHistorique').addEventListener('click', () => {
+  const resultats = window._historiqueResa || [];
+  if (resultats.length === 0) { alert('Fais d\'abord une recherche (bouton "Rechercher") avant d\'exporter.'); return; }
+  const lignes = resultats.map(r => ({
+    'Date': r.date,
+    'Heure': r.heureDebut || '',
+    'Membre': nomAffichageReservation(r),
+    'Type': r.type === 'libre' ? 'Piste libre' : 'Cours',
+    'Statut': r.statut === 'validee' ? 'Validée' : r.statut === 'en_attente' ? 'En attente' : r.statut === 'refusee' ? 'Refusée' : 'Annulée',
+    'Récurrence': r.recurrenceId ? 'Oui' : 'Non'
+  }));
+  const dateDebut = document.getElementById('hr-dateDebut').value;
+  const dateFin = document.getElementById('hr-dateFin').value;
+  const feuille = XLSX.utils.json_to_sheet(lignes);
+  feuille['!cols'] = [{wch:12},{wch:8},{wch:26},{wch:12},{wch:12},{wch:11}];
+  const classeur = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(classeur, feuille, 'Historique réservations');
+  XLSX.writeFile(classeur, `Historique-reservations-Lar-Allegria-${dateDebut}_${dateFin}.xlsx`);
+});
+
+document.getElementById('btnVerifierOrphelines').addEventListener('click', async () => {
+  document.getElementById('wrapOrphelines').classList.remove('hidden');
+  const toggleBtn = document.querySelector('.collapse-toggle[data-target="wrapOrphelines"]');
+  if (toggleBtn) { toggleBtn.textContent = '▾'; toggleBtn.setAttribute('aria-expanded', 'true'); }
+  const wrap = document.getElementById('listeOrphelines');
+  wrap.innerHTML = '<div class="empty-state">Recherche en cours...</div>';
+  const aujourdhui = dateISOLocale(new Date());
+  const snap = await getDocs(query(collection(db, 'reservations'), where('date', '>=', aujourdhui)));
+  const orphelines = [];
+  snap.forEach(d => {
+    const r = d.data();
+    if (r.statut === 'annulee' || r.statut === 'refusee') return;
+    if (!membresParUid[r.membreId]) orphelines.push({ id: d.id, ...r });
+  });
+  if (orphelines.length === 0) { wrap.innerHTML = '<div class="empty-state">Aucune réservation orpheline trouvée à venir.</div>'; return; }
+  orphelines.sort((a, b) => a.date.localeCompare(b.date));
+  wrap.innerHTML = orphelines.map(r => {
+    const dateLabel = capitalize(new Date(r.date + 'T00:00:00').toLocaleDateString('fr-BE', {weekday:'long', day:'numeric', month:'long'}));
+    return `
+    <div class="data-row">
+      <div class="data-main">
+        <div class="data-title">${dateLabel} — ${escapeHtml(r.heureDebut)}</div>
+        <div class="data-sub">Identifiant du compte introuvable : <code>${escapeHtml(r.membreId||'')}</code></div>
+      </div>
+      <div class="data-actions">
+        <button class="btn-sm danger" onclick="window.annulerReservationAdmin('${r.id}')">Annuler ce créneau</button>
+      </div>
+    </div>`;
+  }).join('');
+});
+
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.collapse-toggle');
+  if (!btn) return;
+  const cible = document.getElementById(btn.dataset.target);
+  if (!cible) return;
+  const maintenantCache = cible.classList.toggle('hidden');
+  btn.textContent = maintenantCache ? '▸' : '▾';
+  btn.setAttribute('aria-expanded', String(!maintenantCache));
+});
+
+window.ouvrirModalAjouterReservation = (prefillDate, prefillHeure) => {
+  const membresTries = [...membresCache].sort((a, b) => nomMembre(a.id).localeCompare(nomMembre(b.id)));
+  const html = `
+    <div class="modal-overlay" id="modalOverlayAjoutResa">
+      <div class="modal-box">
+        <h3>Ajouter une réservation</h3>
+        <div class="field"><label>Membre *</label><select id="ar-membre"><option value="">— Choisir —</option>${membresTries.map(m => `<option value="${m.id}">${escapeHtml(nomMembre(m.id))}</option>`).join('')}</select></div>
+        <div class="field"><label>Nom du client <span class="hint">— pour un essai réservé sous un compte partagé type "Nouveau Client" : garde une trace de qui a testé, sans créer de fiche membre</span></label><input id="ar-nomClientEssai" placeholder="ex: Marc Dupont"></div>
+        <div class="field"><label>Type</label><select id="ar-type"><option value="cours">Cours de dressage avec Lara</option><option value="libre">Utilisation libre de la piste</option></select></div>
+        <div class="form-grid">
+          <div class="field"><label>Date de départ</label><input type="date" id="ar-date" value="${prefillDate || ''}"></div>
+          <div class="field"><label>Heure</label><input type="time" id="ar-heure" value="${prefillHeure || ''}"></div>
+        </div>
+        <div class="field">
+          <label>Récurrence <span class="hint">— pour un créneau fixe (ex: chaque samedi 13h-14h)</span></label>
+          <select id="ar-recurrence">
+            <option value="aucune">Aucune — une seule fois</option>
+            <option value="hebdomadaire">Toutes les semaines</option>
+            <option value="bimensuelle">Une semaine sur deux</option>
+          </select>
+        </div>
+        <div class="field hidden" id="ar-zoneJusquau"><label>Jusqu'au (inclus)</label><input type="date" id="ar-jusquau"></div>
+        <p style="color:var(--terre); font-size:0.8rem;">Une réservation ajoutée ici est automatiquement <strong>validée</strong> (pas besoin de confirmation).</p>
+        <div class="modal-actions">
+          <button class="btn-sm" type="button" onclick="window.fermerModal()">Annuler</button>
+          <button class="btn-sm primary" type="button" id="ar-save">Enregistrer</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modalZone').innerHTML = html;
+  document.getElementById('ar-recurrence').addEventListener('change', (e) => {
+    document.getElementById('ar-zoneJusquau').classList.toggle('hidden', e.target.value === 'aucune');
+  });
+  document.getElementById('ar-save').addEventListener('click', async () => {
+    const membreId = document.getElementById('ar-membre').value;
+    const nomClientEssai = document.getElementById('ar-nomClientEssai').value.trim();
+    const type = document.getElementById('ar-type').value;
+    const dateVal = document.getElementById('ar-date').value;
+    const heure = document.getElementById('ar-heure').value;
+    const recurrence = document.getElementById('ar-recurrence').value;
+    const jusquau = document.getElementById('ar-jusquau').value;
+    if (!membreId || !dateVal || !heure) { alert('Merci de choisir un membre, une date et une heure.'); return; }
+    if (recurrence !== 'aucune' && !jusquau) { alert('Merci d\'indiquer une date de fin pour la récurrence.'); return; }
+
+    const dates = [dateVal];
+    if (recurrence !== 'aucune') {
+      const pas = recurrence === 'hebdomadaire' ? 7 : 14;
+      let courante = new Date(dateVal + 'T00:00:00');
+      const fin = new Date(jusquau + 'T00:00:00');
+      while (true) {
+        courante = new Date(courante); courante.setDate(courante.getDate() + pas);
+        if (courante > fin) break;
+        dates.push(dateISOLocale(courante));
+        if (dates.length >= 104) break; // garde-fou
+      }
+    }
+
+    const btn = document.getElementById('ar-save');
+    btn.disabled = true;
+    btn.textContent = 'Enregistrement...';
+    try {
+      // Vérifie les créneaux déjà occupés sur toute la plage concernée pour éviter les doublons.
+      const dateMin = dates.reduce((a, b) => a < b ? a : b);
+      const dateMax = dates.reduce((a, b) => a > b ? a : b);
+      const snapExistant = await getDocs(query(collection(db, 'reservations'), where('date', '>=', dateMin), where('date', '<=', dateMax)));
+      const occupes = new Set();
+      snapExistant.forEach(d => {
+        const r = d.data();
+        if (r.statut === 'validee' || r.statut === 'en_attente') occupes.add(`${r.date}_${r.heureDebut}`);
+      });
+      const recurrenceId = recurrence !== 'aucune' ? ('rec_' + Date.now()) : null;
+      const aCreer = dates.filter(d => !occupes.has(`${d}_${heure}`));
+      const ignores = dates.filter(d => occupes.has(`${d}_${heure}`));
+      // Le cheval préféré du membre (sa fiche) devient le souhait par défaut du cours.
+      const prefere = type === 'cours' ? membresParUid[membreId] : null;
+      const champsCheval = (prefere && prefere.chevalPrefereId) ? { chevalSouhaiteId: prefere.chevalPrefereId, chevalSouhaiteNom: prefere.chevalPrefereNom || '' } : {};
+      await Promise.all(aCreer.map(d => addDoc(collection(db, 'reservations'), {
+        membreId, type, date: d, heureDebut: heure, statut: 'validee',
+        ajouteParAdmin: true, recurrenceId, nomClientEssai: nomClientEssai || null,
+        ...champsCheval,
+        createdAt: serverTimestamp()
+      })));
+      if (type === 'cours' && aCreer.length > 0) {
+        // Traitement séquentiel (pas Promise.all) : chaque date est ajoutée
+        // au même abonnement, un traitement en parallèle écraserait les
+        // mises à jour les unes les autres.
+        // Seuls les cours déjà prestés sont décomptés ; les futurs le seront le jour J.
+        for (const d of aCreer) { if (coursEstPreste(d)) await consommerCoursAbonnement(membreId, d); }
+      }
+      window.fermerModal();
+      chargerReservationsAttente();
+      renderPlanningSemaine();
+      chargerRecurrencesAdmin();
+      chargerCalendrierDeuxSemaines();
+      if (ignores.length > 0) {
+        alert(`${aCreer.length} créneau(x) créé(s).\n${ignores.length} déjà occupé(s), non modifié(s) : ${ignores.join(', ')}`);
+      }
+    } catch (err) {
+      alert('Erreur lors de l\'enregistrement : ' + (err.code || err.message));
+      btn.disabled = false;
+      btn.textContent = 'Enregistrer';
+    }
+  });
+};
+
+let calBlocOffset = 0; // en jours, multiple de 15
+
+async function chargerRecurrencesAdmin() {
+  const aujourdhui = dateISOLocale(new Date());
+  const snap = await getDocs(query(collection(db, 'reservations'), where('date', '>=', aujourdhui)));
+  const parRecurrence = {};
+  snap.forEach(d => {
+    const r = d.data();
+    if (!r.recurrenceId || r.statut === 'annulee' || r.statut === 'refusee') return;
+    (parRecurrence[r.recurrenceId] ||= []).push(r);
+  });
+  const groupes = Object.entries(parRecurrence).map(([recurrenceId, occurrences]) => {
+    occurrences.sort((a, b) => a.date.localeCompare(b.date));
+    const prochaine = occurrences[0];
+    let frequence = 'Toutes les semaines';
+    if (occurrences.length > 1) {
+      const diffJours = Math.round((new Date(occurrences[1].date + 'T00:00:00') - new Date(occurrences[0].date + 'T00:00:00')) / 86400000);
+      frequence = diffJours >= 13 ? 'Une semaine sur deux' : 'Toutes les semaines';
+    }
+    return { recurrenceId, membreId: prochaine.membreId, heure: prochaine.heureDebut, prochaineDate: prochaine.date, frequence, nb: occurrences.length };
+  });
+  groupes.sort((a, b) => nomMembre(a.membreId).localeCompare(nomMembre(b.membreId)));
+  const wrap = document.getElementById('listeRecurrences');
+  if (groupes.length === 0) { wrap.innerHTML = '<div class="empty-state">Aucun cours récurrent actif pour le moment.</div>'; return; }
+  wrap.innerHTML = groupes.map(g => {
+    const jourLabel = capitalize(new Date(g.prochaineDate + 'T00:00:00').toLocaleDateString('fr-BE', {weekday:'long'}));
+    return `
+    <div class="data-row">
+      <div class="data-main">
+        <div class="data-title">${escapeHtml(nomMembre(g.membreId))} — ${jourLabel} ${g.heure}</div>
+        <div class="data-sub">${g.frequence} · ${g.nb} prochaine(s) occurrence(s) planifiée(s), à partir du ${capitalize(new Date(g.prochaineDate+'T00:00:00').toLocaleDateString('fr-BE',{day:'numeric', month:'long'}))}</div>
+      </div>
+      <div class="data-actions">
+        <button class="btn-sm danger" onclick="window.supprimerRecurrence('${idSur(g.recurrenceId)}')">Supprimer la récurrence</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+window.supprimerRecurrence = async (recurrenceId) => {
+  if (!confirm('Supprimer toute cette récurrence ? Toutes les prochaines occurrences de ce créneau seront annulées (les occurrences passées restent inchangées).')) return;
+  const aujourdhui = dateISOLocale(new Date());
+  const snap = await getDocs(query(collection(db, 'reservations'), where('recurrenceId', '==', recurrenceId)));
+  await Promise.all(snap.docs.map(d => {
+    const r = d.data();
+    if (r.date < aujourdhui || r.statut === 'annulee' || r.statut === 'refusee') return Promise.resolve();
+    return updateDoc(doc(db, 'reservations', d.id), { statut: 'annulee', motifAnnulation: 'autre', motifAnnulationDetail: 'Récurrence supprimée par l\'administrateur' });
+  }));
+  chargerReservationsAttente();
+  renderPlanningSemaine();
+  chargerRecurrencesAdmin();
+  chargerCalendrierDeuxSemaines();
+};
+async function chargerCalendrierDeuxSemaines() {
+  const zone = document.getElementById('calendrierDeuxSemaines');
+  const jours = [];
+  for (let i = 0; i < 15; i++) { const d = new Date(); d.setDate(d.getDate() + calBlocOffset + i); jours.push(d); }
+  const dateDebut = dateISOLocale(jours[0]);
+  const dateFin = dateISOLocale(jours[14]);
+  document.getElementById('calBlocLabel').textContent =
+    `Du ${jours[0].toLocaleDateString('fr-BE', {day:'numeric', month:'long'})} au ${jours[14].toLocaleDateString('fr-BE', {day:'numeric', month:'long'})}`;
+  const snap = await getDocs(query(collection(db, 'reservations'), where('date', '>=', dateDebut), where('date', '<=', dateFin)));
+  const parCle = {};
+  snap.forEach(d => {
+    const r = d.data();
+    if (r.statut === 'annulee' || r.statut === 'refusee') return;
+    parCle[`${r.date}_${r.heureDebut}`] = { id: d.id, ...r };
+  });
+  const disp = await getDoc(doc(db, 'parametres', 'disponibilites'));
+  const horaires = horairesParJourDepuis(disp.exists() ? disp.data() : {});
+  const maintenant = new Date();
+
+  const blocs = await Promise.all(jours.map(async (d) => {
+    const jourISO = d.getDay() === 0 ? 7 : d.getDay();
+    const dateISO = dateISOLocale(d);
+    const exception = await exceptionJourAdmin(dateISO);
+    if (exception?.ferme) {
+      return `<div class="resa-jour"><div class="resa-jour-titre">${capitalize(d.toLocaleDateString('fr-BE', {weekday:'short', day:'numeric', month:'short'}))}</div><div class="empty-state" style="margin:0;">Fermé</div></div>`;
+    }
+    const h = horaires[jourISO] || { ouvert: false };
+    const ouvertParException = exception && (exception.heureDebut || exception.heureFin);
+    if (!h.ouvert && !ouvertParException) {
+      return `<div class="resa-jour"><div class="resa-jour-titre">${capitalize(d.toLocaleDateString('fr-BE', {weekday:'short', day:'numeric', month:'short'}))}</div><div class="empty-state" style="margin:0;">Fermé</div></div>`;
+    }
+    const heures = creneauxHorairesAdmin(exception?.heureDebut || h.heureDebut, exception?.heureFin || h.heureFin);
+    const boutons = heures.map(heure => {
+      const cle = `${dateISO}_${heure}`;
+      const resa = parCle[cle];
+      const estPasse = new Date(`${dateISO}T${heure}:00`) < maintenant;
+      if (estPasse) return `<button class="creneau-btn passe" disabled>${heure}</button>`;
+      if (resa) {
+        const cls = resa.statut === 'validee' ? 'valide' : 'attente';
+        return `<button class="creneau-btn ${cls}" onclick="window.annulerReservationAdmin('${resa.id}')" title="${escapeHtml(nomAffichageReservation(resa))} — cliquer pour annuler">${heure} — ${escapeHtml(nomAffichageReservation(resa))}</button>`;
+      }
+      return `<button class="creneau-btn" onclick="window.ouvrirModalAjouterReservation('${dateISO}','${heure}')">${heure}</button>`;
+    }).join('');
+    return `<div class="resa-jour"><div class="resa-jour-titre">${capitalize(d.toLocaleDateString('fr-BE', {weekday:'short', day:'numeric', month:'short'}))}</div><div class="resa-creneaux">${boutons}</div></div>`;
+  }));
+  zone.innerHTML = blocs.join('') || '<div class="empty-state">Aucun jour d\'ouverture sur ces 2 semaines.</div>';
+}
+
+// ==========================================================================
+// DEMANDES D'INSCRIPTION
+// ==========================================================================
+async function chargerDemandesInscription() {
+  const snap = await getDocs(query(collection(db, 'demandes_inscription'), where('statut', '==', 'en_attente')));
+  let demandes = [];
+  snap.forEach(d => demandes.push({ ...d.data(), id: d.id }));
+  demandes.sort((a, b) => (b.dateCreation?.toMillis?.() || 0) - (a.dateCreation?.toMillis?.() || 0));
+
+  document.getElementById('tabMembresBtn').classList.toggle('has-unread', demandes.length > 0);
+
+  const wrap = document.getElementById('listeDemandesInscription');
+  if (demandes.length === 0) {
+    wrap.innerHTML = '<div class="empty-state">Aucune demande en attente.</div>';
+    return;
+  }
+  wrap.innerHTML = demandes.map(d => `
+    <div class="data-row">
+      <div class="data-main">
+        <div class="data-title">${escapeHtml(d.prenom)} ${escapeHtml(d.nom)} — ${labelTypeMembre(d.typeMembre)}</div>
+        <div class="data-sub">${escapeHtml(d.email)} · ${escapeHtml(d.telephone)}${d.cheval?.nom ? ` · Cheval : ${escapeHtml(d.cheval.nom)}` : ''}</div>
+      </div>
+      <div class="data-actions">
+        <button class="btn-sm primary" onclick="window.voirDemande('${d.id}')">Voir / Convertir en membre</button>
+        <button class="btn-sm danger" onclick="window.rejeterDemande('${d.id}')">Rejeter</button>
+      </div>
+    </div>`).join('');
+
+  window._demandesInscription = {};
+  demandes.forEach(d => window._demandesInscription[d.id] = d);
+}
+window.rejeterDemande = async (id) => {
+  if (!confirm('Rejeter cette demande ?')) return;
+  await updateDoc(doc(db, 'demandes_inscription', id), { statut: 'rejetee' });
+  chargerDemandesInscription();
+};
+window.voirDemande = (id) => {
+  const d = window._demandesInscription[id];
+  const html = `
+    <div class="modal-overlay" id="modalOverlayDemande">
+      <div class="modal-box" style="max-width:560px;">
+        <h3>Demande de ${escapeHtml(d.prenom)} ${escapeHtml(d.nom)}</h3>
+        <div style="font-size:0.9rem; line-height:1.7; max-height:50vh; overflow-y:auto;">
+          ${d.identifiantSouhaite ? `<div class="banner-alert info">Identifiant et mot de passe souhaités par le membre : <strong>${escapeHtml(d.identifiantSouhaite)}</strong> / <strong>${escapeHtml(d.motDePasseSouhaite||'')}</strong> — pré-remplis à l'étape suivante, tu peux les modifier si besoin (ex : identifiant déjà pris).</div>` : ''}
+          <p><strong>Type :</strong> ${labelTypeMembre(d.typeMembre)}<br>
+          <strong>Naissance :</strong> ${d.dateNaissance || '—'}<br>
+          <strong>Téléphone :</strong> ${escapeHtml(d.telephone)}<br>
+          <strong>Email :</strong> ${escapeHtml(d.email)}<br>
+          <strong>Adresse :</strong> ${escapeHtml(d.adresse?.rue)}, ${escapeHtml(d.adresse?.cp)} ${escapeHtml(d.adresse?.ville)}<br>
+          <strong>Contact urgence :</strong> ${escapeHtml(d.contactUrgence?.nom)} (${escapeHtml(d.contactUrgence?.lien||'')}) — ${escapeHtml(d.contactUrgence?.telephone)}<br>
+          <strong>Niveau :</strong> ${escapeHtml(d.niveauEquitation)}<br>
+          ${d.experience ? `<strong>Expérience :</strong> ${escapeHtml(d.experience)}<br>` : ''}
+          <strong>Assurance RC :</strong> ${escapeHtml(d.assuranceRC?.compagnie||'—')} ${escapeHtml(d.assuranceRC?.numeroPolice||'')}<br>
+          <strong>Droit à l'image :</strong> ${d.droitImage ? 'Oui' : 'Non'}</p>
+          ${d.cheval ? `<p><strong>Cheval :</strong> ${escapeHtml(d.cheval.nom)} — ${escapeHtml(d.cheval.race)}, ${escapeHtml(d.cheval.robe)}<br>
+          Puce : ${escapeHtml(d.cheval.puce)} · Vétérinaire : ${escapeHtml(d.cheval.veterinaire)} · Maréchal : ${escapeHtml(d.cheval.marechal)}<br>
+          Vaccins — grippe : ${d.cheval.vaccinGrippeDate||'—'}, tétanos : ${d.cheval.vaccinTetanosDate||'—'}<br>
+          Alimentation : ${escapeHtml(d.cheval.alimentationParticuliere||'—')}</p>` : ''}
+        </div>
+        <div class="modal-actions">
+          <button class="btn-sm" type="button" onclick="window.fermerModal()">Fermer</button>
+          <button class="btn-sm primary" type="button" onclick="window.fermerModal(); window.ouvrirModalMembre(null, '${id}')">Créer la fiche membre</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modalZone').innerHTML = html;
+};
+
+// ==========================================================================
+// MEMBRES — CRUD
+// ==========================================================================
+function renderMembres(filtre = '') {
+  const f = filtre.toLowerCase();
+  const wrap = document.getElementById('listeMembres');
+  const actifs = membresCache.filter(m => !m.archive && (!f ||
+    `${m.prenom} ${m.nom} ${m.identifiant||''}`.toLowerCase().includes(f)));
+  if (actifs.length === 0) {
+    wrap.innerHTML = '<div class="empty-state">Aucun membre.</div>';
+  } else {
+    wrap.innerHTML = actifs.map(m => `
+      <div class="data-row">
+        <div class="data-main">
+          <div class="data-title">${escapeHtml(m.prenom)} ${escapeHtml(m.nom)}</div>
+          <div class="data-sub">${labelTypeMembre(m.typeMembre)} · ${escapeHtml(m.email||'')} ${m.typeMembre !== 'benevole' ? (m.cotisationPayee ? '<span class="badge badge-ok">Cotisation OK</span>' : '<span class="badge badge-warn">Cotisation à régler</span>') : ''} ${m.recurrenceCours === 'hebdomadaire' ? '<span class="badge badge-neutral">Cours 1x/semaine</span>' : m.recurrenceCours === 'bimensuelle' ? '<span class="badge badge-neutral">Cours 1x/2 semaines</span>' : ''} ${m.chefBenevoles ? '<span class="badge badge-danger">Chef des bénévoles</span>' : ''} ${m.abonnement ? '<span class="badge badge-neutral">Abonnement</span>' : ''} ${m.abonnementRenouvellementDemande ? '<span class="badge badge-warn">Nouvel abonnement demandé</span>' : ''} ${m.suppressionDemandee ? '<span class="badge badge-danger">Suppression demandée</span>' : ''} ${(m.compteDemo && compteActuel.role === 'superadmin') ? '<span class="badge badge-neutral">Compte démo</span>' : ''}</div>
+        </div>
+        <div class="data-actions">
+          ${(!m.compteDemo || compteActuel.role === 'superadmin') ? `<button class="btn-sm" onclick="window.editerMembre('${m.id}')">Modifier</button>
+          <button class="btn-sm danger" onclick="window.archiverMembre('${m.id}')">Archiver</button>` : ''}
+        </div>
+      </div>`).join('');
+  }
+  renderMembresArchives();
+}
+function renderMembresArchives() {
+  const wrap = document.getElementById('listeMembresArchives');
+  const archives = membresCache.filter(m => m.archive);
+  wrap.innerHTML = archives.length ? archives.map(m => `
+    <div class="data-row">
+      <div class="data-main"><div class="data-title">${escapeHtml(m.prenom)} ${escapeHtml(m.nom)}</div></div>
+      <div class="data-actions"><button class="btn-sm" onclick="window.reactiverMembre('${m.id}')">Réactiver</button></div>
+    </div>`).join('') : '<div class="empty-state">Aucun membre archivé.</div>';
+}
+document.getElementById('btnVoirArchives').addEventListener('click', () => {
+  const z = document.getElementById('listeMembresArchives');
+  z.style.display = z.style.display === 'none' ? 'flex' : 'none';
+  z.style.flexDirection = 'column';
+  z.style.gap = '10px';
+});
+document.getElementById('rechercheMembre').addEventListener('input', (e) => renderMembres(e.target.value));
+document.getElementById('btnAjouterMembre').addEventListener('click', () => window.ouvrirModalMembre());
+document.getElementById('btnCreerCompteDemo').addEventListener('click', async () => {
+  if (Object.values(membresParUid).some(m => m.compteDemo)) {
+    alert('Le compte de démonstration existe déjà (onglet Membres, fiche "Hexelya").');
+    return;
+  }
+  if (!confirm('Créer le compte de démonstration "Hexelya" (identifiant "Hexelya", mot de passe "hexelya") ? Il sera invisible et intouchable depuis l\'Admin simple. Ta session reste ouverte.')) return;
+  try {
+    const uid = await creerCompteMembre('Hexelya', 'hexelya'); // via une app Firebase secondaire
+    await setDoc(doc(db, 'membres', uid), {
+      role: 'membre',
+      identifiant: 'Hexelya',
+      prenom: 'Hexelya',
+      nom: 'Démo',
+      typeMembre: 'cours',
+      compteDemo: true,
+      motDePasseActuel: 'hexelya',
+      dateInscription: new Date().toISOString(),
+      archive: false
+    });
+    await chargerMembres();
+    renderMembres();
+    alert('Compte démo créé. Retrouve-le dans l\'onglet Membres pour compléter sa fiche comme celle d\'un vrai membre.');
+  } catch (err) {
+    if (err.code === 'auth/email-already-in-use') {
+      alert('Un compte avec l\'identifiant "Hexelya" existe déjà dans Firebase Authentication.');
+    } else {
+      alert('Erreur lors de la création : ' + (err.code || err.message));
+    }
+  }
+});
+
+window.editerMembre = (id) => window.ouvrirModalMembre(membresParUid[id]);
+window.ignorerDemandeAbonnement = async (membreId, btn) => {
+  try {
+    await updateDoc(doc(db, 'membres', membreId), { abonnementRenouvellementDemande: false });
+    if (membresParUid[membreId]) membresParUid[membreId].abonnementRenouvellementDemande = false;
+    btn.closest('.banner-alert').remove();
+  } catch (err) { alert('Erreur : ' + (err.code || err.message)); }
+};
+window.supprimerDefinitivementMembre = async (id, identifiant) => {
+  const m = membresParUid[id];
+  if (m?.compteDemo && compteActuel.role !== 'superadmin') {
+    alert('Ce compte de démonstration ne peut être géré que par Hélène (Super Admin).');
+    return;
+  }
+  if (!confirm(`Supprimer définitivement la fiche de "${identifiant}" ? Cette action est irréversible (fiche + historique de connexion).`)) return;
+  let compteAuthSupprime = false;
+  if (m?.motDePasseActuel) {
+    try {
+      await supprimerCompteAuthMembre(identifiant, m.motDePasseActuel);
+      compteAuthSupprime = true;
+    } catch (err) {
+      console.warn('Suppression du compte Firebase Authentication impossible :', err);
+    }
+  }
+  try {
+    await deleteDoc(doc(db, 'membres', id));
+    window.fermerModal();
+    await chargerMembres(id);
+    renderMembres();
+    alert(compteAuthSupprime
+      ? 'Fiche et compte de connexion supprimés.'
+      : 'Fiche supprimée. Le compte de connexion n\'a pas pu être supprimé automatiquement (mot de passe non à jour) — supprime-le manuellement dans Firebase Console → Authentication → Users.');
+  } catch (err) {
+    alert('Erreur lors de la suppression de la fiche : ' + (err.code || err.message));
+  }
+};
+window.archiverMembre = async (id) => {
+  const m = membresParUid[id];
+  if (m?.compteDemo && compteActuel.role !== 'superadmin') {
+    alert('Ce compte de démonstration ne peut être géré que par Hélène (Super Admin).');
+    return;
+  }
+  await updateDoc(doc(db, 'membres', id), { archive: true });
+  await chargerMembres(id); renderMembres();
+};
+window.reactiverMembre = async (id) => {
+  await updateDoc(doc(db, 'membres', id), { archive: false });
+  await chargerMembres(id); renderMembres();
+};
+
+window.ouvrirModalMembre = (membre, demandeId) => {
+  const d = demandeId ? window._demandesInscription[demandeId] : null;
+  const src = membre || d || {};
+  const estNouveau = !membre;
+  const html = `
+    <div class="modal-overlay" id="modalOverlayMembre">
+      <div class="modal-box" style="max-width:640px;">
+        <h3>${membre ? 'Modifier le membre' : 'Ajouter un membre'}</h3>
+        ${estNouveau ? `<div class="banner-alert info">Le compte de connexion (identifiant + mot de passe) est créé automatiquement quand tu cliques sur "Enregistrer" — rien à faire dans Firebase.</div>` : ''}
+        ${src.suppressionDemandee ? `
+        <div class="banner-alert danger">
+          <strong>Ce membre a demandé la suppression de sa fiche.</strong><br>
+          Motif : ${escapeHtml(src.suppressionMotif || '—')}
+          <div style="margin-top:8px;"><button class="btn-sm danger" type="button" onclick="window.supprimerDefinitivementMembre('${idSur(membre?.id)}','${idSur(membre?.identifiant||'')}')">Supprimer définitivement cette fiche</button></div>
+        </div>` : ''}
+        <div class="form-grid">
+          <div class="field"><label>Identifiant de connexion *</label><input id="fm-identifiant" value="${escapeHtml(src.identifiant||src.identifiantSouhaite||src.prenom||'')}"></div>
+          <div class="field"><label>Type de membre</label>
+            <select id="fm-type">
+              <option value="cours" ${(src.typeMembre||'cours')==='cours'?'selected':''}>Membre cours</option>
+              <option value="pension" ${src.typeMembre==='pension'?'selected':''}>Membre demi-pension</option>
+              <option value="benevole" ${src.typeMembre==='benevole'?'selected':''}>Membre bénévole</option>
+            </select>
+          </div>
+        </div>
+        <div class="field" id="fm-zoneChefBenevoles" style="${src.typeMembre==='benevole'?'':'display:none;'}">
+          <label>Chef des bénévoles <span class="hint">— peut ajouter ET retirer du stock (comme l'admin), mais n'a accès à rien d'autre côté admin</span></label>
+          <select id="fm-chefBenevoles">
+            <option value="non" ${!src.chefBenevoles?'selected':''}>Non</option>
+            <option value="oui" ${src.chefBenevoles?'selected':''}>Oui</option>
+          </select>
+        </div>
+        ${estNouveau ? `<div class="form-grid">
+          <div class="field"><label>${d?.motDePasseSouhaite ? 'Mot de passe choisi par le membre *' : 'Mot de passe temporaire *'}</label><input id="fm-motdepasse" type="text" placeholder="ex: club4460" value="${escapeHtml(d?.motDePasseSouhaite || ('club' + Math.floor(1000+Math.random()*9000)))}"></div>
+          <div class="field"><label></label><div style="font-size:0.85rem;color:var(--terre);padding-top:8px;">${d?.motDePasseSouhaite ? "C'est ce que le membre a choisi lui-même — modifie si besoin (ex: en cas de doublon)." : "À communiquer au membre — il pourra le changer une fois connecté."}</div></div>
+        </div>` : ''}
+        <div class="form-grid">
+          <div class="field"><label>Prénom *</label><input id="fm-prenom" value="${escapeHtml(src.prenom||'')}"></div>
+          <div class="field"><label>Nom *</label><input id="fm-nom" value="${escapeHtml(src.nom||'')}"></div>
+        </div>
+        <div class="field"><label>Date de naissance</label><input type="date" id="fm-naissance" value="${escapeHtml(src.dateNaissance||'')}"></div>
+        <div class="form-grid">
+          <div class="field"><label>Téléphone</label><input id="fm-telephone" value="${escapeHtml(src.telephone||src.gsm||'')}"></div>
+          <div class="field"><label>Email</label><input id="fm-email" value="${escapeHtml(src.email||'')}"></div>
+        </div>
+        <div class="field"><label>Adresse</label><input id="fm-adresse" value="${escapeHtml(src.adressePostale || (src.adresse ? `${src.adresse.rue}, ${src.adresse.cp} ${src.adresse.ville}` : ''))}"></div>
+        <div class="field" id="fm-zoneCotisationRecurrence">
+          <div class="form-grid">
+            <div class="field"><label>Cotisation payée</label>
+              <select id="fm-cotisationPayee">
+                <option value="non" ${!src.cotisationPayee?'selected':''}>Non</option>
+                <option value="oui" ${src.cotisationPayee?'selected':''}>Oui</option>
+              </select>
+            </div>
+            <div class="field"><label>Échéance cotisation</label><input type="date" id="fm-cotisationEcheance" value="${src.cotisationDateEcheance||''}"></div>
+          </div>
+          <div class="field"><label>Cours avec récurrence <span class="hint">— si ce membre a un cours fixe régulier</span></label>
+            <select id="fm-recurrenceCours">
+              <option value="" ${!src.recurrenceCours?'selected':''}>Aucune</option>
+              <option value="hebdomadaire" ${src.recurrenceCours==='hebdomadaire'?'selected':''}>1x par semaine</option>
+              <option value="bimensuelle" ${src.recurrenceCours==='bimensuelle'?'selected':''}>1x toutes les deux semaines</option>
+            </select>
+          </div>
+          <div class="field"><label>Fonctionne par abonnement <span class="hint">— 10+1 cours, décomptés à chaque leçon validée ET donnée</span></label>
+            <select id="fm-abonnement">
+              <option value="non" ${!src.abonnement?'selected':''}>Non</option>
+              <option value="oui" ${src.abonnement?'selected':''}>Oui</option>
+            </select>
+          </div>
+          ${src.abonnementRenouvellementDemande ? `<div class="banner-alert" style="margin-bottom:16px;">Ce membre a demandé un nouvel abonnement. <button type="button" class="btn-sm" style="margin-left:10px;" onclick="window.ignorerDemandeAbonnement('${idSur(src.id || '')}', this)">Ignorer la demande</button></div>` : ''}
+          ${!estNouveau ? `
+          <div class="field" id="fm-zoneAbonnements" style="${src.abonnement?'':'display:none;'}">
+            <div class="section-heading" style="margin-bottom:8px;">
+              <label style="margin-bottom:0;">Abonnements</label>
+              <button class="collapse-toggle" type="button" data-target="wrapAbonnementsMembre" aria-expanded="false">▸</button>
+            </div>
+            <div id="wrapAbonnementsMembre" class="hidden">
+              <div id="zoneAbonnementActif"><div class="empty-state">Chargement...</div></div>
+              <button class="btn-sm primary" type="button" id="fm-btnNouvelAbonnement" style="margin-top:10px;">+ Nouvel abonnement (11 cours)</button>
+              <div style="margin-top:14px;">
+                <h4 style="font-size:0.8rem; text-transform:uppercase; letter-spacing:0.04em; color:var(--terre); margin-bottom:8px;">Historique des abonnements</h4>
+                <div id="zoneAbonnementsHistorique"></div>
+              </div>
+            </div>
+          </div>` : ''}
+        </div>
+        ${!estNouveau ? `
+        <div class="field" id="fm-zoneCoursHistorique">
+          <div class="section-heading" style="margin-bottom:8px;">
+            <label style="margin-bottom:0;">Cours — historique et à venir</label>
+            <button class="collapse-toggle" type="button" data-target="wrapHistoriqueCoursMembre" aria-expanded="false">▸</button>
+          </div>
+          <div id="wrapHistoriqueCoursMembre" class="hidden">
+            <div id="zoneCoursAVenirMembre"><div class="empty-state">Chargement...</div></div>
+            <div id="zoneHistoriqueCoursMembre" style="margin-top:10px;"></div>
+          </div>
+        </div>
+        <div class="field">
+          <div class="section-heading" style="margin-bottom:8px;">
+            <label style="margin-bottom:0;">Stock utilisé</label>
+            <button class="collapse-toggle" type="button" data-target="wrapStockMembre" aria-expanded="false">▸</button>
+          </div>
+          <div id="wrapStockMembre" class="hidden">
+            <div id="zoneStockMembre"><div class="empty-state">Chargement...</div></div>
+          </div>
+        </div>` : ''}
+        <div class="modal-actions">
+          <button class="btn-sm" type="button" onclick="window.fermerModal()">Annuler</button>
+          <button class="btn-sm primary" type="button" id="fm-save">Enregistrer</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modalZone').innerHTML = html;
+  if (!estNouveau) { chargerCoursMembre(membre.id); chargerStockMembre(membre.id); }
+
+  if (estNouveau) {
+    // Suggestion automatique de l'identifiant et du mot de passe à partir du
+    // prénom/nom/date de naissance — sauf si le membre a déjà choisi les
+    // siens lui-même via le formulaire d'inscription (on respecte son choix).
+    let identifiantAuto = !(d && d.identifiantSouhaite);
+    let motdepasseAuto = !(d && d.motDePasseSouhaite);
+    const champId = document.getElementById('fm-identifiant');
+    const champMdp = document.getElementById('fm-motdepasse');
+    const champPrenom = document.getElementById('fm-prenom');
+    const champNom = document.getElementById('fm-nom');
+    const champNaissance = document.getElementById('fm-naissance');
+    champId.addEventListener('input', () => { identifiantAuto = false; });
+    champMdp.addEventListener('input', () => { motdepasseAuto = false; });
+    const recalculerSuggestions = () => {
+      if (identifiantAuto) champId.value = suggererIdentifiant(champPrenom.value, champNom.value);
+      if (motdepasseAuto) champMdp.value = suggererMotDePasse(champPrenom.value, champNom.value, champNaissance.value);
+    };
+    champPrenom.addEventListener('input', recalculerSuggestions);
+    champNom.addEventListener('input', recalculerSuggestions);
+    champNaissance.addEventListener('input', recalculerSuggestions);
+    if (identifiantAuto || motdepasseAuto) recalculerSuggestions();
+  }
+
+  const majAffichageSelonType = () => {
+    const estBenevole = document.getElementById('fm-type').value === 'benevole';
+    document.getElementById('fm-zoneCotisationRecurrence').classList.toggle('hidden', estBenevole);
+    document.getElementById('fm-zoneChefBenevoles').style.display = estBenevole ? '' : 'none';
+    const zoneHisto = document.getElementById('fm-zoneCoursHistorique');
+    if (zoneHisto) zoneHisto.classList.toggle('hidden', estBenevole);
+  };
+  document.getElementById('fm-type').addEventListener('change', majAffichageSelonType);
+  majAffichageSelonType();
+
+  const champAbonnement = document.getElementById('fm-abonnement');
+  const zoneAbos = document.getElementById('fm-zoneAbonnements');
+  champAbonnement.addEventListener('change', () => {
+    if (zoneAbos) zoneAbos.style.display = champAbonnement.value === 'oui' ? '' : 'none';
+  });
+  if (!estNouveau && membre) {
+    chargerAbonnementsMembre(membre.id);
+    const btnNouvelAbo = document.getElementById('fm-btnNouvelAbonnement');
+    if (btnNouvelAbo) btnNouvelAbo.addEventListener('click', () => window.creerNouvelAbonnement(membre.id));
+  }
+
+  document.getElementById('fm-save').addEventListener('click', async () => {
+    const identifiant = document.getElementById('fm-identifiant').value.trim();
+    const motDePasse = estNouveau ? document.getElementById('fm-motdepasse').value.trim() : '';
+    if (!identifiant) { alert('L\'identifiant est obligatoire.'); return; }
+    if (!identifiantValide(identifiant)) { alert('L\'identifiant ne peut contenir que des lettres et des chiffres (pas d\'espace, pas de caractère spécial).'); return; }
+    if (estNouveau && motDePasse.length < 6) { alert('Le mot de passe temporaire doit contenir au moins 6 caractères.'); return; }
+    if (estNouveau && !motDePasseValide(motDePasse)) { alert('Le mot de passe ne peut contenir que des lettres et des chiffres (pas d\'espace, pas de caractère spécial).'); return; }
+
+    const btnSave = document.getElementById('fm-save');
+    let uid;
+    if (estNouveau) {
+      btnSave.disabled = true;
+      btnSave.textContent = 'Création du compte...';
+      try {
+        uid = await creerCompteMembre(identifiant, motDePasse);
+      } catch (err) {
+        btnSave.disabled = false;
+        btnSave.textContent = 'Enregistrer';
+        if (err.code === 'auth/email-already-in-use') {
+          alert('Cet identifiant est déjà utilisé par un autre compte. Choisis un identifiant différent.');
+        } else if (err.code === 'auth/weak-password') {
+          alert('Mot de passe trop faible (6 caractères minimum).');
+        } else {
+          alert('Erreur lors de la création du compte : ' + (err.code || err.message));
+        }
+        return;
+      }
+      btnSave.textContent = 'Enregistrement de la fiche...';
+    } else {
+      uid = membre.id;
+    }
+    const data = {
+      role: 'membre',
+      identifiant,
+      typeMembre: document.getElementById('fm-type').value,
+      prenom: document.getElementById('fm-prenom').value.trim(),
+      nom: document.getElementById('fm-nom').value.trim(),
+      dateNaissance: document.getElementById('fm-naissance').value,
+      telephone: document.getElementById('fm-telephone').value.trim(),
+      email: document.getElementById('fm-email').value.trim(),
+      adressePostale: document.getElementById('fm-adresse').value.trim(),
+      cotisationPayee: document.getElementById('fm-cotisationPayee').value === 'oui',
+      cotisationDateEcheance: document.getElementById('fm-cotisationEcheance').value,
+      recurrenceCours: document.getElementById('fm-recurrenceCours').value,
+      abonnement: document.getElementById('fm-abonnement').value === 'oui',
+      chefBenevoles: document.getElementById('fm-chefBenevoles').value === 'oui',
+      archive: false
+    };
+    if (estNouveau) {
+      data.motDePasseActuel = motDePasse;
+      data.dateInscription = new Date().toISOString();
+      if (d) {
+        data.niveauEquitation = d.niveauEquitation || 'debutant';
+        data.contactUrgence = d.contactUrgence || {};
+        data.assuranceRC = d.assuranceRC || {};
+        data.droitImage = !!d.droitImage;
+        if (d.cheval && d.cheval.nom) {
+          data.chevaux = [{
+            id: 'cheval-' + Date.now(), nom: d.cheval.nom, race: d.cheval.race, robe: d.cheval.robe,
+            naissance: d.cheval.naissance, sexe: d.cheval.sexe, puce: d.cheval.puce,
+            veterinaire: d.cheval.veterinaire, marechal: d.cheval.marechal, archive: false,
+            alimentationParticuliere: d.cheval.alimentationParticuliere,
+            vaccins: { grippe: { date: d.cheval.vaccinGrippeDate }, tetanos: { date: d.cheval.vaccinTetanosDate } }
+          }];
+        }
+      }
+    }
+    try {
+      await setDoc(doc(db, 'membres', uid), data, { merge: true });
+      if (demandeId) await updateDoc(doc(db, 'demandes_inscription', demandeId), { statut: 'traitee' });
+      window.fermerModal();
+      await chargerMembres(uid);
+      renderMembres();
+      chargerDemandesInscription();
+    } catch (err) {
+      btnSave.disabled = false;
+      btnSave.textContent = 'Enregistrer';
+      alert('Erreur : ' + (err.code || err.message));
+    }
+  });
+};
+
+async function chargerCoursMembre(membreId) {
+  const aujourdhui = dateISOLocale(new Date());
+  const snap = await getDocs(query(collection(db, 'reservations'), where('membreId', '==', membreId)));
+  let toutes = [];
+  snap.forEach(d => toutes.push({ ...d.data(), id: d.id }));
+
+  const ligne = (r) => {
+    const dateLabel = r.date ? capitalize(new Date(r.date + 'T00:00:00').toLocaleDateString('fr-BE', {weekday:'long', day:'numeric', month:'long'})) : '';
+    const badge = r.statut === 'validee' ? '<span class="badge badge-ok">Validée</span>'
+      : r.statut === 'en_attente' ? '<span class="badge badge-warn">En attente</span>'
+      : r.statut === 'refusee' ? '<span class="badge badge-danger">Refusée</span>'
+      : '<span class="badge badge-neutral">Annulée</span>';
+    return `<div class="data-row"><div class="data-main"><div class="data-title">${dateLabel} — ${r.heureDebut || ''}</div><div class="data-sub">${r.type === 'libre' ? 'Piste libre' : 'Cours'} ${badge}${r.recurrenceId ? ' <span class="badge badge-neutral">Récurrence</span>' : ''}${r.nomClientEssai ? ` · <strong>${escapeHtml(r.nomClientEssai)}</strong>` : ''}</div></div></div>`;
+  };
+
+  // À venir : les 3 prochaines occurrences seulement (pour ne pas afficher
+  // des dizaines de créneaux identiques pour un cours récurrent).
+  const aVenir = toutes.filter(r => r.date >= aujourdhui && r.statut !== 'annulee' && r.statut !== 'refusee')
+    .sort((a, b) => a.date.localeCompare(b.date)).slice(0, 3);
+  document.getElementById('zoneCoursAVenirMembre').innerHTML =
+    `<h4 style="font-size:0.8rem; text-transform:uppercase; letter-spacing:0.04em; color:var(--terre); margin-bottom:8px;">Prochains cours</h4>` +
+    (aVenir.length ? aVenir.map(ligne).join('') : '<div class="empty-state">Aucun cours à venir.</div>');
+
+  // Historique : tout ce qui est passé, depuis le début.
+  const historique = toutes.filter(r => r.date < aujourdhui)
+    .sort((a, b) => b.date.localeCompare(a.date));
+  document.getElementById('zoneHistoriqueCoursMembre').innerHTML =
+    `<h4 style="font-size:0.8rem; text-transform:uppercase; letter-spacing:0.04em; color:var(--terre); margin-bottom:8px;">Historique (${historique.length})</h4>` +
+    (historique.length ? historique.map(ligne).join('') : '<div class="empty-state">Aucun cours passé enregistré.</div>');
+}
+
+async function chargerStockMembre(membreId) {
+  const snap = await getDocs(query(collection(db, 'stock_signalements'), where('membreId', '==', membreId)));
+  let prises = [];
+  snap.forEach(d => prises.push({ ...d.data(), id: d.id }));
+  prises.sort((a, b) => (b.dateSignalement || '').localeCompare(a.dateSignalement || ''));
+  const wrap = document.getElementById('zoneStockMembre');
+  if (prises.length === 0) { wrap.innerHTML = '<div class="empty-state">Aucune prise de stock signalée pour ce membre.</div>'; return; }
+  wrap.innerHTML = prises.map(p => {
+    const dateLabel = p.dateSignalement ? new Date(p.dateSignalement).toLocaleString('fr-BE', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' }) : '';
+    return `<div class="data-row"><div class="data-main"><div class="data-title">${p.quantitePrise} ${escapeHtml(p.unite||'')} de ${escapeHtml(p.nom)}</div><div class="data-sub">${dateLabel}</div></div></div>`;
+  }).join('');
+}
+
+// ==========================================================================
+// ABONNEMENTS (10+1 cours) — historique complet par membre
+// ==========================================================================
+function formatDateCourte(iso) {
+  if (!iso) return '—';
+  return capitalize(new Date(iso + 'T00:00:00').toLocaleDateString('fr-BE', { day:'numeric', month:'long', year:'numeric' }));
+}
+async function chargerAbonnementsMembre(membreId) {
+  await synchroniserAbonnements(membreId); // met à jour le décompte avant d'afficher
+  const snap = await getDocs(query(collection(db, 'abonnements_membres'), where('membreId', '==', membreId)));
+  let abonnements = [];
+  snap.forEach(d => abonnements.push({ ...d.data(), id: d.id }));
+  abonnements.sort((a, b) => (b.dateSouscription || '').localeCompare(a.dateSouscription || ''));
+  window._abonnementsMembreActuel = abonnements;
+
+  const actif = abonnements.find(a => a.actif);
+  const zoneActif = document.getElementById('zoneAbonnementActif');
+  if (!actif) {
+    zoneActif.innerHTML = '<div class="empty-state">Aucun abonnement actif pour ce membre.</div>';
+  } else {
+    const utilises = actif.coursUtilises || [];
+    const restants = 11 - utilises.length;
+    const listeDates = utilises.map((c, i) => `
+      <div class="data-row">
+        <div class="data-main"><div class="data-title">Cours du ${formatDateCourte(c.date)}</div></div>
+        <div class="data-actions"><button class="btn-sm" onclick="window.modifierSeanceAbonnement('${idSur(actif.id)}', ${i}, '${idSur(membreId)}')">Modifier</button><button class="btn-sm danger" onclick="window.retirerCoursUtilise('${idSur(actif.id)}', ${i}, '${idSur(membreId)}')">Retirer</button></div>
+      </div>`).join('');
+    zoneActif.innerHTML = `
+      <div class="data-row">
+        <div class="data-main">
+          <div class="data-title">Abonnement actif — souscrit le ${formatDateCourte(actif.dateSouscription)}</div>
+          <div class="data-sub">
+            ${actif.paye ? `<span class="badge badge-ok">Payé le ${formatDateCourte(actif.datePaiement)}</span>` : '<span class="badge badge-warn">Non payé</span>'}
+            <span class="badge ${restants<=2 ? 'badge-danger' : 'badge-neutral'}">${restants} / 11 cours restants</span>
+          </div>
+        </div>
+        <div class="data-actions">
+          <button class="btn-sm" onclick="window.togglePayeAbonnement('${actif.id}','${membreId}')">${actif.paye ? 'Marquer non payé' : 'Marquer payé'}</button>
+          <button class="btn-sm" onclick="window.marquerCoursUtiliseManuel('${actif.id}','${membreId}')">+ Marquer un cours utilisé</button>
+        </div>
+      </div>
+      ${listeDates ? `<div style="margin-top:8px;">${listeDates}</div>` : ''}`;
+  }
+
+  const historique = abonnements.filter(a => !a.actif);
+  document.getElementById('zoneAbonnementsHistorique').innerHTML = historique.length === 0
+    ? '<div class="empty-state">Aucun abonnement passé.</div>'
+    : historique.map(a => {
+        const utilises = a.coursUtilises || [];
+        return `<div class="data-row"><div class="data-main"><div class="data-title">Souscrit le ${formatDateCourte(a.dateSouscription)}</div><div class="data-sub">${a.paye ? 'Payé le ' + formatDateCourte(a.datePaiement) : 'Non payé'} · ${utilises.length}/11 cours utilisés</div></div><div class="data-actions"><button class="btn-sm" onclick="window.ouvrirSeancesAbonnement('${idSur(a.id)}','${idSur(membreId)}')">Voir / modifier les séances</button></div></div>`;
+      }).join('');
+}
+window.creerNouvelAbonnement = async (membreId) => {
+  if (!confirm("Créer un nouvel abonnement de 11 cours pour ce membre ? L'abonnement actif précédent, s'il existe, sera archivé dans l'historique.")) return;
+  const estPaye = confirm('L\'abonnement est-il déjà payé ? (Annuler = non payé pour l\'instant)');
+  try {
+    const ancienActif = (window._abonnementsMembreActuel || []).find(a => a.actif);
+    if (ancienActif) await updateDoc(doc(db, 'abonnements_membres', ancienActif.id), { actif: false });
+    await addDoc(collection(db, 'abonnements_membres'), {
+      membreId,
+      dateSouscription: dateISOLocale(new Date()),
+      paye: estPaye,
+      datePaiement: estPaye ? dateISOLocale(new Date()) : null,
+      actif: true,
+      coursUtilises: []
+    });
+    await updateDoc(doc(db, 'membres', membreId), { abonnementRenouvellementDemande: false });
+    chargerAbonnementsMembre(membreId);
+  } catch (err) {
+    alert('Erreur : ' + (err.code || err.message) + '\n\nSi le message mentionne "permissions", il faut mettre à jour les règles Firestore (voir le README, section 4).');
+  }
+};
+window.togglePayeAbonnement = async (abonnementId, membreId) => {
+  const a = (window._abonnementsMembreActuel || []).find(x => x.id === abonnementId);
+  const nouveauPaye = !a?.paye;
+  await updateDoc(doc(db, 'abonnements_membres', abonnementId), {
+    paye: nouveauPaye,
+    datePaiement: nouveauPaye ? dateISOLocale(new Date()) : null
+  });
+  chargerAbonnementsMembre(membreId);
+};
+// ---- Modification manuelle des séances d'un abonnement (Lara et Super Admin) ----
+// Le nombre de cours utilisés = nombre de séances de la liste. Les dates
+// retirées ou déplacées sont mémorisées dans "coursExclus" pour que le décompte
+// automatique ne les remette pas.
+function parseDateFr(str) {
+  const m = String(str || '').trim().match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);
+  if (!m) return null;
+  const iso = `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+  return isNaN(new Date(iso + 'T00:00:00')) ? null : iso;
+}
+function aboParId(id) { return (window._abonnementsMembreActuel || []).find(x => x.id === id); }
+async function ecrireSeancesAbonnement(abonnementId, utilises, exclus) {
+  await updateDoc(doc(db, 'abonnements_membres', abonnementId), { coursUtilises: utilises, coursExclus: exclus });
+  const abo = aboParId(abonnementId);
+  if (abo) { abo.coursUtilises = utilises; abo.coursExclus = exclus; }
+}
+window.marquerCoursUtiliseManuel = async (abonnementId, membreId) => {
+  const dateISO = parseDateFr(prompt('Date du cours (JJ/MM/AAAA) :', new Date().toLocaleDateString('fr-BE')));
+  if (!dateISO) { alert('Format de date non reconnu (JJ/MM/AAAA).'); return; }
+  const abo = aboParId(abonnementId);
+  const utilises = [...(abo?.coursUtilises || [])];
+  if (utilises.length >= 11 && !confirm('Cet abonnement a déjà 11 cours utilisés. Ajouter quand même ?')) return;
+  utilises.push({ date: dateISO });
+  const exclus = (abo?.coursExclus || []).filter(d => d !== dateISO);
+  await ecrireSeancesAbonnement(abonnementId, utilises, exclus);
+  chargerAbonnementsMembre(membreId);
+};
+window.modifierSeanceAbonnement = async (abonnementId, index, membreId) => {
+  const abo = aboParId(abonnementId);
+  const utilises = [...(abo?.coursUtilises || [])];
+  const ancienne = utilises[index]?.date;
+  if (!ancienne) return;
+  const saisie = prompt('Nouvelle date du cours (JJ/MM/AAAA) :', ancienne.split('-').reverse().join('/'));
+  if (saisie === null) return;
+  const dateISO = parseDateFr(saisie);
+  if (!dateISO) { alert('Format de date non reconnu (JJ/MM/AAAA).'); return; }
+  if (dateISO === ancienne) return;
+  utilises[index] = { ...utilises[index], date: dateISO };
+  let exclus = [...(abo?.coursExclus || [])].filter(d => d !== dateISO);
+  if (!exclus.includes(ancienne)) exclus.push(ancienne);
+  await ecrireSeancesAbonnement(abonnementId, utilises, exclus);
+  chargerAbonnementsMembre(membreId);
+  if (document.getElementById('overlaySeancesAbo')) window.ouvrirSeancesAbonnement(abonnementId, membreId);
+};
+window.retirerCoursUtilise = async (abonnementId, index, membreId) => {
+  if (!confirm('Retirer ce cours de la liste des cours utilisés (le crédite à nouveau) ?')) return;
+  const abo = aboParId(abonnementId);
+  const utilises = [...(abo?.coursUtilises || [])];
+  const [retire] = utilises.splice(index, 1);
+  const exclus = [...(abo?.coursExclus || [])];
+  if (retire?.date && !exclus.includes(retire.date)) exclus.push(retire.date);
+  await ecrireSeancesAbonnement(abonnementId, utilises, exclus);
+  chargerAbonnementsMembre(membreId);
+  if (document.getElementById('overlaySeancesAbo')) window.ouvrirSeancesAbonnement(abonnementId, membreId);
+};
+// Fenêtre pour consulter/modifier les séances d'un abonnement passé (historique).
+window.ouvrirSeancesAbonnement = (abonnementId, membreId) => {
+  const abo = aboParId(abonnementId);
+  if (!abo) return;
+  document.getElementById('overlaySeancesAbo')?.remove();
+  const lignes = (abo.coursUtilises || []).map((c, i) => `
+    <div class="data-row"><div class="data-main"><div class="data-title">Cours du ${formatDateCourte(c.date)}</div></div>
+    <div class="data-actions"><button class="btn-sm" onclick="window.modifierSeanceAbonnement('${idSur(abo.id)}', ${i}, '${idSur(membreId)}')">Modifier</button><button class="btn-sm danger" onclick="window.retirerCoursUtilise('${idSur(abo.id)}', ${i}, '${idSur(membreId)}')">Retirer</button></div></div>`).join('');
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="modal-overlay" id="overlaySeancesAbo" style="z-index:1500;"><div class="modal-box" style="max-width:520px;">
+      <h3>Séances — abonnement du ${formatDateCourte(abo.dateSouscription)}</h3>
+      <p style="color:var(--terre); font-size:0.85rem;">${(abo.coursUtilises || []).length} / 11 cours utilisés</p>
+      <div class="data-list">${lignes || '<div class="empty-state">Aucune séance.</div>'}</div>
+      <div class="modal-actions">
+        <button class="btn-sm" onclick="window.marquerCoursUtiliseManuel('${idSur(abo.id)}','${idSur(membreId)}').then(() => window.ouvrirSeancesAbonnement('${idSur(abo.id)}','${idSur(membreId)}'))">+ Ajouter une séance</button>
+        <button class="btn-sm primary" onclick="document.getElementById('overlaySeancesAbo').remove()">Fermer</button>
+      </div></div></div>`);
+};
+// Décompte (ou recrédite) un cours sur l'abonnement actif d'un membre,
+// appelé quand un cours est validé / annulé côté admin.
+// Un cours est "presté" dès le JOUR du cours (aujourd'hui compris) : le cours
+// du jour est donc décompté sans attendre l'heure. S'il est annulé ensuite par
+// Lara, il est recrédité automatiquement (voir rendreCoursAbonnement).
+function coursEstPreste(dateISO) {
+  return dateISO <= dateISOLocale(new Date());
+}
+
+// Décompte automatique : tout cours VALIDÉ et PRESTÉ (date/heure passées) depuis
+// la souscription de l'abonnement actif est ajouté à cet abonnement, une seule
+// fois (comparaison par date). Exécuté à l'ouverture de l'espace admin.
+async function synchroniserAbonnements(membreIdUnique) {
+  try {
+    const snapAbo = await getDocs(membreIdUnique
+      ? query(collection(db, 'abonnements_membres'), where('membreId', '==', membreIdUnique), where('actif', '==', true))
+      : query(collection(db, 'abonnements_membres'), where('actif', '==', true)));
+    if (snapAbo.empty) return;
+    const abos = [];
+    snapAbo.forEach(d => abos.push({ id: d.id, ...d.data() }));
+    const dateMin = abos.map(a => a.dateSouscription || '9999-12-31').reduce((x, y) => x < y ? x : y);
+    const aujourdhui = dateISOLocale(new Date());
+    if (dateMin > aujourdhui) return;
+    const snapR = await getDocs(query(collection(db, 'reservations'), where('date', '>=', dateMin), where('date', '<=', aujourdhui)));
+    const prestes = [];
+    snapR.forEach(d => {
+      const r = d.data();
+      if (r.type === 'cours' && r.statut === 'validee' && coursEstPreste(r.date)) prestes.push(r);
+    });
+    for (const abo of abos) {
+      const utilises = [...(abo.coursUtilises || [])];
+      const exclus = abo.coursExclus || [];
+      const dejaPris = {};
+      utilises.forEach(c => { dejaPris[c.date] = (dejaPris[c.date] || 0) + 1; });
+      const mesCours = prestes.filter(r => r.membreId === abo.membreId && r.date >= (abo.dateSouscription || '')).sort((a, b) => (a.date + a.heureDebut).localeCompare(b.date + b.heureDebut));
+      const nouveaux = [];
+      for (const r of mesCours) {
+        if (exclus.includes(r.date)) continue; // retiré/déplacé volontairement par l'admin
+        if (dejaPris[r.date] > 0) { dejaPris[r.date]--; continue; }
+        if (utilises.length + nouveaux.length >= 11) break;
+        nouveaux.push({ date: r.date });
+      }
+      if (!nouveaux.length) continue;
+      const avant = 11 - utilises.length;
+      const finale = utilises.concat(nouveaux);
+      await updateDoc(doc(db, 'abonnements_membres', abo.id), { coursUtilises: finale });
+      const restants = 11 - finale.length;
+      if (restants <= 2 && avant > restants) {
+        notifierMembreReservation(abo.membreId, `ℹ️ Il vous reste ${restants} cours dans votre abonnement.`);
+      }
+    }
+  } catch (err) { console.warn('Synchronisation des abonnements :', err); }
+}
+
+async function consommerCoursAbonnement(membreId, dateCours) {
+  const m = membresParUid[membreId];
+  if (!m || !m.abonnement) return;
+  const snap = await getDocs(query(collection(db, 'abonnements_membres'), where('membreId', '==', membreId), where('actif', '==', true)));
+  if (snap.empty) return;
+  const aboDoc = snap.docs[0];
+  if ((aboDoc.data().coursUtilises || []).some(c => c.date === dateCours)) return; // déjà décompté
+  const utilises = [...(aboDoc.data().coursUtilises || []), { date: dateCours }];
+  await updateDoc(doc(db, 'abonnements_membres', aboDoc.id), { coursUtilises: utilises });
+  const restants = 11 - utilises.length;
+  if ([2, 1, 0].includes(restants)) {
+    notifierMembreReservation(membreId, `ℹ️ Il vous reste ${restants} cours dans votre abonnement.`);
+  }
+}
+async function rendreCoursAbonnement(membreId, dateCours) {
+  const m = membresParUid[membreId];
+  if (!m || !m.abonnement) return;
+  const snap = await getDocs(query(collection(db, 'abonnements_membres'), where('membreId', '==', membreId), where('actif', '==', true)));
+  if (snap.empty) return;
+  const aboDoc = snap.docs[0];
+  const utilises = [...(aboDoc.data().coursUtilises || [])];
+  const idx = utilises.findIndex(c => c.date === dateCours);
+  if (idx === -1) return;
+  utilises.splice(idx, 1);
+  await updateDoc(doc(db, 'abonnements_membres', aboDoc.id), { coursUtilises: utilises });
+}
+
+// ==========================================================================
+// BOX & NETTOYAGE
+// ==========================================================================
+let boxesCache = [];
+async function chargerBoxes() {
+  const snap = await getDocs(collection(db, 'boxes'));
+  boxesCache = [];
+  snap.forEach(d => boxesCache.push({ ...d.data(), id: d.id }));
+  renderBoxes();
+}
+function renderBoxes() {
+  const wrap = document.getElementById('listeBoxes');
+  if (boxesCache.length === 0) { wrap.innerHTML = '<div class="empty-state">Aucun box créé.</div>'; return; }
+  wrap.innerHTML = boxesCache.map(b => `
+    <div class="data-row">
+      <div class="data-main">
+        <div class="data-title">${escapeHtml(b.nom)}</div>
+        <div class="data-sub">${b.chevalActuel ? 'Cheval : ' + escapeHtml(b.chevalActuel) : 'Vide'} ${b.membreId ? '· Propriétaire : ' + escapeHtml(nomMembre(b.membreId)) : ''}</div>
+      </div>
+      <div class="data-actions">
+        <button class="btn-sm" onclick="window.editerBox('${b.id}')">Modifier</button>
+        <button class="btn-sm danger" onclick="window.supprimerBox('${b.id}')">Supprimer</button>
+      </div>
+    </div>`).join('');
+}
+document.getElementById('btnAjouterBox').addEventListener('click', () => window.ouvrirModalBox());
+window.editerBox = (id) => window.ouvrirModalBox(boxesCache.find(b => b.id === id));
+window.supprimerBox = async (id) => {
+  if (!confirm('Supprimer ce box ?')) return;
+  await deleteDoc(doc(db, 'boxes', id));
+  chargerBoxes();
+};
+window.ouvrirModalBox = (box) => {
+  const optionsMembres = membresCache.filter(m => m.typeMembre === 'pension').map(m =>
+    `<option value="${m.id}" ${box?.membreId===m.id?'selected':''}>${escapeHtml(m.prenom)} ${escapeHtml(m.nom)}</option>`).join('');
+  const html = `
+    <div class="modal-overlay" id="modalOverlayBox">
+      <div class="modal-box">
+        <h3>${box ? 'Modifier le box' : 'Ajouter un box'}</h3>
+        <div class="field"><label>Nom du box</label><input id="bx-nom" value="${escapeHtml(box?.nom||'')}" placeholder="ex: Box 1"></div>
+        <div class="field"><label>Cheval actuel</label><input id="bx-cheval" value="${escapeHtml(box?.chevalActuel||'')}"></div>
+        <div class="field"><label>Membre en demi-pension</label>
+          <select id="bx-membre"><option value="">—</option>${optionsMembres}</select>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-sm" type="button" onclick="window.fermerModal()">Annuler</button>
+          <button class="btn-sm primary" type="button" id="bx-save">Enregistrer</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modalZone').innerHTML = html;
+  document.getElementById('bx-save').addEventListener('click', async () => {
+    const data = {
+      nom: document.getElementById('bx-nom').value.trim(),
+      chevalActuel: document.getElementById('bx-cheval').value.trim(),
+      membreId: document.getElementById('bx-membre').value || null
+    };
+    if (!data.nom) { alert('Merci d\'indiquer un nom de box.'); return; }
+    if (box) await updateDoc(doc(db, 'boxes', box.id), data);
+    else await addDoc(collection(db, 'boxes'), data);
+    window.fermerModal();
+    chargerBoxes();
+  });
+};
+
+async function chargerNettoyages() {
+  const snap = await getDocs(collection(db, 'nettoyages'));
+  let taches = [];
+  snap.forEach(d => taches.push({ ...d.data(), id: d.id }));
+  taches.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+
+  // Retrouve la photo du cheval du box concerné (par nom, insensible à la
+  // casse) pour afficher une petite vignette ronde devant chaque tâche.
+  const snapChevaux = await getDocs(collection(db, 'chevaux_ecurie'));
+  const photoParNomCheval = {};
+  snapChevaux.forEach(d => {
+    const c = d.data();
+    if (c.nom && c.photoUrl) photoParNomCheval[c.nom.trim().toLowerCase()] = c.photoUrl;
+  });
+
+  const wrap = document.getElementById('listeNettoyages');
+  if (taches.length === 0) { wrap.innerHTML = '<div class="empty-state">Aucune tâche planifiée.</div>'; return; }
+  wrap.innerHTML = taches.map(t => {
+    const dateLabel = t.date ? capitalize(new Date(t.date + 'T00:00:00').toLocaleDateString('fr-BE', {weekday:'long', day:'numeric', month:'long'})) : '';
+    const badge = t.statut === 'fait' ? '<span class="badge badge-ok">Fait</span>' : '<span class="badge badge-warn">À faire</span>';
+    const boxRef = boxesCache.find(b => b.id === t.boxId);
+    const nomCheval = boxRef?.chevalActuel?.trim();
+    const photoCheval = nomCheval ? photoParNomCheval[nomCheval.toLowerCase()] : null;
+    const vignette = photoCheval ? `<img src="${escapeHtml(photoCheval)}" style="width:36px; height:36px; border-radius:50%; object-fit:cover; flex:none;">` : '';
+    return `
+    <div class="data-row">
+      ${vignette}
+      <div class="data-main">
+        <div class="data-title">${escapeHtml(t.boxNom)} — ${dateLabel}</div>
+        <div class="data-sub">Assigné à : ${escapeHtml(nomMembre(t.assigneA))} ${badge}</div>
+      </div>
+      <div class="data-actions">
+        ${t.statut !== 'fait' ? `<button class="btn-sm primary" onclick="window.marquerNettoyageFaitAdmin('${t.id}')">Marquer fait</button>` : ''}
+        <button class="btn-sm danger" onclick="window.supprimerNettoyage('${t.id}')">Supprimer</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+window.marquerNettoyageFaitAdmin = async (id) => { await updateDoc(doc(db, 'nettoyages', id), { statut: 'fait' }); chargerNettoyages(); };
+window.supprimerNettoyage = async (id) => { await deleteDoc(doc(db, 'nettoyages', id)); chargerNettoyages(); };
+
+document.getElementById('btnAjouterNettoyage').addEventListener('click', () => {
+  const optionsBoxes = boxesCache.map(b => `<option value="${b.id}" data-nom="${escapeHtml(b.nom)}">${escapeHtml(b.nom)}</option>`).join('');
+  const optionsMembres = membresCache.filter(m => m.typeMembre === 'pension').map(m => `<option value="${m.id}">${escapeHtml(m.prenom)} ${escapeHtml(m.nom)}</option>`).join('');
+  const html = `
+    <div class="modal-overlay" id="modalOverlayNett">
+      <div class="modal-box">
+        <h3>Assigner une tâche de nettoyage</h3>
+        <div class="field"><label>Box</label><select id="nt-box">${optionsBoxes || '<option value="">Aucun box créé</option>'}</select></div>
+        <div class="field"><label>Date</label><input type="date" id="nt-date"></div>
+        <div class="field"><label>Assigné à</label><select id="nt-membre">${optionsMembres || '<option value="">Aucun membre demi-pension</option>'}</select></div>
+        <div class="modal-actions">
+          <button class="btn-sm" type="button" onclick="window.fermerModal()">Annuler</button>
+          <button class="btn-sm primary" type="button" id="nt-save">Enregistrer</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modalZone').innerHTML = html;
+  document.getElementById('nt-save').addEventListener('click', async () => {
+    const boxSelect = document.getElementById('nt-box');
+    const boxNom = boxSelect.options[boxSelect.selectedIndex]?.dataset.nom || '';
+    const data = {
+      boxId: boxSelect.value, boxNom,
+      date: document.getElementById('nt-date').value,
+      assigneA: document.getElementById('nt-membre').value,
+      statut: 'a_faire', createdAt: serverTimestamp()
+    };
+    if (!data.date || !data.assigneA) { alert('Merci de choisir une date et un membre.'); return; }
+    await addDoc(collection(db, 'nettoyages'), data);
+    window.fermerModal();
+    chargerNettoyages();
+  });
+});
+
+// ==========================================================================
+// TARIFS
+// ==========================================================================
+async function chargerTarifs() {
+  const snap = await getDocs(collection(db, 'tarifs'));
+  let tarifs = [];
+  snap.forEach(d => tarifs.push({ ...d.data(), id: d.id }));
+  const wrap = document.getElementById('listeTarifs');
+  if (tarifs.length === 0) { wrap.innerHTML = '<div class="empty-state">Aucun tarif créé.</div>'; return; }
+  const categories = [...new Set(tarifs.map(t => t.categorie || 'Autres'))];
+  wrap.innerHTML = categories.map(cat => `
+    <h3>${escapeHtml(cat)}</h3>
+    <div class="data-list" style="margin-bottom:16px;">
+      ${tarifs.filter(t => (t.categorie||'Autres')===cat).map(t => `
+        <div class="data-row">
+          <div class="data-main">
+            <div class="data-title">${escapeHtml(t.nom)}</div>
+            <div class="data-sub">${t.prixTexte || (typeof t.prix === 'number' ? t.prix.toFixed(2) + ' €' + (t.unite ? ' / ' + t.unite : '') : '')} ${t.visiblePublic === false ? '<span class="badge badge-neutral">Masqué du site public</span>' : ''}</div>
+          </div>
+          <div class="data-actions">
+            <button class="btn-sm" onclick="window.editerTarif('${t.id}')">Modifier</button>
+            <button class="btn-sm danger" onclick="window.supprimerTarif('${t.id}')">Supprimer</button>
+          </div>
+        </div>`).join('')}
+    </div>`).join('');
+  window._tarifs = {}; tarifs.forEach(t => window._tarifs[t.id] = t);
+}
+document.getElementById('btnAjouterTarif').addEventListener('click', () => window.ouvrirModalTarif());
+window.editerTarif = (id) => window.ouvrirModalTarif(window._tarifs[id]);
+window.supprimerTarif = async (id) => { if (!confirm('Supprimer ce tarif ?')) return; await deleteDoc(doc(db, 'tarifs', id)); chargerTarifs(); };
+window.ouvrirModalTarif = (t) => {
+  const html = `
+    <div class="modal-overlay" id="modalOverlayTarif">
+      <div class="modal-box">
+        <h3>${t ? 'Modifier le tarif' : 'Ajouter un tarif'}</h3>
+        <div class="field"><label>Catégorie</label><input id="tf-cat" value="${escapeHtml(t?.categorie||'')}" placeholder="ex: Cours, Pension, Stages"></div>
+        <div class="field"><label>Nom</label><input id="tf-nom" value="${escapeHtml(t?.nom||'')}" placeholder="ex: Cours de dressage 1h"></div>
+        <div class="form-grid">
+          <div class="field"><label>Prix (€)</label><input type="number" step="0.01" id="tf-prix" value="${t?.prix ?? ''}"></div>
+          <div class="field"><label>Unité</label><input id="tf-unite" value="${escapeHtml(t?.unite||'')}" placeholder="ex: heure, mois, abonnement, séance"></div>
+        </div>
+        <div class="field"><label>Conditions (facultatif)</label><input id="tf-conditions" value="${escapeHtml(t?.conditions||'')}"></div>
+        <div class="field"><label>Visible sur le site public</label>
+          <select id="tf-visible"><option value="oui" ${t?.visiblePublic!==false?'selected':''}>Oui</option><option value="non" ${t?.visiblePublic===false?'selected':''}>Non</option></select>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-sm" type="button" onclick="window.fermerModal()">Annuler</button>
+          <button class="btn-sm primary" type="button" id="tf-save">Enregistrer</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modalZone').innerHTML = html;
+  document.getElementById('tf-save').addEventListener('click', async () => {
+    const prixVal = document.getElementById('tf-prix').value;
+    const data = {
+      categorie: document.getElementById('tf-cat').value.trim() || 'Autres',
+      nom: document.getElementById('tf-nom').value.trim(),
+      unite: document.getElementById('tf-unite').value.trim(),
+      conditions: document.getElementById('tf-conditions').value.trim(),
+      visiblePublic: document.getElementById('tf-visible').value === 'oui'
+    };
+    if (prixVal !== '') data.prix = parseFloat(prixVal);
+    if (!data.nom) { alert('Merci d\'indiquer un nom.'); return; }
+    if (t) await updateDoc(doc(db, 'tarifs', t.id), data);
+    else await addDoc(collection(db, 'tarifs'), data);
+    window.fermerModal();
+    chargerTarifs();
+  });
+};
+
+// ==========================================================================
+// PARAMÈTRES BANCAIRES (IBAN)
+// ==========================================================================
+async function chargerIban() {
+  const d = await getDoc(doc(db, 'parametres', 'bancaire'));
+  document.getElementById('act-iban').value = d.exists() ? (d.data().iban || '') : '';
+}
+document.getElementById('btnSauverIban').addEventListener('click', async () => {
+  await setDoc(doc(db, 'parametres', 'bancaire'), { iban: document.getElementById('act-iban').value.trim() }, { merge: true });
+  alert('IBAN enregistré.');
+});
+
+// ==========================================================================
+// MON MOT DE PASSE
+// ==========================================================================
+document.getElementById('btnChangerMotDePasse').addEventListener('click', async () => {
+  const errorBox = document.getElementById('pwError');
+  const successBox = document.getElementById('pwSuccess');
+  errorBox.classList.remove('show');
+  successBox.classList.remove('show');
+
+  const actuel = document.getElementById('pw-actuel').value;
+  const nouveau = document.getElementById('pw-nouveau').value;
+  const confirme = document.getElementById('pw-confirme').value;
+
+  if (!actuel || !nouveau) {
+    errorBox.textContent = 'Merci de remplir le mot de passe actuel et le nouveau mot de passe.';
+    errorBox.classList.add('show');
+    return;
+  }
+  if (nouveau.length < 6) {
+    errorBox.textContent = 'Le nouveau mot de passe doit contenir au moins 6 caractères.';
+    errorBox.classList.add('show');
+    return;
+  }
+  if (!motDePasseValide(nouveau)) {
+    errorBox.textContent = 'Le mot de passe ne peut contenir que des lettres et des chiffres (pas d\'espace, pas de caractère spécial).';
+    errorBox.classList.add('show');
+    return;
+  }
+  if (nouveau !== confirme) {
+    errorBox.textContent = 'La confirmation ne correspond pas au nouveau mot de passe.';
+    errorBox.classList.add('show');
+    return;
+  }
+
+  try {
+    const user = auth.currentUser;
+    const credential = EmailAuthProvider.credential(user.email, actuel);
+    await reauthenticateWithCredential(user, credential);
+    await updatePassword(user, nouveau);
+    await updateDoc(doc(db, 'membres', user.uid), { motDePasseActuel: nouveau });
+    successBox.classList.add('show');
+    document.getElementById('pw-actuel').value = '';
+    document.getElementById('pw-nouveau').value = '';
+    document.getElementById('pw-confirme').value = '';
+  } catch (err) {
+    errorBox.textContent = err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password'
+      ? 'Mot de passe actuel incorrect.'
+      : 'Erreur : ' + (err.code || err.message);
+    errorBox.classList.add('show');
+  }
+});
+
+// ==========================================================================
+// DISPONIBILITÉS (horaires d'ouverture de la piste)
+// ==========================================================================
+const JOURS_SEMAINE = [[1,'Lundi'],[2,'Mardi'],[3,'Mercredi'],[4,'Jeudi'],[5,'Vendredi'],[6,'Samedi'],[7,'Dimanche']];
+
+// Construit un objet { "1": {ouvert, heureDebut, heureFin}, ... "7": {...} } à
+// partir des données enregistrées — supporte l'ancien format à horaire unique
+// (heureDebut/heureFin/joursOuverts) pour ne rien perdre lors de la migration.
+function horairesParJourDepuis(disp) {
+  const horaires = {};
+  const joursOuvertsAnciens = disp.joursOuverts || [1,2,3,4,5,6];
+  JOURS_SEMAINE.forEach(([num]) => {
+    const existant = disp.horaires && disp.horaires[num];
+    if (existant) {
+      horaires[num] = existant;
+    } else {
+      horaires[num] = {
+        ouvert: joursOuvertsAnciens.includes(num),
+        heureDebut: disp.heureDebut || '09:00',
+        heureFin: disp.heureFin || '19:00'
+      };
+    }
+  });
+  return horaires;
+}
+
+async function chargerDisponibilitesAdmin() {
+  const d = await getDoc(doc(db, 'parametres', 'disponibilites'));
+  const disp = d.exists() ? d.data() : {};
+  const horaires = horairesParJourDepuis(disp);
+  document.getElementById('param-jours').innerHTML = JOURS_SEMAINE.map(([num, nom]) => {
+    const h = horaires[num];
+    return `
+    <div class="horaire-jour-row" style="display:flex; align-items:center; gap:14px; padding:10px 0; border-bottom:1px solid #EEE0C4; flex-wrap:wrap;">
+      <label style="display:flex; align-items:center; gap:8px; min-width:130px; font-weight:600;">
+        <input type="checkbox" class="param-jour-check" value="${num}" ${h.ouvert ? 'checked' : ''}>
+        ${nom}
+      </label>
+      <div class="field" style="margin:0;"><label>Ouverture</label><input type="time" class="param-jour-debut" data-jour="${num}" value="${h.heureDebut}"></div>
+      <div class="field" style="margin:0;"><label>Fermeture</label><input type="time" class="param-jour-fin" data-jour="${num}" value="${h.heureFin}"></div>
+    </div>`;
+  }).join('');
+}
+document.getElementById('btnSauverDisponibilites').addEventListener('click', async () => {
+  const horaires = {};
+  JOURS_SEMAINE.forEach(([num]) => {
+    const check = document.querySelector(`.param-jour-check[value="${num}"]`);
+    const debut = document.querySelector(`.param-jour-debut[data-jour="${num}"]`);
+    const fin = document.querySelector(`.param-jour-fin[data-jour="${num}"]`);
+    horaires[num] = { ouvert: check.checked, heureDebut: debut.value || '09:00', heureFin: fin.value || '19:00' };
+  });
+  try {
+    await setDoc(doc(db, 'parametres', 'disponibilites'), { horaires }, { merge: true });
+    alert('Horaires enregistrés.');
+  } catch (err) {
+    alert('Erreur lors de l\'enregistrement : ' + (err.code || err.message));
+  }
+});
+
+// ==========================================================================
+// PROGRAMMES (cartes numérotées de la page publique "Activités")
+// ==========================================================================
+const PROGRAMMES_DE_BASE = [
+  { categorie: 'Initiation', titre: "École d'équitation", description: "Découverte et apprentissage de l'équitation pour les cavaliers débutants, sur des chevaux adaptés, en cours individuels d'une heure.", ordre: 1 },
+  { categorie: 'Perfectionnement', titre: 'Cours de dressage', description: 'Des cours individuels pour progresser en dressage à votre rythme, seul(e) sur la piste avec Lara, quel que soit votre niveau.', ordre: 2 },
+  { categorie: 'Demi-pension', titre: 'Écurie privée', description: "Un cheval de l'écurie mis à votre disposition comme s'il était le vôtre : box, soins et accès à la piste, dans un cadre familial et suivi de près.", ordre: 3 },
+  { categorie: 'Immersion', titre: 'Stages', description: 'Des stages ponctuels pour se perfectionner sur plusieurs jours, seul(e) ou en petit groupe selon les périodes.', ordre: 4 },
+  { categorie: 'Événements', titre: 'Spectacles équestres', description: 'Le club organise régulièrement des spectacles équestres où cavaliers et chevaux du club se retrouvent pour présenter leur travail.', ordre: 5 }
+];
+async function chargerProgrammesActivites() {
+  const snap = await getDocs(collection(db, 'programme_activites'));
+  let programmes = [];
+  snap.forEach(d => programmes.push({ ...d.data(), id: d.id }));
+  programmes.sort((a, b) => (a.ordre ?? 999) - (b.ordre ?? 999));
+  const wrap = document.getElementById('listeProgrammesActivites');
+  if (programmes.length === 0) { wrap.innerHTML = '<div class="empty-state">Aucun programme — clique sur "Initialiser" pour repartir des 5 programmes actuels, ou ajoutes-en un.</div>'; return; }
+  let numero = 0;
+  wrap.innerHTML = programmes.map(p => {
+    if (p.visiblePublic !== false) numero++;
+    const badgeNum = p.visiblePublic !== false ? `${String(numero).padStart(2,'0')} — ` : '';
+    return `
+    <div class="data-row">
+      <div class="data-main">
+        <div class="data-title">${badgeNum}${escapeHtml(p.categorie || '')} — ${escapeHtml(p.titre || '')}</div>
+        <div class="data-sub">${escapeHtml((p.description||'').slice(0,80))}${(p.description||'').length>80?'…':''} ${p.visiblePublic === false ? '<span class="badge badge-neutral">Masqué du site public</span>' : ''}</div>
+      </div>
+      <div class="data-actions">
+        <button class="btn-sm" onclick="window.editerProgrammeActivite('${p.id}')">Modifier</button>
+        <button class="btn-sm danger" onclick="window.supprimerProgrammeActivite('${p.id}')">Supprimer</button>
+      </div>
+    </div>`;
+  }).join('');
+  window._programmesActivites = programmes;
+}
+document.getElementById('btnInitProgrammes').addEventListener('click', async () => {
+  if (!confirm("Créer les 5 programmes de base ? (à ne faire qu'une fois — n'écrase pas ceux déjà créés)")) return;
+  try {
+    await Promise.all(PROGRAMMES_DE_BASE.map(p => addDoc(collection(db, 'programme_activites'), { ...p, visiblePublic: true })));
+    chargerProgrammesActivites();
+  } catch (err) {
+    alert('Erreur : ' + (err.code || err.message) + '\n\nSi le message mentionne "permissions", il faut mettre à jour les règles Firestore (voir le README, section 4).');
+  }
+});
+document.getElementById('btnAjouterProgramme').addEventListener('click', () => window.ouvrirModalProgramme());
+window.editerProgrammeActivite = (id) => window.ouvrirModalProgramme((window._programmesActivites || []).find(p => p.id === id));
+window.supprimerProgrammeActivite = async (id) => { if (!confirm('Supprimer ce programme ?')) return; await deleteDoc(doc(db, 'programme_activites', id)); chargerProgrammesActivites(); };
+window.ouvrirModalProgramme = (p) => {
+  const html = `
+    <div class="modal-overlay" id="modalOverlayProgramme">
+      <div class="modal-box">
+        <h3>${p ? 'Modifier le programme' : 'Ajouter un programme'}</h3>
+        <div class="form-grid">
+          <div class="field"><label>Catégorie <span class="hint">— ex: Initiation, Perfectionnement...</span></label><input id="pg-categorie" value="${escapeHtml(p?.categorie||'')}"></div>
+          <div class="field"><label>Ordre d'affichage</label><input type="number" id="pg-ordre" value="${p?.ordre ?? ((window._programmesActivites||[]).length+1)}"></div>
+        </div>
+        <div class="field"><label>Titre</label><input id="pg-titre" value="${escapeHtml(p?.titre||'')}"></div>
+        <div class="field"><label>Description</label><textarea id="pg-description" rows="3" spellcheck="true" lang="fr">${escapeHtml(p?.description||'')}</textarea></div>
+        <div class="field"><label>Visible sur le site public</label>
+          <select id="pg-visible"><option value="oui" ${p?.visiblePublic!==false?'selected':''}>Oui</option><option value="non" ${p?.visiblePublic===false?'selected':''}>Non</option></select>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-sm" type="button" onclick="window.fermerModal()">Annuler</button>
+          <button class="btn-sm primary" type="button" id="pg-save">Enregistrer</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modalZone').innerHTML = html;
+  document.getElementById('pg-save').addEventListener('click', async () => {
+    const data = {
+      categorie: document.getElementById('pg-categorie').value.trim(),
+      titre: document.getElementById('pg-titre').value.trim(),
+      description: document.getElementById('pg-description').value.trim(),
+      ordre: parseInt(document.getElementById('pg-ordre').value, 10) || 999,
+      visiblePublic: document.getElementById('pg-visible').value === 'oui'
+    };
+    if (!data.titre) { alert('Le titre est obligatoire.'); return; }
+    try {
+      if (p) await updateDoc(doc(db, 'programme_activites', p.id), data);
+      else await addDoc(collection(db, 'programme_activites'), data);
+      window.fermerModal();
+      chargerProgrammesActivites();
+    } catch (err) {
+      alert('Erreur : ' + (err.code || err.message));
+    }
+  });
+};
+
+// ==========================================================================
+// ACTIVITÉS (stages, spectacles)
+// ==========================================================================
+async function chargerActivites() {
+  const snap = await getDocs(collection(db, 'activites'));
+  let activites = [];
+  snap.forEach(d => activites.push({ ...d.data(), id: d.id }));
+  activites.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  const wrap = document.getElementById('listeActivites');
+  if (activites.length === 0) { wrap.innerHTML = '<div class="empty-state">Aucune activité créée.</div>'; return; }
+  wrap.innerHTML = activites.map(a => `
+    <div class="data-row">
+      <div class="data-main">
+        <div class="data-title">${escapeHtml(a.titre)} <span class="badge badge-neutral">${a.type === 'stage' ? 'Stage' : 'Spectacle'}</span></div>
+        <div class="data-sub">${a.date || ''} ${a.heure || ''} · ${escapeHtml(a.lieu||'')} ${a.prixParPersonne ? '· ' + Number(a.prixParPersonne).toFixed(2) + ' €/pers.' : ''}</div>
+      </div>
+      <div class="data-actions">
+        <button class="btn-sm" onclick="window.voirReponsesActivite('${a.id}')">Voir réponses</button>
+        <button class="btn-sm danger" onclick="window.supprimerActivite('${a.id}')">Supprimer</button>
+      </div>
+    </div>`).join('');
+  window._activites = {}; activites.forEach(a => window._activites[a.id] = a);
+}
+document.getElementById('btnAjouterActivite').addEventListener('click', () => {
+  const html = `
+    <div class="modal-overlay" id="modalOverlayActivite">
+      <div class="modal-box">
+        <h3>Créer une activité</h3>
+        <div class="field"><label>Titre</label><input id="ac-titre" placeholder="ex: Stage de dressage automne"></div>
+        <div class="field"><label>Type</label><select id="ac-type"><option value="stage">Stage</option><option value="spectacle">Spectacle</option></select></div>
+        <div class="form-grid">
+          <div class="field"><label>Date</label><input type="date" id="ac-date"></div>
+          <div class="field"><label>Heure</label><input type="time" id="ac-heure"></div>
+        </div>
+        <div class="field"><label>Lieu</label><input id="ac-lieu" value="Rue Mahay 66, Grâce-Hollogne"></div>
+        <div class="field"><label>Prix par personne (€, facultatif)</label><input type="number" step="0.01" id="ac-prix"></div>
+        <div class="field"><label>Description</label><textarea id="ac-description" rows="3" spellcheck="true" lang="fr"></textarea></div>
+        <div class="modal-actions">
+          <button class="btn-sm" type="button" onclick="window.fermerModal()">Annuler</button>
+          <button class="btn-sm primary" type="button" id="ac-save">Créer</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modalZone').innerHTML = html;
+  document.getElementById('ac-save').addEventListener('click', async () => {
+    const data = {
+      titre: document.getElementById('ac-titre').value.trim(),
+      type: document.getElementById('ac-type').value,
+      date: document.getElementById('ac-date').value,
+      heure: document.getElementById('ac-heure').value,
+      lieu: document.getElementById('ac-lieu').value.trim(),
+      description: document.getElementById('ac-description').value.trim()
+    };
+    const prixVal = document.getElementById('ac-prix').value;
+    if (prixVal !== '') data.prixParPersonne = parseFloat(prixVal);
+    if (!data.titre || !data.date) { alert('Merci d\'indiquer au moins un titre et une date.'); return; }
+    await addDoc(collection(db, 'activites'), data);
+    window.fermerModal();
+    chargerActivites();
+  });
+});
+window.supprimerActivite = async (id) => { if (!confirm('Supprimer cette activité ?')) return; await deleteDoc(doc(db, 'activites', id)); chargerActivites(); };
+
+window.voirReponsesActivite = async (id) => {
+  const snap = await getDocs(query(collection(db, 'activites_reponses'), where('activiteId', '==', id)));
+  let reponses = [];
+  snap.forEach(d => reponses.push({ ...d.data(), id: d.id }));
+  const html = `
+    <div class="modal-overlay" id="modalOverlayReponses">
+      <div class="modal-box" style="max-width:560px;">
+        <h3>Réponses — ${escapeHtml(window._activites[id].titre)}</h3>
+        <div class="data-list" style="max-height:50vh; overflow-y:auto;">
+          ${reponses.length ? reponses.map(r => `
+            <div class="data-row">
+              <div class="data-main">
+                <div class="data-title">${escapeHtml(nomMembre(r.uid))} — ${r.statut === 'present' ? `présent (${r.nombrePersonnes||1})` : 'absent'}</div>
+                <div class="data-sub">${r.montant ? Number(r.montant).toFixed(2) + ' €' : ''} ${r.paye ? (r.paiementValide ? '<span class="badge badge-ok">Payé validé</span>' : '<span class="badge badge-warn">Payé — à valider</span>') : (r.montant ? '<span class="badge badge-danger">Non payé</span>' : '')}</div>
+              </div>
+              ${r.paye && !r.paiementValide ? `<div class="data-actions"><button class="btn-sm primary" onclick="window.validerPaiementActivite('${r.id}','${id}')">Valider paiement</button></div>` : ''}
+            </div>`).join('') : '<div class="empty-state">Aucune réponse.</div>'}
+        </div>
+        <div class="modal-actions"><button class="btn-sm" type="button" onclick="window.fermerModal()">Fermer</button></div>
+      </div>
+    </div>`;
+  document.getElementById('modalZone').innerHTML = html;
+};
+window.validerPaiementActivite = async (reponseId, activiteId) => {
+  await updateDoc(doc(db, 'activites_reponses', reponseId), { paiementValide: true });
+  window.voirReponsesActivite(activiteId);
+};
+
+// ==========================================================================
+// BOUTIQUE
+// ==========================================================================
+async function chargerBoutiqueAdmin() {
+  const snap = await getDocs(collection(db, 'articles_boutique'));
+  let articles = [];
+  snap.forEach(d => articles.push({ ...d.data(), id: d.id }));
+  const wrap = document.getElementById('listeArticlesBoutique');
+  wrap.innerHTML = articles.length ? articles.map(a => `
+    <div class="data-row">
+      <div class="data-main">
+        <div class="data-title">${escapeHtml(a.nom)} ${a.actif === false ? '<span class="badge badge-neutral">Inactif</span>' : ''}</div>
+        <div class="data-sub">${Number(a.prix).toFixed(2)} € · Stock : ${a.stock ?? 0}</div>
+      </div>
+      <div class="data-actions">
+        <button class="btn-sm" onclick="window.editerArticleBoutique('${a.id}')">Modifier</button>
+        <button class="btn-sm danger" onclick="window.supprimerArticleBoutique('${a.id}')">Supprimer</button>
+      </div>
+    </div>`).join('') : '<div class="empty-state">Aucun article.</div>';
+  window._articlesBoutique = {}; articles.forEach(a => window._articlesBoutique[a.id] = a);
+}
+document.getElementById('btnAjouterArticleBoutique').addEventListener('click', () => window.ouvrirModalArticleBoutique());
+window.editerArticleBoutique = (id) => window.ouvrirModalArticleBoutique(window._articlesBoutique[id]);
+window.supprimerArticleBoutique = async (id) => { if (!confirm('Supprimer cet article ?')) return; await deleteDoc(doc(db, 'articles_boutique', id)); chargerBoutiqueAdmin(); };
+window.ouvrirModalArticleBoutique = (a) => {
+  const html = `
+    <div class="modal-overlay" id="modalOverlayArticleBoutique">
+      <div class="modal-box">
+        <h3>${a ? "Modifier l'article" : 'Ajouter un article'}</h3>
+        <div class="field"><label>Nom</label><input id="ab-nom" value="${escapeHtml(a?.nom||'')}"></div>
+        <div class="form-grid">
+          <div class="field"><label>Prix (€)</label><input type="number" step="0.01" id="ab-prix" value="${a?.prix ?? ''}"></div>
+          <div class="field"><label>Stock</label><input type="number" id="ab-stock" value="${a?.stock ?? 0}"></div>
+        </div>
+        <div class="field"><label>Photo (URL, facultatif)</label><input id="ab-photo" value="${escapeHtml(a?.photoURL||'')}"></div>
+        <div class="field"><label>Actif</label><select id="ab-actif"><option value="oui" ${a?.actif!==false?'selected':''}>Oui</option><option value="non" ${a?.actif===false?'selected':''}>Non</option></select></div>
+        <div class="modal-actions">
+          <button class="btn-sm" type="button" onclick="window.fermerModal()">Annuler</button>
+          <button class="btn-sm primary" type="button" id="ab-save">Enregistrer</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modalZone').innerHTML = html;
+  document.getElementById('ab-save').addEventListener('click', async () => {
+    const data = {
+      nom: document.getElementById('ab-nom').value.trim(),
+      prix: parseFloat(document.getElementById('ab-prix').value) || 0,
+      stock: parseInt(document.getElementById('ab-stock').value, 10) || 0,
+      photoURL: document.getElementById('ab-photo').value.trim(),
+      actif: document.getElementById('ab-actif').value === 'oui'
+    };
+    if (!data.nom) { alert('Merci d\'indiquer un nom.'); return; }
+    if (a) await updateDoc(doc(db, 'articles_boutique', a.id), data);
+    else await addDoc(collection(db, 'articles_boutique'), data);
+    window.fermerModal();
+    chargerBoutiqueAdmin();
+  });
+};
+
+async function chargerCommandesAdmin() {
+  const snap = await getDocs(collection(db, 'commandes'));
+  let commandes = [];
+  snap.forEach(d => commandes.push({ ...d.data(), id: d.id }));
+  commandes.sort((a, b) => (b.dateCreation?.toMillis?.() || 0) - (a.dateCreation?.toMillis?.() || 0));
+  const wrap = document.getElementById('listeCommandes');
+  wrap.innerHTML = commandes.length ? commandes.map(c => {
+    const detail = (c.lignes || []).map(l => `${l.quantite} × ${escapeHtml(l.nom)}`).join(', ');
+    const badge = c.statut === 'validee' ? '<span class="badge badge-ok">Validée</span>' : c.statut === 'annulee' ? '<span class="badge badge-danger">Annulée</span>' : '<span class="badge badge-warn">En attente</span>';
+    return `
+    <div class="data-row">
+      <div class="data-main">
+        <div class="data-title">${escapeHtml(nomMembre(c.membreId))} — ${Number(c.total).toFixed(2)} € ${badge}</div>
+        <div class="data-sub">${detail}</div>
+      </div>
+      ${c.statut === 'en_attente' ? `
+      <div class="data-actions">
+        <button class="btn-sm primary" onclick="window.validerCommande('${c.id}')">Valider</button>
+        <button class="btn-sm danger" onclick="window.annulerCommande('${c.id}')">Annuler</button>
+      </div>` : ''}
+    </div>`;
+  }).join('') : '<div class="empty-state">Aucune commande.</div>';
+}
+window.validerCommande = async (id) => { await updateDoc(doc(db, 'commandes', id), { statut: 'validee' }); chargerCommandesAdmin(); };
+window.annulerCommande = async (id) => { await updateDoc(doc(db, 'commandes', id), { statut: 'annulee' }); chargerCommandesAdmin(); };
+
+
+// ==========================================================================
+// PLANNING DES CHEVAUX — choix du cheval par cours, validé par Lara.
+// Règle : 1 cours d'1 h puis repos d'1 h (deux cours à moins de 2 h d'écart
+// = conflit). Les chevaux décédés / archivés / non proposés sont exclus.
+// ==========================================================================
+let semainePlanningChevaux = lundiDeLaSemaine(new Date());
+let planChevauxDonnees = { chevaux: [], resa: [] };
+
+function heureEnMinutes(h) { const [a, b] = String(h || '0:0').split(':'); return (Number(a) || 0) * 60 + (Number(b) || 0); }
+function chevalUtilisable(c) { return !c.decede && !c.archive && c.proposeAuxMembres !== false; }
+
+// Un cheval est en conflit sur (date, heure) si un AUTRE cours actif l'utilise
+// à moins de 2 h d'écart (même heure, ou juste avant/après sans repos).
+function conflitCheval(chevalId, dateISO, heure, exclureResaId) {
+  if (!chevalId) return null;
+  const m = heureEnMinutes(heure);
+  return planChevauxDonnees.resa.find(x =>
+    x.id !== exclureResaId && x.chevalValideId === chevalId && x.date === dateISO &&
+    (x.statut === 'validee' || x.statut === 'en_attente') && Math.abs(heureEnMinutes(x.heureDebut) - m) < 120) || null;
+}
+
+async function chargerPlanningChevaux() {
+  const lundi = new Date(semainePlanningChevaux);
+  const dimanche = new Date(lundi); dimanche.setDate(dimanche.getDate() + 6);
+  document.getElementById('pcSemaineLabel').textContent =
+    `Semaine du ${lundi.toLocaleDateString('fr-BE', {day:'numeric', month:'long'})} au ${dimanche.toLocaleDateString('fr-BE', {day:'numeric', month:'long', year:'numeric'})}`;
+  const wrap = document.getElementById('listePlanningChevaux');
+  wrap.innerHTML = '<div class="empty-state">Chargement…</div>';
+  try {
+    // On élargit d'un jour de chaque côté : le conflit se calcule par date, donc inutile, mais ça reste léger.
+    const [snapC, snapR] = await Promise.all([
+      getDocs(collection(db, 'chevaux_ecurie')),
+      getDocs(query(collection(db, 'reservations'), where('date', '>=', dateISOLocale(lundi)), where('date', '<=', dateISOLocale(dimanche))))
+    ]);
+    const chevaux = []; snapC.forEach(d => chevaux.push({ ...d.data(), id: d.id }));
+    const resa = []; snapR.forEach(d => resa.push({ ...d.data(), id: d.id }));
+    planChevauxDonnees = { chevaux, resa };
+    renderPlanningChevaux();
+  } catch (err) {
+    wrap.innerHTML = '<div class="empty-state">Erreur : ' + escapeHtml(err.code || err.message) + '</div>';
+  }
+}
+
+function renderPlanningChevaux() {
+  const wrap = document.getElementById('listePlanningChevaux');
+  const { chevaux, resa } = planChevauxDonnees;
+  const parId = {}; chevaux.forEach(c => parId[c.id] = c);
+  const cours = resa.filter(r => r.type === 'cours' && (r.statut === 'validee' || r.statut === 'en_attente'))
+    .sort((a, b) => (a.date + a.heureDebut).localeCompare(b.date + b.heureDebut));
+  if (!cours.length) { wrap.innerHTML = '<div class="empty-state">Aucun cours cette semaine.</div>'; return; }
+  const utilisables = chevaux.filter(chevalUtilisable).sort((a, b) => (a.nom || '').localeCompare(b.nom || ''));
+  wrap.innerHTML = cours.map(r => {
+    const dateLabel = capitalize(new Date(r.date + 'T00:00:00').toLocaleDateString('fr-BE', {weekday:'long', day:'numeric', month:'long'}));
+    const souhait = r.chevalSouhaiteId ? parId[r.chevalSouhaiteId] : null;
+    const aTraiter = (r.chevalSouhaiteId || '') !== (r.chevalSouhaiteTraiteId || '') || (!r.chevalValideId && r.chevalSouhaiteId);
+    const valide = r.chevalValideId ? parId[r.chevalValideId] : null;
+    const valideDecede = valide && !chevalUtilisable(valide);
+    const defaut = r.chevalValideId || r.chevalSouhaiteId || '';
+    const options = ['<option value="">— Aucun cheval —</option>'].concat(utilisables.map(c => {
+      const conf = conflitCheval(c.id, r.date, r.heureDebut, r.id);
+      return `<option value="${escapeHtml(c.id)}" ${c.id === defaut ? 'selected' : ''}>${escapeHtml(c.nom)} ${conf ? '⛔ pris/repos (' + escapeHtml(conf.heureDebut) + ')' : '✅ libre'}</option>`;
+    })).join('');
+    const etat = valideDecede ? '<span class="badge badge-danger">Cheval décédé/indisponible — à réattribuer</span>'
+      : aTraiter ? '<span class="badge badge-warn">À valider</span>'
+      : valide ? `<span class="badge badge-ok">Validé : ${escapeHtml(valide.nom)}</span>`
+      : '<span class="badge badge-neutral">Sans cheval</span>';
+    const souhaitTxt = r.chevalSouhaiteNom ? `Souhait : ${escapeHtml(souhait?.nom || r.chevalSouhaiteNom)}${souhait && !chevalUtilisable(souhait) ? ' (indisponible)' : ''}` : 'Pas de préférence';
+    return `
+    <div class="data-row" style="flex-wrap:wrap;">
+      <div class="data-main">
+        <div class="data-title">${dateLabel} ${escapeHtml(r.heureDebut)} — ${escapeHtml(nomAffichageReservation(r))}</div>
+        <div class="data-sub">${souhaitTxt} · ${r.statut === 'en_attente' ? 'réservation en attente · ' : ''}${etat}</div>
+      </div>
+      <div class="data-actions" style="gap:8px;">
+        <select id="pc-sel-${idSur(r.id)}">${options}</select>
+        <button class="btn-sm primary" onclick="window.validerChevalCours('${idSur(r.id)}')">Valider</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// Enregistre le cheval validé et prévient le membre selon le cas.
+async function enregistrerChevalCours(r, chevalId, silencieux) {
+  const { chevaux } = planChevauxDonnees;
+  const cheval = chevaux.find(c => c.id === chevalId) || null;
+  const souhaitId = r.chevalSouhaiteId || '';
+  await updateDoc(doc(db, 'reservations', r.id), {
+    chevalValideId: chevalId || '',
+    chevalValideNom: cheval?.nom || '',
+    chevalSouhaiteTraiteId: souhaitId
+  });
+  r.chevalValideId = chevalId || ''; r.chevalValideNom = cheval?.nom || ''; r.chevalSouhaiteTraiteId = souhaitId;
+  const quand = libelleDateHeure(r.date, r.heureDebut);
+  if (souhaitId && chevalId === souhaitId) {
+    await notifierMembreReservation(r.membreId, `🐴 Bonne nouvelle : le cheval ${cheval.nom} que vous souhaitiez est confirmé pour votre cours du ${quand}.`);
+  } else if (souhaitId && chevalId) {
+    await notifierMembreReservation(r.membreId, `🐴 Le cheval souhaité (${r.chevalSouhaiteNom || '—'}) n'est pas disponible pour votre cours du ${quand}. Lara vous attribue ${cheval.nom}.`);
+  } else if (souhaitId && !chevalId) {
+    await notifierMembreReservation(r.membreId, `🐴 Le cheval souhaité (${r.chevalSouhaiteNom || '—'}) n'est pas disponible pour votre cours du ${quand}. Lara vous communiquera le cheval prévu.`);
+  } else if (chevalId) {
+    await notifierMembreReservation(r.membreId, `🐴 Votre cheval pour le cours du ${quand} : ${cheval.nom}.`);
+  }
+}
+
+window.validerChevalCours = async (resaId) => {
+  const r = planChevauxDonnees.resa.find(x => x.id === resaId);
+  if (!r) return;
+  const chevalId = document.getElementById('pc-sel-' + resaId).value;
+  const conf = conflitCheval(chevalId, r.date, r.heureDebut, r.id);
+  if (conf && !confirm(`Ce cheval a déjà un cours à ${conf.heureDebut} ce jour-là : il lui faut 1 h de repos entre deux cours. Valider quand même ?`)) return;
+  try {
+    await enregistrerChevalCours(r, chevalId);
+    renderPlanningChevaux();
+  } catch (err) { alert('Erreur : ' + (err.code || err.message)); }
+};
+
+// Valide en un clic tous les souhaits sans conflit (dans l'ordre chronologique,
+// chaque validation bloquant le cheval pour les cours suivants).
+document.getElementById('pcValiderSansConflit').addEventListener('click', async () => {
+  const { chevaux, resa } = planChevauxDonnees;
+  const parId = {}; chevaux.forEach(c => parId[c.id] = c);
+  const aValider = resa.filter(r => r.type === 'cours' && (r.statut === 'validee' || r.statut === 'en_attente') &&
+    r.chevalSouhaiteId && r.chevalSouhaiteId !== r.chevalSouhaiteTraiteId && parId[r.chevalSouhaiteId] && chevalUtilisable(parId[r.chevalSouhaiteId]))
+    .sort((a, b) => (a.date + a.heureDebut).localeCompare(b.date + b.heureDebut));
+  let ok = 0, restant = 0;
+  for (const r of aValider) {
+    if (conflitCheval(r.chevalSouhaiteId, r.date, r.heureDebut, r.id)) { restant++; continue; }
+    try { await enregistrerChevalCours(r, r.chevalSouhaiteId); ok++; } catch (e) { restant++; }
+  }
+  alert(`${ok} cheval(aux) confirmé(s).${restant ? `\n${restant} souhait(s) en conflit ou en erreur : à traiter à la main.` : ''}`);
+  renderPlanningChevaux();
+});
+document.getElementById('pcSemainePrec').addEventListener('click', () => { semainePlanningChevaux.setDate(semainePlanningChevaux.getDate() - 7); chargerPlanningChevaux(); });
+document.getElementById('pcSemaineSuiv').addEventListener('click', () => { semainePlanningChevaux.setDate(semainePlanningChevaux.getDate() + 7); chargerPlanningChevaux(); });
+
+// ==========================================================================
+// MESSAGES
+// ==========================================================================
+async function chargerConversations(filtre = '') {
+  const snap = await getDocs(collection(db, 'conversations'));
+  let convs = [];
+  snap.forEach(d => convs.push({ ...d.data(), uid: d.id }));
+  convs.sort((a, b) => (b.dateDernierMessage || '').localeCompare(a.dateDernierMessage || ''));
+  const f = filtre.toLowerCase();
+  const wrap = document.getElementById('listeConversations');
+  const filtrees = convs.filter(c => !f || nomMembre(c.uid).toLowerCase().includes(f));
+  wrap.innerHTML = filtrees.length ? filtrees.map(c => `
+    <div class="data-row" style="cursor:pointer;" onclick="window.ouvrirConversation('${idSur(c.uid)}')">
+      <div class="data-main">
+        <div class="data-title">${escapeHtml(nomMembre(c.uid))} ${c.nonLuAdmin ? '<span class="badge badge-warn">Nouveau</span>' : ''}</div>
+        <div class="data-sub">${escapeHtml(c.dernierMessage || '')}</div>
+      </div>
+    </div>`).join('') : '<div class="empty-state">Aucune conversation.</div>';
+}
+document.getElementById('rechercheMessage').addEventListener('input', (e) => chargerConversations(e.target.value));
+
+// ==========================================================================
+// NOUVEAU MESSAGE — un membre, une sélection, ou tout le monde
+// ==========================================================================
+document.getElementById('btnNouveauMessage').addEventListener('click', () => window.ouvrirModalNouveauMessage());
+
+window.ouvrirModalNouveauMessage = () => {
+  const membresTries = [...membresCache].sort((a, b) => nomMembre(a.id).localeCompare(nomMembre(b.id)));
+  const html = `
+    <div class="modal-overlay" id="modalOverlayNouveauMsg">
+      <div class="modal-box" style="max-width:520px;">
+        <h3>Nouveau message</h3>
+        <div class="field">
+          <label>Destinataires</label>
+          <select id="nm-mode">
+            <option value="un">Un membre</option>
+            <option value="plusieurs">Sélection de membres</option>
+            <option value="tous">Tous les membres (${membresTries.length})</option>
+          </select>
+        </div>
+        <div id="nm-zoneUnMembre" class="field">
+          <label>Membre</label>
+          <select id="nm-unMembre">${membresTries.map(m => `<option value="${m.id}">${escapeHtml(nomMembre(m.id))}</option>`).join('')}</select>
+        </div>
+        <div id="nm-zonePlusieurs" class="field hidden">
+          <label>Membres</label>
+          <input type="text" id="nm-filtre" placeholder="🔍 Filtrer...">
+          <div style="max-height:220px; overflow-y:auto; border:1px solid #DCCBA8; border-radius:6px; padding:8px; margin-top:6px;" id="nm-listeCheckbox">
+            ${membresTries.map(m => `<label class="nm-ligne" data-nom="${escapeHtml(nomMembre(m.id)).toLowerCase()}" style="display:flex; align-items:center; gap:8px; padding:4px 0;"><input type="checkbox" class="nm-check" value="${m.id}"> ${escapeHtml(nomMembre(m.id))}</label>`).join('') || '<div class="empty-state">Aucun membre.</div>'}
+          </div>
+        </div>
+        <div id="nm-zoneTous" class="field hidden">
+          <div class="banner-alert info">Le message sera envoyé individuellement à chacun des ${membresTries.length} membres.</div>
+        </div>
+        <div class="field"><label>Message</label><textarea id="nm-texte" rows="4" spellcheck="true" lang="fr" style="width:100%; box-sizing:border-box; font-family:inherit; font-size:0.95rem; padding:8px;"></textarea></div>
+        <div class="modal-actions">
+          <button class="btn-sm" type="button" onclick="window.fermerModal()">Annuler</button>
+          <button class="btn-sm primary" id="nm-envoyer">Envoyer</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modalZone').innerHTML = html;
+
+  const modeSelect = document.getElementById('nm-mode');
+  const zones = { un: document.getElementById('nm-zoneUnMembre'), plusieurs: document.getElementById('nm-zonePlusieurs'), tous: document.getElementById('nm-zoneTous') };
+  modeSelect.addEventListener('change', () => {
+    Object.entries(zones).forEach(([k, z]) => z.classList.toggle('hidden', k !== modeSelect.value));
+  });
+
+  document.getElementById('nm-filtre').addEventListener('input', (e) => {
+    const f = e.target.value.trim().toLowerCase();
+    document.querySelectorAll('#nm-listeCheckbox .nm-ligne').forEach(l => {
+      l.style.display = !f || l.dataset.nom.includes(f) ? 'flex' : 'none';
+    });
+  });
+
+  document.getElementById('nm-envoyer').addEventListener('click', async () => {
+    const texte = document.getElementById('nm-texte').value.trim();
+    if (!texte) { alert('Merci de saisir un message.'); return; }
+    let uids = [];
+    if (modeSelect.value === 'un') {
+      const v = document.getElementById('nm-unMembre').value;
+      if (v) uids = [v];
+    } else if (modeSelect.value === 'plusieurs') {
+      uids = [...document.querySelectorAll('.nm-check:checked')].map(c => c.value);
+    } else {
+      uids = membresTries.map(m => m.id);
+    }
+    if (uids.length === 0) { alert('Sélectionne au moins un membre.'); return; }
+
+    const btn = document.getElementById('nm-envoyer');
+    btn.disabled = true;
+    btn.textContent = 'Envoi...';
+    try {
+      await envoyerNouveauxMessages(uids, texte);
+      window.fermerModal();
+      chargerConversations();
+    } catch (err) {
+      alert('Erreur lors de l\'envoi : ' + (err.code || err.message));
+      btn.disabled = false;
+      btn.textContent = 'Envoyer';
+    }
+  });
+};
+
+async function envoyerNouveauxMessages(uids, texte) {
+  const maintenant = new Date().toISOString();
+  await Promise.all(uids.map(async (uid) => {
+    await addDoc(collection(db, 'conversations', uid, 'messages'), { texte, expediteur: 'admin', dateEnvoi: maintenant, lu: false });
+    await setDoc(doc(db, 'conversations', uid), { dernierMessage: texte, dateDernierMessage: maintenant, nonLuMembre: true }, { merge: true });
+  }));
+}
+
+window.ouvrirConversation = async (uid) => {
+  const msgsSnap = await getDocs(collection(db, 'conversations', uid, 'messages'));
+  let msgs = [];
+  msgsSnap.forEach(d => msgs.push({ ...d.data(), id: d.id }));
+  msgs.sort((a, b) => (a.dateEnvoi || '').localeCompare(b.dateEnvoi || ''));
+  const nonLus = msgs.filter(m => m.expediteur === 'membre' && !m.lu);
+  await Promise.all(nonLus.map(m => updateDoc(doc(db, 'conversations', uid, 'messages', m.id), { lu: true })));
+  if (nonLus.length) await setDoc(doc(db, 'conversations', uid), { nonLuAdmin: false }, { merge: true });
+
+  const html = `
+    <div class="modal-overlay" id="modalOverlayConv">
+      <div class="modal-box" style="max-width:520px;">
+        <h3>${escapeHtml(nomMembre(uid))}</h3>
+        <div class="chat-thread" id="modalChatThread">${msgs.map(m => bulleMessage(m)).join('') || '<div class="empty-state">Aucun message.</div>'}</div>
+        <div class="chat-input-row">
+          <input type="text" id="modalChatInput" placeholder="Répondre...">
+          <button class="btn-sm primary" id="modalChatSend">Envoyer</button>
+        </div>
+        <div class="modal-actions"><button class="btn-sm" type="button" onclick="window.fermerModal(); chargerConversationsGlobal();">Fermer</button></div>
+      </div>
+    </div>`;
+  document.getElementById('modalZone').innerHTML = html;
+  document.getElementById('modalChatThread').scrollTop = 999999;
+  document.getElementById('modalChatSend').addEventListener('click', () => envoyerMessageAdmin(uid));
+  document.getElementById('modalChatInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') envoyerMessageAdmin(uid); });
+};
+window.chargerConversationsGlobal = () => chargerConversations();
+
+async function envoyerMessageAdmin(uid) {
+  const input = document.getElementById('modalChatInput');
+  const texte = input.value.trim();
+  if (!texte) return;
+  input.value = '';
+  const maintenant = new Date().toISOString();
+  await addDoc(collection(db, 'conversations', uid, 'messages'), { texte, expediteur: 'admin', dateEnvoi: maintenant, lu: false });
+  await setDoc(doc(db, 'conversations', uid), { dernierMessage: texte, dateDernierMessage: maintenant, nonLuMembre: true }, { merge: true });
+  window.ouvrirConversation(uid);
+}
+function bulleMessage(m) {
+  const estMoi = m.expediteur === 'admin';
+  const heure = m.dateEnvoi ? new Date(m.dateEnvoi).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' }) : '';
+  return `<div class="chat-bubble ${estMoi ? 'moi' : 'autre'}">${escapeHtml(m.texte)}<div class="chat-meta">${heure}</div></div>`;
+}
+
+// ==========================================================================
+// CHEVAUX DE L'ÉCURIE (page publique "Nos chevaux")
+// ==========================================================================
+async function chargerChevauxAdmin() {
+  const snap = await getDocs(collection(db, 'chevaux_ecurie'));
+  let chevaux = [];
+  snap.forEach(d => chevaux.push({ ...d.data(), id: d.id }));
+  const wrap = document.getElementById('listeChevauxEcurie');
+  if (chevaux.length === 0) { wrap.innerHTML = '<div class="empty-state">Aucun cheval créé.</div>'; return; }
+  wrap.innerHTML = chevaux.map(c => `
+    <div class="data-row">
+      ${c.photoUrl ? `<img src="${escapeHtml(c.photoUrl)}" style="width:52px; height:52px; border-radius:6px; object-fit:cover; flex:none;">` : ''}
+      <div class="data-main">
+        <div class="data-title">${escapeHtml(c.nom)}</div>
+        <div class="data-sub">${escapeHtml(c.race || '')} ${c.visiblePublic === false ? '<span class="badge badge-neutral">Masqué du site public</span>' : ''} ${c.decede ? '<span class="badge badge-neutral">Décédé</span>' : ''} ${c.archive ? '<span class="badge badge-danger">Archivée</span>' : ''}</div>
+      </div>
+      <div class="data-actions">
+        <button class="btn-sm" onclick="window.editerChevalEcurie('${c.id}')">Modifier</button>
+        <button class="btn-sm danger" onclick="window.supprimerChevalEcurie('${c.id}')">Supprimer</button>
+      </div>
+    </div>`).join('');
+  window._chevauxEcurie = {}; chevaux.forEach(c => window._chevauxEcurie[c.id] = c);
+}
+document.getElementById('btnAjouterCheval').addEventListener('click', () => window.ouvrirModalChevalEcurie());
+window.editerChevalEcurie = (id) => window.ouvrirModalChevalEcurie(window._chevauxEcurie[id]);
+window.supprimerChevalEcurie = async (id) => { if (!confirm('Supprimer ce cheval ?')) return; await deleteDoc(doc(db, 'chevaux_ecurie', id)); chargerChevauxAdmin(); };
+window.ouvrirModalChevalEcurie = (c) => {
+  const html = `
+    <div class="modal-overlay" id="modalOverlayCheval2">
+      <div class="modal-box">
+        <h3>${c ? 'Modifier le cheval' : 'Ajouter un cheval'}</h3>
+        <div class="form-grid">
+          <div class="field"><label>Nom</label><input id="ce-nom" value="${escapeHtml(c?.nom||'')}"></div>
+          <div class="field"><label>Race</label><input id="ce-race" value="${escapeHtml(c?.race||'')}"></div>
+        </div>
+        <div class="field"><label>Photo (URL — ex: assets/chevaux/nom.jpg si déposée sur GitHub)</label><input id="ce-photo" value="${escapeHtml(c?.photoUrl||'')}"></div>
+        <div class="field"><label>Description</label><textarea id="ce-description" rows="3" spellcheck="true" lang="fr">${escapeHtml(c?.description||'')}</textarea></div>
+        <div class="field"><label>Caractère <span class="hint">— joueur, câlin, curieux, un peu têtu...</span></label><textarea id="ce-caractere" rows="2" spellcheck="true" lang="fr">${escapeHtml(c?.caractere||'')}</textarea></div>
+        <div class="field"><label>Signe particulier <span class="hint">— étoile en tête, balzane, tache atypique...</span></label><input id="ce-signe" value="${escapeHtml(c?.signeParticulier||'')}"></div>
+        <div class="form-grid">
+          <div class="field"><label>Visible sur le site public</label>
+            <select id="ce-visible"><option value="oui" ${c?.visiblePublic!==false?'selected':''}>Oui</option><option value="non" ${c?.visiblePublic===false?'selected':''}>Non</option></select>
+          </div>
+          <div class="field"><label>Proposé aux membres pour leurs cours</label>
+            <select id="ce-propose"><option value="oui" ${c?.proposeAuxMembres!==false?'selected':''}>Oui</option><option value="non" ${c?.proposeAuxMembres===false?'selected':''}>Non (ex. poney de Lara, cheval en repos)</option></select>
+          </div>
+          <div class="field"><label>Statut</label>
+            <select id="ce-decede"><option value="non" ${!c?.decede?'selected':''}>Vivant</option><option value="oui" ${c?.decede?'selected':''}>Décédé</option></select>
+          </div>
+        </div>
+        <div class="field"><label>Archiver cette fiche <span class="hint">— masque la fiche de la page publique "Nos chevaux" sans la supprimer ni perdre l'historique</span></label>
+          <select id="ce-archive"><option value="non" ${!c?.archive?'selected':''}>Non — reste sur le site</option><option value="oui" ${c?.archive?'selected':''}>Oui — archivée</option></select>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-sm" type="button" onclick="window.fermerModal()">Annuler</button>
+          <button class="btn-sm primary" type="button" id="ce-save">Enregistrer</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modalZone').innerHTML = html;
+  document.getElementById('ce-save').addEventListener('click', async () => {
+    const data = {
+      nom: document.getElementById('ce-nom').value.trim(),
+      race: document.getElementById('ce-race').value.trim(),
+      photoUrl: document.getElementById('ce-photo').value.trim(),
+      description: document.getElementById('ce-description').value.trim(),
+      caractere: document.getElementById('ce-caractere').value.trim(),
+      signeParticulier: document.getElementById('ce-signe').value.trim(),
+      visiblePublic: document.getElementById('ce-visible').value === 'oui',
+      decede: document.getElementById('ce-decede').value === 'oui',
+      proposeAuxMembres: document.getElementById('ce-propose').value === 'oui',
+      archive: document.getElementById('ce-archive').value === 'oui'
+    };
+    if (!data.nom) { alert('Merci d\'indiquer un nom.'); return; }
+    const btnSave = document.getElementById('ce-save');
+    btnSave.disabled = true;
+    try {
+      if (c) await updateDoc(doc(db, 'chevaux_ecurie', c.id), data);
+      else await addDoc(collection(db, 'chevaux_ecurie'), data);
+      window.fermerModal();
+      chargerChevauxAdmin();
+    } catch (err) {
+      btnSave.disabled = false;
+      alert('Erreur lors de l\'enregistrement : ' + (err.code || err.message) + '\n\nSi le message mentionne "permissions" ou "insufficient permissions", il faut mettre à jour les règles Firestore dans la console Firebase (voir le README, section 4).');
+    }
+  });
+};
+
+// ==========================================================================
+// ÉVÉNEMENTS (page publique, visible de tous)
+// ==========================================================================
+async function chargerEvenementsAdmin() {
+  const snap = await getDocs(collection(db, 'evenements'));
+  let evenements = [];
+  snap.forEach(d => evenements.push({ ...d.data(), id: d.id }));
+  evenements.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  const wrap = document.getElementById('listeEvenements');
+  if (evenements.length === 0) { wrap.innerHTML = '<div class="empty-state">Aucun événement créé.</div>'; return; }
+  wrap.innerHTML = evenements.map(e => `
+    <div class="data-row">
+      ${e.photoUrl ? `<img src="${escapeHtml(e.photoUrl)}" style="width:52px; height:52px; border-radius:6px; object-fit:cover; flex:none;">` : ''}
+      <div class="data-main">
+        <div class="data-title">${escapeHtml(e.titre)}</div>
+        <div class="data-sub">${e.date || ''}</div>
+      </div>
+      <div class="data-actions">
+        <button class="btn-sm" onclick="window.editerEvenement('${e.id}')">Modifier</button>
+        <button class="btn-sm danger" onclick="window.supprimerEvenement('${e.id}')">Supprimer</button>
+      </div>
+    </div>`).join('');
+  window._evenements = {}; evenements.forEach(e => window._evenements[e.id] = e);
+}
+document.getElementById('btnAjouterEvenement').addEventListener('click', () => window.ouvrirModalEvenement());
+window.editerEvenement = (id) => window.ouvrirModalEvenement(window._evenements[id]);
+window.supprimerEvenement = async (id) => { if (!confirm('Supprimer cet événement ?')) return; await deleteDoc(doc(db, 'evenements', id)); chargerEvenementsAdmin(); };
+window.ouvrirModalEvenement = (e) => {
+  const html = `
+    <div class="modal-overlay" id="modalOverlayEvenement">
+      <div class="modal-box">
+        <h3>${e ? "Modifier l'événement" : 'Créer un événement'}</h3>
+        <div class="field"><label>Titre</label><input id="ev-titre" value="${escapeHtml(e?.titre||'')}"></div>
+        <div class="form-grid">
+          <div class="field"><label>Date</label><input type="date" id="ev-date" value="${e?.date||''}"></div>
+          <div class="field"><label>Heure (facultatif)</label><input type="time" id="ev-heure" value="${e?.heure||''}"></div>
+        </div>
+        <div class="field"><label>Photo (URL)</label><input id="ev-photo" value="${escapeHtml(e?.photoUrl||'')}"></div>
+        <div class="field"><label>Description</label><textarea id="ev-description" rows="3" spellcheck="true" lang="fr">${escapeHtml(e?.description||'')}</textarea></div>
+        <div class="modal-actions">
+          <button class="btn-sm" type="button" onclick="window.fermerModal()">Annuler</button>
+          <button class="btn-sm primary" type="button" id="ev-save">Enregistrer</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modalZone').innerHTML = html;
+  document.getElementById('ev-save').addEventListener('click', async () => {
+    const data = {
+      titre: document.getElementById('ev-titre').value.trim(),
+      date: document.getElementById('ev-date').value,
+      heure: document.getElementById('ev-heure').value,
+      photoUrl: document.getElementById('ev-photo').value.trim(),
+      description: document.getElementById('ev-description').value.trim()
+    };
+    if (!data.titre || !data.date) { alert('Merci d\'indiquer au moins un titre et une date.'); return; }
+    try {
+      if (e) await updateDoc(doc(db, 'evenements', e.id), data);
+      else await addDoc(collection(db, 'evenements'), data);
+      window.fermerModal();
+      chargerEvenementsAdmin();
+    } catch (err) {
+      alert('Erreur lors de l\'enregistrement : ' + (err.code || err.message) + '\n\nSi le message mentionne "permissions", il faut mettre à jour les règles Firestore (voir le README, section 4).');
+    }
+  });
+};
+
+// ==========================================================================
+// BLOG (page publique, visible de tous)
+// ==========================================================================
+async function chargerBlogAdmin() {
+  const snap = await getDocs(collection(db, 'articles_blog'));
+  let articles = [];
+  snap.forEach(d => articles.push({ ...d.data(), id: d.id }));
+  articles.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  const wrap = document.getElementById('listeArticlesBlog');
+  if (articles.length === 0) { wrap.innerHTML = '<div class="empty-state">Aucun article créé.</div>'; return; }
+  wrap.innerHTML = articles.map(a => `
+    <div class="data-row">
+      ${a.photoUrl ? `<img src="${escapeHtml(a.photoUrl)}" style="width:52px; height:52px; border-radius:6px; object-fit:cover; flex:none;">` : ''}
+      <div class="data-main">
+        <div class="data-title">${escapeHtml(a.titre)}</div>
+        <div class="data-sub">${a.date || ''} ${a.publie === false ? '<span class="badge badge-neutral">Brouillon</span>' : ''}</div>
+      </div>
+      <div class="data-actions">
+        <button class="btn-sm" onclick="window.editerArticleBlog('${a.id}')">Modifier</button>
+        <button class="btn-sm danger" onclick="window.supprimerArticleBlog('${a.id}')">Supprimer</button>
+      </div>
+    </div>`).join('');
+  window._articlesBlog = {}; articles.forEach(a => window._articlesBlog[a.id] = a);
+}
+document.getElementById('btnAjouterArticleBlog').addEventListener('click', () => window.ouvrirModalArticleBlog());
+window.editerArticleBlog = (id) => window.ouvrirModalArticleBlog(window._articlesBlog[id]);
+window.supprimerArticleBlog = async (id) => { if (!confirm('Supprimer cet article ?')) return; await deleteDoc(doc(db, 'articles_blog', id)); chargerBlogAdmin(); };
+window.ouvrirModalArticleBlog = (a) => {
+  const html = `
+    <div class="modal-overlay" id="modalOverlayArticleBlog">
+      <div class="modal-box" style="max-width:640px;">
+        <h3>${a ? "Modifier l'article" : 'Écrire un article'}</h3>
+        <div class="form-grid">
+          <div class="field"><label>Titre</label><input id="bl-titre" value="${escapeHtml(a?.titre||'')}"></div>
+          <div class="field"><label>Date</label><input type="date" id="bl-date" value="${a?.date || new Date().toISOString().slice(0,10)}"></div>
+        </div>
+        <div class="field"><label>Photo (URL, facultatif)</label><input id="bl-photo" value="${escapeHtml(a?.photoUrl||'')}"></div>
+        <div class="field"><label>Contenu</label><textarea id="bl-contenu" rows="6" spellcheck="true" lang="fr">${escapeHtml(a?.contenu||'')}</textarea></div>
+        <div class="field"><label>Statut</label>
+          <select id="bl-publie"><option value="oui" ${a?.publie!==false?'selected':''}>Publié</option><option value="non" ${a?.publie===false?'selected':''}>Brouillon (pas visible du public)</option></select>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-sm" type="button" onclick="window.fermerModal()">Annuler</button>
+          <button class="btn-sm primary" type="button" id="bl-save">Enregistrer</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modalZone').innerHTML = html;
+  document.getElementById('bl-save').addEventListener('click', async () => {
+    const data = {
+      titre: document.getElementById('bl-titre').value.trim(),
+      date: document.getElementById('bl-date').value,
+      photoUrl: document.getElementById('bl-photo').value.trim(),
+      contenu: document.getElementById('bl-contenu').value.trim(),
+      publie: document.getElementById('bl-publie').value === 'oui'
+    };
+    if (!data.titre) { alert('Merci d\'indiquer un titre.'); return; }
+    try {
+      if (a) await updateDoc(doc(db, 'articles_blog', a.id), data);
+      else await addDoc(collection(db, 'articles_blog'), data);
+      window.fermerModal();
+      chargerBlogAdmin();
+    } catch (err) {
+      alert('Erreur lors de l\'enregistrement : ' + (err.code || err.message) + '\n\nSi le message mentionne "permissions", il faut mettre à jour les règles Firestore (voir le README, section 4).');
+    }
+  });
+};
+
+// ==========================================================================
+// STOCK (foin, nourriture...)
+// ==========================================================================
+async function chargerStockAdmin() {
+  const snap = await getDocs(collection(db, 'stock'));
+  let stock = [];
+  snap.forEach(d => stock.push({ ...d.data(), id: d.id }));
+  const wrap = document.getElementById('listeStock');
+  majPointRougeStockAdmin(stock);
+  if (stock.length === 0) { wrap.innerHTML = '<div class="empty-state">Aucun article de stock créé.</div>'; return; }
+  wrap.innerHTML = stock.map(s => `
+    <div class="data-row">
+      <div class="data-main">
+        <div class="data-title">${(Number(s.quantite)||0) <= SEUIL_RECOMMANDE_STOCK ? '<span class="point-rouge"></span>' : ''}${escapeHtml(s.nom)} ${s.quantite <= 0 ? '<span class="badge badge-danger">Épuisé</span>' : ''} ${(Number(s.quantite)||0) <= SEUIL_RECOMMANDE_STOCK ? '<span class="badge badge-danger">À recommander</span>' : ''}</div>
+        <div class="data-sub">${s.quantite} ${escapeHtml(s.unite || '')}</div>
+      </div>
+      <div class="data-actions">
+        <button class="btn-sm" onclick="window.ajusterStock('${s.id}', -1)">−</button>
+        <button class="btn-sm" onclick="window.ajusterStock('${s.id}', 1)">+</button>
+        <button class="btn-sm danger" onclick="window.supprimerStock('${s.id}')">Supprimer</button>
+      </div>
+    </div>`).join('');
+  window._stock = {}; stock.forEach(s => window._stock[s.id] = s);
+  majPointRougeStockAdmin(stock);
+}
+document.getElementById('btnAjouterStock').addEventListener('click', () => {
+  const html = `
+    <div class="modal-overlay" id="modalOverlayStock">
+      <div class="modal-box">
+        <h3>Ajouter un article de stock</h3>
+        <div class="field"><label>Nom</label><input id="st-nom" placeholder="ex: Foin, Granulés, Litière..."></div>
+        <div class="form-grid">
+          <div class="field"><label>Quantité de départ</label><input type="number" step="0.1" id="st-quantite" value="0"></div>
+          <div class="field"><label>Unité</label><input id="st-unite" placeholder="ex: bottes, kg, sacs"></div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-sm" type="button" onclick="window.fermerModal()">Annuler</button>
+          <button class="btn-sm primary" type="button" id="st-save">Créer</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modalZone').innerHTML = html;
+  document.getElementById('st-save').addEventListener('click', async () => {
+    const nom = document.getElementById('st-nom').value.trim();
+    if (!nom) { alert('Merci d\'indiquer un nom.'); return; }
+    try {
+      await addDoc(collection(db, 'stock'), {
+        nom,
+        quantite: parseFloat(document.getElementById('st-quantite').value) || 0,
+        unite: document.getElementById('st-unite').value.trim()
+      });
+      window.fermerModal();
+      chargerStockAdmin();
+    } catch (err) {
+      alert('Erreur lors de l\'enregistrement : ' + (err.code || err.message) + '\n\nSi le message mentionne "permissions", il faut mettre à jour les règles Firestore (voir le README, section 4).');
+    }
+  });
+});
+window.ajusterStock = async (id, delta) => {
+  const item = window._stock[id];
+  if (!item) return;
+  const nouvelle = Math.max(0, (item.quantite || 0) + delta);
+  try {
+    await updateDoc(doc(db, 'stock', id), { quantite: nouvelle });
+    chargerStockAdmin();
+  } catch (err) {
+    alert('Erreur : ' + (err.code || err.message));
+  }
+};
+window.supprimerStock = async (id) => { if (!confirm('Supprimer cet article de stock ?')) return; await deleteDoc(doc(db, 'stock', id)); chargerStockAdmin(); };
+
+async function chargerStockSignalements() {
+  const snap = await getDocs(collection(db, 'stock_signalements'));
+  let logs = [];
+  snap.forEach(d => logs.push({ ...d.data(), id: d.id }));
+  logs.sort((a, b) => (b.dateSignalement || '').localeCompare(a.dateSignalement || ''));
+  logs = logs.slice(0, 20);
+  const wrap = document.getElementById('listeStockSignalements');
+  if (logs.length === 0) { wrap.innerHTML = '<div class="empty-state">Aucune prise signalée pour l\'instant.</div>'; return; }
+  wrap.innerHTML = logs.map(l => {
+    const dateLabel = l.dateSignalement ? new Date(l.dateSignalement).toLocaleString('fr-BE', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' }) : '';
+    return `
+    <div class="data-row">
+      <div class="data-main">
+        <div class="data-title">${escapeHtml(nomMembre(l.membreId))} — ${l.quantitePrise} ${escapeHtml(l.unite||'')} de ${escapeHtml(l.nom)}</div>
+        <div class="data-sub">${dateLabel}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ==========================================================================
+// PLANNING BÉNÉVOLES (qui vient quand, pour quelle tâche)
+// ==========================================================================
+async function chargerPlanningBenevolesAdmin() {
+  const snap = await getDocs(collection(db, 'planning_benevoles'));
+  let creneaux = [];
+  snap.forEach(d => creneaux.push({ ...d.data(), id: d.id }));
+  creneaux.sort((a, b) => (a.date || '').localeCompare(b.date || '') || (a.heure || '').localeCompare(b.heure || ''));
+  const wrap = document.getElementById('listePlanningBenevoles');
+  if (creneaux.length === 0) { wrap.innerHTML = '<div class="empty-state">Aucun créneau planifié.</div>'; return; }
+  wrap.innerHTML = creneaux.map(c => {
+    const dateLabel = c.date ? capitalize(new Date(c.date + 'T00:00:00').toLocaleDateString('fr-BE', {weekday:'long', day:'numeric', month:'long'})) : '';
+    const badge = c.statut === 'fait' ? '<span class="badge badge-ok">Fait</span>' : '<span class="badge badge-warn">À venir</span>';
+    const assigne = c.assigneA ? escapeHtml(c.assigneNom || nomMembre(c.assigneA)) : '<em>Non assigné — ouvert à tous les bénévoles</em>';
+    return `
+    <div class="data-row">
+      <div class="data-main">
+        <div class="data-title">${escapeHtml(c.tache)} — ${dateLabel}${c.heure ? ' à ' + escapeHtml(c.heure) : ''}</div>
+        <div class="data-sub">Bénévole : ${assigne} ${badge}</div>
+      </div>
+      <div class="data-actions">
+        ${c.statut !== 'fait' ? `<button class="btn-sm primary" onclick="window.marquerPlanningBenevoleFaitAdmin('${c.id}')">Marquer fait</button>` : ''}
+        <button class="btn-sm danger" onclick="window.supprimerPlanningBenevole('${c.id}')">Supprimer</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+window.marquerPlanningBenevoleFaitAdmin = async (id) => {
+  await updateDoc(doc(db, 'planning_benevoles', id), { statut: 'fait', dateRealisation: new Date().toISOString() });
+  chargerPlanningBenevolesAdmin();
+};
+window.supprimerPlanningBenevole = async (id) => {
+  if (!confirm('Supprimer ce créneau ?')) return;
+  await deleteDoc(doc(db, 'planning_benevoles', id));
+  chargerPlanningBenevolesAdmin();
+};
+
+document.getElementById('btnAjouterPlanningBenevole').addEventListener('click', () => {
+  const optionsBenevoles = membresCache.filter(m => m.typeMembre === 'benevole').map(m => `<option value="${m.id}">${escapeHtml(m.prenom)} ${escapeHtml(m.nom)}</option>`).join('');
+  const html = `
+    <div class="modal-overlay" id="modalOverlayPlanningBenevole">
+      <div class="modal-box">
+        <h3>Ajouter un ou plusieurs créneaux bénévole</h3>
+        <div class="field"><label>Bénévole</label><select id="pb-membre"><option value="">— Ouvert (n'importe quel bénévole pourra le prendre) —</option>${optionsBenevoles}</select></div>
+        <div class="field"><label>Tâche</label><input id="pb-tache" placeholder="ex: Nourrissage du soir, entretien du paddock..."></div>
+        <div class="form-grid">
+          <div class="field"><label>Date de départ</label><input type="date" id="pb-date"></div>
+          <div class="field"><label>Heure (optionnel)</label><input type="time" id="pb-heure"></div>
+        </div>
+        <div class="field">
+          <label>Récurrence</label>
+          <select id="pb-recurrence">
+            <option value="aucune">Aucune — un seul créneau</option>
+            <option value="hebdomadaire">Toutes les semaines</option>
+            <option value="mensuelle">Tous les mois (même jour du mois)</option>
+          </select>
+        </div>
+        <div class="field hidden" id="pb-zoneJusquau"><label>Jusqu'au (inclus)</label><input type="date" id="pb-jusquau"></div>
+        <div class="modal-actions">
+          <button class="btn-sm" type="button" onclick="window.fermerModal()">Annuler</button>
+          <button class="btn-sm primary" type="button" id="pb-save">Enregistrer</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modalZone').innerHTML = html;
+  document.getElementById('pb-recurrence').addEventListener('change', (e) => {
+    document.getElementById('pb-zoneJusquau').classList.toggle('hidden', e.target.value === 'aucune');
+  });
+  document.getElementById('pb-save').addEventListener('click', async () => {
+    const membreSelect = document.getElementById('pb-membre');
+    const membre = membresCache.find(m => m.id === membreSelect.value);
+    const tache = document.getElementById('pb-tache').value.trim();
+    const dateVal = document.getElementById('pb-date').value;
+    const heure = document.getElementById('pb-heure').value;
+    const recurrence = document.getElementById('pb-recurrence').value;
+    const jusquau = document.getElementById('pb-jusquau').value;
+    if (!tache || !dateVal) { alert('Merci de renseigner au moins une tâche et une date.'); return; }
+    if (recurrence !== 'aucune' && !jusquau) { alert('Merci d\'indiquer une date de fin pour la récurrence.'); return; }
+
+    // Calcule la liste des dates à créer (une seule si pas de récurrence).
+    const dates = [dateVal];
+    if (recurrence !== 'aucune') {
+      let courante = new Date(dateVal + 'T00:00:00');
+      const fin = new Date(jusquau + 'T00:00:00');
+      while (true) {
+        if (recurrence === 'hebdomadaire') courante.setDate(courante.getDate() + 7);
+        else courante.setMonth(courante.getMonth() + 1);
+        if (courante > fin) break;
+        dates.push(dateISOLocale(courante));
+        if (dates.length >= 104) break; // garde-fou (2 ans hebdo max)
+      }
+    }
+
+    try {
+      await Promise.all(dates.map(d => addDoc(collection(db, 'planning_benevoles'), {
+        assigneA: membreSelect.value || null,
+        assigneNom: membre ? `${membre.prenom} ${membre.nom}` : '',
+        tache,
+        date: d,
+        heure,
+        statut: 'a_faire',
+        createdAt: serverTimestamp()
+      })));
+      window.fermerModal();
+      chargerPlanningBenevolesAdmin();
+    } catch (err) {
+      alert('Erreur lors de l\'enregistrement : ' + (err.code || err.message) + '\n\nSi le message mentionne "permissions", il faut mettre à jour les règles Firestore (voir le README, section 4).');
+    }
+  });
+});
+
+// ==========================================================================
+// CONTENU DU SITE (textes des pages publiques)
+// ==========================================================================
+async function chargerContenuAdmin() {
+  const d = await getDoc(doc(db, 'contenu_site', 'global'));
+  const c = d.exists() ? d.data() : {};
+  document.getElementById('ct-heroTitre').value = c.heroTitre || '';
+  document.getElementById('ct-heroTexte').value = c.heroTexte || '';
+  document.getElementById('ct-clubIntro').value = c.clubIntro || '';
+  document.getElementById('ct-clubOffre').value = c.clubOffre || '';
+  document.getElementById('ct-laraBio').value = c.laraBio || '';
+  document.getElementById('ct-laraBio2').value = c.laraBio2 || '';
+  document.getElementById('ct-laraMethode').value = c.laraMethode || '';
+  document.getElementById('ct-activitesIntro').value = c.activitesIntro || '';
+  document.getElementById('ct-contactCours').value = c.contactCours || '';
+  document.getElementById('ct-contactRejoindre').value = c.contactRejoindre || '';
+}
+document.getElementById('btnSauverContenu').addEventListener('click', async () => {
+  try {
+    await setDoc(doc(db, 'contenu_site', 'global'), {
+      heroTitre: document.getElementById('ct-heroTitre').value.trim(),
+      heroTexte: document.getElementById('ct-heroTexte').value.trim(),
+      clubIntro: document.getElementById('ct-clubIntro').value.trim(),
+      clubOffre: document.getElementById('ct-clubOffre').value.trim(),
+      laraBio: document.getElementById('ct-laraBio').value.trim(),
+      laraBio2: document.getElementById('ct-laraBio2').value.trim(),
+      laraMethode: document.getElementById('ct-laraMethode').value.trim(),
+      activitesIntro: document.getElementById('ct-activitesIntro').value.trim(),
+      contactCours: document.getElementById('ct-contactCours').value.trim(),
+      contactRejoindre: document.getElementById('ct-contactRejoindre').value.trim()
+    }, { merge: true });
+    alert('Textes enregistrés. Ils apparaîtront sur le site public au prochain chargement des pages.');
+  } catch (err) {
+    alert('Erreur lors de l\'enregistrement : ' + (err.code || err.message) + '\n\nSi le message mentionne "permissions", il faut mettre à jour les règles Firestore (voir le README, section 4).');
+  }
+});
+
+// ==========================================================================
+// CALENDRIER — jours fermés / horaires exceptionnels
+// ==========================================================================
+document.getElementById('exc-statut').addEventListener('change', (e) => {
+  document.getElementById('exc-horaireZone').style.display = e.target.value === 'horaire' ? 'grid' : 'none';
+});
+document.getElementById('btnAjouterException').addEventListener('click', async () => {
+  const dateDebut = document.getElementById('exc-date').value;
+  const dateFin = document.getElementById('exc-dateFin').value || dateDebut;
+  if (!dateDebut) { alert('Merci de choisir au moins une date de début.'); return; }
+  if (dateFin < dateDebut) { alert('La date de fin doit être après la date de début.'); return; }
+  const statut = document.getElementById('exc-statut').value;
+  const data = statut === 'ferme'
+    ? { ferme: true }
+    : {
+        ferme: false,
+        heureDebut: document.getElementById('exc-heureDebut').value,
+        heureFin: document.getElementById('exc-heureFin').value
+      };
+  if (statut === 'horaire' && (!data.heureDebut || !data.heureFin)) {
+    alert('Merci d\'indiquer une heure d\'ouverture et de fermeture.');
+    return;
+  }
+  // Une exception par jour de la période choisie (même s'il n'y en a qu'un).
+  const dates = [];
+  let courante = new Date(dateDebut + 'T00:00:00');
+  const fin = new Date(dateFin + 'T00:00:00');
+  while (courante <= fin) {
+    dates.push(dateISOLocale(courante));
+    courante = new Date(courante); courante.setDate(courante.getDate() + 1);
+    if (dates.length >= 366) break; // garde-fou (1 an max)
+  }
+  try {
+    await Promise.all(dates.map(d => setDoc(doc(db, 'disponibilites_exceptions', d), data)));
+    document.getElementById('exc-date').value = '';
+    document.getElementById('exc-dateFin').value = '';
+    chargerExceptionsAdmin();
+    let messageFinal = `${dates.length} jour(s) mis à jour (${dateDebut}${dates.length>1 ? ' au ' + dateFin : ''}).`;
+    if (statut === 'ferme') {
+      const nbAnnulees = await annulerReservationsPourFermeture(dateDebut, dateFin);
+      if (nbAnnulees > 0) messageFinal += `\n${nbAnnulees} réservation(s) déjà prévue(s) sur cette période ont été annulée(s) automatiquement, et les membres concernés ont été prévenus.`;
+      renderPlanningSemaine();
+      chargerReservationsAttente();
+      chargerRecurrencesAdmin();
+      chargerCalendrierDeuxSemaines();
+    }
+    alert(messageFinal);
+  } catch (err) {
+    alert('Erreur lors de l\'enregistrement : ' + (err.code || err.message) + '\n\nSi le message mentionne "permissions", il faut mettre à jour les règles Firestore (voir le README, section 4).');
+  }
+});
+// Quand une période est marquée "fermée", les réservations déjà prises sur
+// cette période (quel que soit leur statut en cours) sont annulées
+// automatiquement, le cours est recrédité si besoin, et chaque membre
+// concerné reçoit un message (point rouge) l'informant de l'annulation.
+async function annulerReservationsPourFermeture(dateDebut, dateFin) {
+  const snap = await getDocs(query(collection(db, 'reservations'), where('date', '>=', dateDebut), where('date', '<=', dateFin)));
+  let compteur = 0;
+  for (const d of snap.docs) {
+    const r = d.data();
+    if (r.statut === 'annulee' || r.statut === 'refusee') continue;
+    await updateDoc(doc(db, 'reservations', d.id), { statut: 'annulee', annulePar: 'admin' });
+    if (r.type === 'cours' && r.statut === 'validee') await rendreCoursAbonnement(r.membreId, r.date);
+    notifierMembreReservation(r.membreId, `⚠️ Votre réservation du ${libelleDateHeure(r.date, r.heureDebut)} a été annulée par Lara (piste fermée sur cette période).`);
+    compteur++;
+  }
+  return compteur;
+}
+async function chargerExceptionsAdmin() {
+  const snap = await getDocs(collection(db, 'disponibilites_exceptions'));
+  let exceptions = [];
+  snap.forEach(d => exceptions.push({ ...d.data(), date: d.id }));
+  exceptions = exceptions.filter(e => e.date >= dateISOLocale(new Date()));
+  exceptions.sort((a, b) => a.date.localeCompare(b.date));
+
+  // Regroupe les jours consécutifs ayant le même statut en une seule ligne
+  // (ex: 15 au 28 septembre — Fermé) plutôt qu'une ligne par jour.
+  const groupes = [];
+  for (const e of exceptions) {
+    const dernier = groupes[groupes.length - 1];
+    const memeStatut = dernier && dernier.ferme === e.ferme && dernier.heureDebut === e.heureDebut && dernier.heureFin === e.heureFin;
+    const veille = dernier ? dateISOLocale(new Date(new Date(dernier.dateFin + 'T00:00:00').setDate(new Date(dernier.dateFin + 'T00:00:00').getDate() + 1))) : null;
+    if (dernier && memeStatut && veille === e.date) {
+      dernier.dateFin = e.date;
+    } else {
+      groupes.push({ dateDebut: e.date, dateFin: e.date, ferme: e.ferme, heureDebut: e.heureDebut, heureFin: e.heureFin });
+    }
+  }
+
+  const wrap = document.getElementById('listeExceptions');
+  if (groupes.length === 0) { wrap.innerHTML = '<div class="empty-state">Aucune exception à venir.</div>'; return; }
+  wrap.innerHTML = groupes.map(g => {
+    const labelDebut = capitalize(new Date(g.dateDebut + 'T00:00:00').toLocaleDateString('fr-BE', {weekday:'long', day:'numeric', month:'long'}));
+    const labelFin = capitalize(new Date(g.dateFin + 'T00:00:00').toLocaleDateString('fr-BE', {weekday:'long', day:'numeric', month:'long'}));
+    const dateLabel = g.dateDebut === g.dateFin ? labelDebut : `Du ${labelDebut} au ${labelFin}`;
+    return `
+    <div class="data-row">
+      <div class="data-main">
+        <div class="data-title">${dateLabel}</div>
+        <div class="data-sub">${g.ferme ? '<span class="badge badge-danger">Fermé</span>' : `<span class="badge badge-neutral">Horaire spécial : ${g.heureDebut} – ${g.heureFin}</span>`}</div>
+      </div>
+      <div class="data-actions">
+        <button class="btn-sm danger" onclick="window.supprimerException('${idSur(g.dateDebut)}','${idSur(g.dateFin)}')">Supprimer</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+window.supprimerException = async (dateDebut, dateFin) => {
+  if (dateDebut !== dateFin && !confirm(`Supprimer l'exception sur toute la période du ${dateDebut} au ${dateFin} ?`)) return;
+  const dates = [];
+  let courante = new Date(dateDebut + 'T00:00:00');
+  const fin = new Date(dateFin + 'T00:00:00');
+  while (courante <= fin) {
+    dates.push(dateISOLocale(courante));
+    courante = new Date(courante); courante.setDate(courante.getDate() + 1);
+  }
+  await Promise.all(dates.map(d => deleteDoc(doc(db, 'disponibilites_exceptions', d))));
+  chargerExceptionsAdmin();
+};
+
+// ==========================================================================
+// MOTS DE PASSE (super-admin uniquement)
+// ==========================================================================
+async function chargerMotsDePasseAdmin() {
+  const snap = await getDocs(collection(db, 'membres'));
+  let comptes = [];
+  snap.forEach(d => comptes.push({ ...d.data(), id: d.id }));
+  comptes.sort((a, b) => {
+    const ordre = { superadmin: 0, admin: 1 };
+    const oa = ordre[a.role] ?? 2, ob = ordre[b.role] ?? 2;
+    if (oa !== ob) return oa - ob;
+    return (a.identifiant || '').localeCompare(b.identifiant || '');
+  });
+  renderMotsDePasse(comptes);
+}
+function labelRoleCompte(role) {
+  if (role === 'superadmin') return '<span class="badge badge-danger">Super-admin</span>';
+  if (role === 'admin') return '<span class="badge badge-warn">Admin</span>';
+  return '<span class="badge badge-neutral">Membre</span>';
+}
+function formatDateHeure(ts) {
+  if (!ts?.seconds) return 'jamais';
+  return new Date(ts.seconds * 1000).toLocaleString('fr-BE', { dateStyle: 'medium', timeStyle: 'short' });
+}
+function renderMotsDePasse(comptes) {
+  const wrap = document.getElementById('listeMotsDePasse');
+  if (comptes.length === 0) { wrap.innerHTML = '<div class="empty-state">Aucun compte.</div>'; return; }
+  wrap.innerHTML = comptes.map(c => {
+    const nomComplet = `${c.prenom || ''} ${c.nom || ''}`.trim();
+    const mdp = c.motDePasseActuel;
+    return `
+    <div class="data-row">
+      <div class="data-main">
+        <div class="data-title">${escapeHtml(c.identifiant || c.id)} ${labelRoleCompte(c.role)}</div>
+        <div class="data-sub">${escapeHtml(nomComplet)}</div>
+        <div class="data-sub" style="margin-top:4px;">
+          Mot de passe actuel : ${mdp ? `<code>${escapeHtml(mdp)}</code>` : '<em>non enregistré (compte créé avant cette fonctionnalité — à renseigner via une réinitialisation)</em>'}
+        </div>
+        <div class="data-sub">Dernière connexion : ${formatDateHeure(c.derniereConnexion)}</div>
+      </div>
+      <div class="data-actions">
+        <button class="btn-sm" onclick="window.reinitialiserMotDePasse('${idSur(c.id)}','${idSur(c.identifiant || '')}')">Réinitialiser</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+window.reinitialiserMotDePasse = async (uid, identifiant) => {
+  const compte = membresParUid[uid] || {};
+  const ancienConnu = compte.motDePasseActuel;
+  let ancien = ancienConnu;
+  if (!ancien) {
+    ancien = prompt(`Le mot de passe actuel de "${identifiant}" n'est pas encore enregistré.\nSaisis le mot de passe actuellement en vigueur pour ce compte (nécessaire pour le changer) :`);
+    if (!ancien) return;
+  }
+  const nouveau = prompt(`Nouveau mot de passe pour "${identifiant}" (6 caractères minimum) :`);
+  if (!nouveau) return;
+  if (nouveau.length < 6) { alert('Le nouveau mot de passe doit contenir au moins 6 caractères.'); return; }
+  if (!motDePasseValide(nouveau)) { alert('Le mot de passe ne peut contenir que des lettres et des chiffres (pas d\'espace, pas de caractère spécial).'); return; }
+  try {
+    await reinitialiserMotDePasseCompte(identifiant, ancien, nouveau);
+    await updateDoc(doc(db, 'membres', uid), { motDePasseActuel: nouveau });
+    alert(`Mot de passe de "${identifiant}" réinitialisé.`);
+    await chargerMembres(uid);
+    chargerMotsDePasseAdmin();
+  } catch (err) {
+    if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password') {
+      alert('Le mot de passe actuel saisi est incorrect — réinitialisation annulée.');
+    } else {
+      alert('Erreur lors de la réinitialisation : ' + (err.code || err.message));
+    }
+  }
+};
+
+async function chargerSauvegardesMdp() {
+  const snap = await getDocs(collection(db, 'sauvegardes_mdp'));
+  let sauvegardes = [];
+  snap.forEach(d => sauvegardes.push({ ...d.data(), id: d.id }));
+  sauvegardes.sort((a, b) => (b.date?.seconds || 0) - (a.date?.seconds || 0));
+  sauvegardes = sauvegardes.slice(0, 20);
+  const wrap = document.getElementById('listeSauvegardesMdp');
+  if (sauvegardes.length === 0) { wrap.innerHTML = '<div class="empty-state">Aucune sauvegarde pour l\'instant — la première sera créée à la prochaine connexion du super-admin.</div>'; return; }
+  wrap.innerHTML = sauvegardes.map(s => {
+    const dateLabel = s.date?.seconds
+      ? new Date(s.date.seconds * 1000).toLocaleString('fr-BE', { dateStyle: 'medium', timeStyle: 'short' })
+      : 'Date inconnue';
+    const detailId = 'sauv-' + s.id;
+    const comptesHtml = (s.comptes || []).map(c =>
+      `<div class="data-sub">${escapeHtml(c.identifiant)} (${c.role}) : ${c.motDePasseActuel ? `<code>${escapeHtml(c.motDePasseActuel)}</code>` : '<em>non enregistré</em>'}</div>`
+    ).join('');
+    return `
+    <div class="data-row" style="flex-direction:column; align-items:stretch;">
+      <div class="data-main" style="cursor:pointer;" onclick="document.getElementById('${detailId}').classList.toggle('hidden')">
+        <div class="data-title">${dateLabel}</div>
+        <div class="data-sub">${(s.comptes || []).length} compte(s) — clique pour afficher le détail</div>
+      </div>
+      <div id="${detailId}" class="hidden" style="margin-top:8px; padding-top:8px; border-top:1px solid rgba(0,0,0,0.08);">${comptesHtml}</div>
+    </div>`;
+  }).join('');
+}
+
+// ==========================================================================
+// LIVRE DE CAISSE — mouvements en espèces uniquement (hors banque)
+// ==========================================================================
+let anneeActuelleCaisse = new Date().getFullYear();
+
+function initSelecteurAnneeCaisse() {
+  const sel = document.getElementById('lc-annee');
+  const anneeCourante = new Date().getFullYear();
+  const annees = [];
+  for (let a = 2025; a <= anneeCourante + 1; a++) annees.push(a);
+  sel.innerHTML = annees.map(a => `<option value="${a}" ${a === anneeCourante ? 'selected' : ''}>${a}</option>`).join('');
+  anneeActuelleCaisse = anneeCourante;
+  sel.addEventListener('change', () => {
+    anneeActuelleCaisse = parseInt(sel.value, 10);
+    chargerSoldeDepartCaisse();
+    chargerLivreCaisse();
+  });
+}
+async function chargerSoldeDepartCaisse() {
+  const d = await getDoc(doc(db, 'livre_caisse_parametres', String(anneeActuelleCaisse)));
+  document.getElementById('lc-soldeDepart').value = d.exists() ? (d.data().soldeDepart ?? 0) : 0;
+}
+document.getElementById('btnSauverSoldeDepart').addEventListener('click', async () => {
+  const soldeDepart = parseFloat(document.getElementById('lc-soldeDepart').value) || 0;
+  try {
+    await setDoc(doc(db, 'livre_caisse_parametres', String(anneeActuelleCaisse)), { soldeDepart }, { merge: true });
+    chargerLivreCaisse();
+  } catch (err) {
+    alert('Erreur : ' + (err.code || err.message) + '\n\nSi le message mentionne "permissions", il faut mettre à jour les règles Firestore (voir le README, section 4).');
+  }
+});
+
+async function chargerLivreCaisse() {
+  const corps = document.getElementById('corpsTableauCaisse');
+  const dParam = await getDoc(doc(db, 'livre_caisse_parametres', String(anneeActuelleCaisse)));
+  const soldeDepart = dParam.exists() ? (Number(dParam.data().soldeDepart) || 0) : 0;
+  const dateDebut = `${anneeActuelleCaisse}-01-01`;
+  const dateFin = `${anneeActuelleCaisse}-12-31`;
+  const snap = await getDocs(query(collection(db, 'livre_caisse'), where('date', '>=', dateDebut), where('date', '<=', dateFin)));
+  let mouvements = [];
+  snap.forEach(d => mouvements.push({ ...d.data(), id: d.id }));
+  mouvements.sort((a, b) => a.date.localeCompare(b.date) || (a.createdAtMs||0) - (b.createdAtMs||0));
+
+  let solde = soldeDepart, totalEncaisse = 0, totalDecaisse = 0;
+  const ligneDepart = `<tr><td colspan="4" style="font-style:italic;">Solde de départ au 1er janvier</td><td class="solde">${soldeDepart.toFixed(2)} €</td><td></td></tr>`;
+  const lignes = mouvements.map(m => {
+    const montant = Number(m.montant) || 0;
+    if (m.type === 'encaissement') { solde += montant; totalEncaisse += montant; }
+    else { solde -= montant; totalDecaisse += montant; }
+    const dateLabel = new Date(m.date + 'T00:00:00').toLocaleDateString('fr-BE', { day:'2-digit', month:'2-digit', year:'numeric' });
+    return `<tr>
+      <td>${dateLabel}</td>
+      <td>${escapeHtml(m.libelle||'')}</td>
+      <td class="montant-recette">${m.type==='encaissement' ? montant.toFixed(2)+' €' : ''}</td>
+      <td class="montant-depense">${m.type==='decaissement' ? montant.toFixed(2)+' €' : ''}</td>
+      <td class="solde">${solde.toFixed(2)} €</td>
+      <td>
+        <button class="btn-sm" onclick="window.editerMouvementCaisse('${m.id}')">Modifier</button>
+        <button class="btn-sm danger" onclick="window.supprimerMouvementCaisse('${m.id}')">Suppr.</button>
+      </td>
+    </tr>`;
+  }).join('');
+  corps.innerHTML = ligneDepart + (lignes || `<tr><td colspan="6" class="empty-state">Aucun mouvement de caisse pour ${anneeActuelleCaisse}.</td></tr>`);
+  document.getElementById('totauxCaisse').textContent =
+    `Encaissé : ${totalEncaisse.toFixed(2)} € · Décaissé : ${totalDecaisse.toFixed(2)} € · Solde au 31/12 : ${solde.toFixed(2)} €`;
+  window._livreCaisse = mouvements;
+}
+
+document.getElementById('btnAjouterMouvementCaisse').addEventListener('click', () => window.ouvrirModalMouvementCaisse());
+window.editerMouvementCaisse = (id) => window.ouvrirModalMouvementCaisse((window._livreCaisse || []).find(m => m.id === id));
+window.supprimerMouvementCaisse = async (id) => {
+  if (!confirm('Supprimer ce mouvement de caisse ?')) return;
+  await deleteDoc(doc(db, 'livre_caisse', id));
+  chargerLivreCaisse();
+};
+window.ouvrirModalMouvementCaisse = (m) => {
+  const html = `
+    <div class="modal-overlay" id="modalOverlayCaisse">
+      <div class="modal-box">
+        <h3>${m ? 'Modifier le mouvement' : 'Ajouter un mouvement de caisse'}</h3>
+        <div class="form-grid">
+          <div class="field"><label>Date</label><input type="date" id="lc-date" value="${m?.date || dateISOLocale(new Date())}"></div>
+          <div class="field"><label>Type</label>
+            <select id="lc-type">
+              <option value="decaissement" ${m?.type!=='encaissement'?'selected':''}>Décaissé (sorti de caisse)</option>
+              <option value="encaissement" ${m?.type==='encaissement'?'selected':''}>Encaissé (entré en caisse)</option>
+            </select>
+          </div>
+        </div>
+        <div class="field"><label>Libellé</label><input id="lc-libelle" value="${escapeHtml(m?.libelle||'')}" placeholder="ex: Paiement cours en espèces, achat foin en liquide..." spellcheck="true" lang="fr"></div>
+        <div class="field"><label>Montant (€)</label><input type="number" step="0.01" id="lc-montant" value="${m?.montant ?? ''}"></div>
+        <div class="modal-actions">
+          <button class="btn-sm" type="button" onclick="window.fermerModal()">Annuler</button>
+          <button class="btn-sm primary" type="button" id="lc-save">Enregistrer</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modalZone').innerHTML = html;
+  document.getElementById('lc-save').addEventListener('click', async () => {
+    const montant = parseFloat(document.getElementById('lc-montant').value);
+    if (!montant || montant <= 0) { alert('Merci d\'indiquer un montant valide.'); return; }
+    const data = {
+      date: document.getElementById('lc-date').value,
+      type: document.getElementById('lc-type').value,
+      libelle: document.getElementById('lc-libelle').value.trim(),
+      montant
+    };
+    if (!data.date) { alert('Merci d\'indiquer une date.'); return; }
+    try {
+      if (m) await updateDoc(doc(db, 'livre_caisse', m.id), data);
+      else await addDoc(collection(db, 'livre_caisse'), { ...data, createdAtMs: Date.now() });
+      window.fermerModal();
+      const anneeSaisie = parseInt(data.date.slice(0,4), 10);
+      if (anneeSaisie !== anneeActuelleCaisse) {
+        anneeActuelleCaisse = anneeSaisie;
+        document.getElementById('lc-annee').value = anneeSaisie;
+        await chargerSoldeDepartCaisse();
+      }
+      chargerLivreCaisse();
+    } catch (err) {
+      alert('Erreur : ' + (err.code || err.message));
+    }
+  });
+};
+document.getElementById('btnExporterCaisse').addEventListener('click', async () => {
+  const mouvements = window._livreCaisse || [];
+  const dParam = await getDoc(doc(db, 'livre_caisse_parametres', String(anneeActuelleCaisse)));
+  const soldeDepart = dParam.exists() ? (Number(dParam.data().soldeDepart) || 0) : 0;
+  let solde = soldeDepart;
+  const lignes = [{ 'Date': '', 'Libellé': 'Solde de départ', 'Encaissé (€)': '', 'Décaissé (€)': '', 'Solde (€)': soldeDepart }];
+  mouvements.forEach(m => {
+    const montant = Number(m.montant) || 0;
+    if (m.type === 'encaissement') solde += montant; else solde -= montant;
+    lignes.push({
+      'Date': m.date, 'Libellé': m.libelle || '',
+      'Encaissé (€)': m.type === 'encaissement' ? montant : '',
+      'Décaissé (€)': m.type === 'decaissement' ? montant : '',
+      'Solde (€)': Number(solde.toFixed(2))
+    });
+  });
+  if (mouvements.length === 0) { alert('Aucun mouvement à exporter pour ' + anneeActuelleCaisse + '.'); return; }
+  const feuille = XLSX.utils.json_to_sheet(lignes);
+  feuille['!cols'] = [{wch:12},{wch:32},{wch:12},{wch:12},{wch:12}];
+  const classeur = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(classeur, feuille, `Caisse ${anneeActuelleCaisse}`);
+  XLSX.writeFile(classeur, `Livre-de-caisse-Lar-Allegria-${anneeActuelleCaisse}.xlsx`);
+});
+
+// ==========================================================================
+// COMPTABILITÉ — achats & ventes → compte de résultat simplifié
+// ==========================================================================
+let planComptableCache = [];
+let compteActuelAnnee = new Date().getFullYear();
+
+function initSelecteurAnneeCompta() {
+  const sel = document.getElementById('cpt-annee');
+  const anneeCourante = new Date().getFullYear();
+  const annees = [];
+  for (let a = 2025; a <= anneeCourante + 1; a++) annees.push(a);
+  sel.innerHTML = annees.map(a => `<option value="${a}" ${a === anneeCourante ? 'selected' : ''}>${a}</option>`).join('');
+  compteActuelAnnee = anneeCourante;
+  sel.addEventListener('change', () => { compteActuelAnnee = parseInt(sel.value, 10); chargerCompta(); });
+}
+
+async function chargerPlanComptable() {
+  const snap = await getDocs(collection(db, 'comptabilite_comptes'));
+  planComptableCache = [];
+  snap.forEach(d => planComptableCache.push({ ...d.data(), id: d.id }));
+  planComptableCache.sort((a, b) => (a.numero || '').localeCompare(b.numero || ''));
+  const wrap = document.getElementById('listePlanComptable');
+  wrap.innerHTML = planComptableCache.length === 0
+    ? '<div class="empty-state">Aucun compte encodé pour l\'instant.</div>'
+    : planComptableCache.map(c => `
+      <div class="data-row">
+        <div class="data-main"><div class="data-title">${escapeHtml(c.numero)} — ${escapeHtml(c.nom)} <span class="badge badge-neutral">${c.tauxDeductible ?? 100}% déductible</span></div></div>
+        <div class="data-actions"><button class="btn-sm danger" onclick="window.supprimerCompteComptable('${c.id}')">Supprimer</button></div>
+      </div>`).join('');
+}
+document.getElementById('btnAjouterCompte').addEventListener('click', async () => {
+  const numero = document.getElementById('pc-numero').value.trim();
+  const nom = document.getElementById('pc-nom').value.trim();
+  const tauxDeductible = Math.max(0, Math.min(100, parseFloat(document.getElementById('pc-deductible').value) || 0));
+  if (!numero || !nom) { alert('Merci de renseigner le numéro et l\'intitulé du compte.'); return; }
+  try {
+    await addDoc(collection(db, 'comptabilite_comptes'), { numero, nom, tauxDeductible });
+    document.getElementById('pc-numero').value = '';
+    document.getElementById('pc-nom').value = '';
+    document.getElementById('pc-deductible').value = '100';
+    chargerPlanComptable();
+  } catch (err) {
+    alert('Erreur : ' + (err.code || err.message) + '\n\nSi le message mentionne "permissions", il faut mettre à jour les règles Firestore (voir le README, section 4).');
+  }
+});
+window.supprimerCompteComptable = async (id) => {
+  if (!confirm('Supprimer ce compte du plan comptable ? (les écritures déjà encodées avec ce compte ne sont pas modifiées)')) return;
+  await deleteDoc(doc(db, 'comptabilite_comptes', id));
+  chargerPlanComptable();
+};
+
+async function chargerCompta() {
+  const corps = document.getElementById('corpsTableauCompta');
+  const dateDebut = `${compteActuelAnnee}-01-01`;
+  const dateFin = `${compteActuelAnnee}-12-31`;
+  const snap = await getDocs(query(collection(db, 'comptabilite_ecritures'), where('date', '>=', dateDebut), where('date', '<=', dateFin)));
+  let ecritures = [];
+  snap.forEach(d => ecritures.push({ ...d.data(), id: d.id }));
+  ecritures.sort((a, b) => a.date.localeCompare(b.date) || (a.createdAtMs||0) - (b.createdAtMs||0));
+
+  if (ecritures.length === 0) {
+    corps.innerHTML = '<tr><td colspan="7" class="empty-state">Aucune écriture pour ' + compteActuelAnnee + '.</td></tr>';
+    document.getElementById('totauxCompta').textContent = '';
+    return;
+  }
+
+  let totalAchats = 0, totalVentes = 0, totalDeductible = 0;
+  corps.innerHTML = ecritures.map(e => {
+    const montant = Number(e.montant) || 0;
+    if (e.type === 'vente') totalVentes += montant; else totalAchats += montant;
+    totalDeductible += Number(e.montantDeductible) || 0;
+    const dateLabel = new Date(e.date + 'T00:00:00').toLocaleDateString('fr-BE', { day:'2-digit', month:'2-digit', year:'numeric' });
+    const compteLabel = e.compteNumero ? `${escapeHtml(e.compteNumero)} — ${escapeHtml(e.compteNom||'')}` : '—';
+    return `<tr>
+      <td>${dateLabel}</td>
+      <td>${escapeHtml(e.libelle||'')}</td>
+      <td>${compteLabel}</td>
+      <td class="montant-depense">${e.type!=='vente' ? montant.toFixed(2)+' €' : ''}</td>
+      <td class="montant-recette">${e.type==='vente' ? montant.toFixed(2)+' €' : ''}</td>
+      <td>${e.montantDeductible ? e.montantDeductible.toFixed(2) + ' € (' + (e.tauxDeductible ?? 100) + '%)' : '—'}</td>
+      <td>
+        <button class="btn-sm" onclick="window.editerEcritureCompta('${e.id}')">Modifier</button>
+        <button class="btn-sm danger" onclick="window.supprimerEcritureCompta('${e.id}')">Suppr.</button>
+      </td>
+    </tr>`;
+  }).join('');
+  const resultat = totalVentes - totalAchats;
+  document.getElementById('totauxCompta').innerHTML =
+    `Compte de résultat simplifié ${compteActuelAnnee} — Total achats : ${totalAchats.toFixed(2)} € · Total ventes : ${totalVentes.toFixed(2)} € · <strong>Résultat : ${resultat.toFixed(2)} €</strong> · Total déductible : ${totalDeductible.toFixed(2)} €`;
+  window._ecrituresCompta = ecritures;
+}
+
+document.getElementById('btnAjouterEcriture').addEventListener('click', () => window.ouvrirModalEcriture());
+window.editerEcritureCompta = (id) => window.ouvrirModalEcriture((window._ecrituresCompta || []).find(e => e.id === id));
+window.supprimerEcritureCompta = async (id) => {
+  if (!confirm('Supprimer cette écriture ?')) return;
+  await deleteDoc(doc(db, 'comptabilite_ecritures', id));
+  chargerCompta();
+};
+window.ouvrirModalEcriture = (e) => {
+  const optionsComptes = planComptableCache.map(c => `<option value="${c.id}" ${e?.compteId===c.id?'selected':''}>${escapeHtml(c.numero)} — ${escapeHtml(c.nom)}</option>`).join('');
+  const html = `
+    <div class="modal-overlay" id="modalOverlayEcriture">
+      <div class="modal-box">
+        <h3>${e ? 'Modifier l\'écriture' : 'Ajouter une écriture'}</h3>
+        <div class="form-grid">
+          <div class="field"><label>Date</label><input type="date" id="ec-date" value="${e?.date || dateISOLocale(new Date())}"></div>
+          <div class="field"><label>Type</label>
+            <select id="ec-type">
+              <option value="achat" ${e?.type!=='vente'?'selected':''}>Achat</option>
+              <option value="vente" ${e?.type==='vente'?'selected':''}>Vente</option>
+            </select>
+          </div>
+        </div>
+        <div class="field ${e?.type==='vente'?'':'hidden'}" id="ec-zoneVente">
+          <label>Reprendre le total d'un mois depuis le Livre des recettes</label>
+          <div style="display:flex; gap:8px;">
+            <input type="month" id="ec-moisRecettes">
+            <button class="btn-sm" type="button" id="ec-reprendreMois">Calculer</button>
+          </div>
+        </div>
+        <div class="field"><label>Libellé</label><input id="ec-libelle" value="${escapeHtml(e?.libelle||'')}" placeholder="ex: Achat de foin, Ventes de janvier 2025..." spellcheck="true" lang="fr"></div>
+        <div class="form-grid">
+          <div class="field"><label>Montant (€)</label><input type="number" step="0.01" id="ec-montant" value="${e?.montant ?? ''}"></div>
+          <div class="field"><label>Compte comptable <span class="hint">— détermine automatiquement le % déductible</span></label>
+            <select id="ec-compte"><option value="">— Aucun —</option>${optionsComptes}</select>
+          </div>
+        </div>
+        <div class="data-sub" id="ec-infoDeductible" style="margin-bottom:10px;"></div>
+        <div class="modal-actions">
+          <button class="btn-sm" type="button" onclick="window.fermerModal()">Annuler</button>
+          <button class="btn-sm primary" type="button" id="ec-save">Enregistrer</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modalZone').innerHTML = html;
+  document.getElementById('ec-type').addEventListener('change', () => {
+    document.getElementById('ec-zoneVente').classList.toggle('hidden', document.getElementById('ec-type').value !== 'vente');
+  });
+  document.getElementById('ec-reprendreMois').addEventListener('click', async () => {
+    const moisVal = document.getElementById('ec-moisRecettes').value;
+    if (!moisVal) { alert('Choisis un mois.'); return; }
+    const [an, mois] = moisVal.split('-');
+    const debut = `${an}-${mois}-01`;
+    const dernierJour = new Date(parseInt(an, 10), parseInt(mois, 10), 0).getDate();
+    const fin = `${an}-${mois}-${String(dernierJour).padStart(2,'0')}`;
+    const snapMois = await getDocs(query(collection(db, 'livre_recettes'), where('date', '>=', debut), where('date', '<=', fin)));
+    let total = 0;
+    snapMois.forEach(d => total += Number(d.data().montant) || 0);
+    document.getElementById('ec-montant').value = total.toFixed(2);
+    if (!document.getElementById('ec-libelle').value) {
+      const nomsMois = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+      document.getElementById('ec-libelle').value = `Ventes de ${nomsMois[parseInt(mois,10)-1]} ${an} — Livre des recettes`;
+    }
+    majInfoDeductible();
+  });
+  const majInfoDeductible = () => {
+    const compte = planComptableCache.find(c => c.id === document.getElementById('ec-compte').value);
+    const taux = compte ? (compte.tauxDeductible ?? 100) : null;
+    const montant = parseFloat(document.getElementById('ec-montant').value) || 0;
+    document.getElementById('ec-infoDeductible').textContent = compte
+      ? `Déductible à ${taux}% pour ce compte → ${(montant * taux / 100).toFixed(2)} € déductible sur ce montant.`
+      : 'Choisis un compte comptable pour voir le % déductible applicable.';
+  };
+  document.getElementById('ec-compte').addEventListener('change', majInfoDeductible);
+  document.getElementById('ec-montant').addEventListener('input', majInfoDeductible);
+  majInfoDeductible();
+  document.getElementById('ec-save').addEventListener('click', async () => {
+    const compteId = document.getElementById('ec-compte').value;
+    const compte = planComptableCache.find(c => c.id === compteId);
+    const montant = parseFloat(document.getElementById('ec-montant').value);
+    if (!montant || montant <= 0) { alert('Merci d\'indiquer un montant valide.'); return; }
+    const tauxDeductible = compte ? (compte.tauxDeductible ?? 100) : 0;
+    const data = {
+      date: document.getElementById('ec-date').value,
+      type: document.getElementById('ec-type').value,
+      libelle: document.getElementById('ec-libelle').value.trim(),
+      montant,
+      tauxDeductible,
+      montantDeductible: Number((montant * tauxDeductible / 100).toFixed(2)),
+      compteId: compteId || null,
+      compteNumero: compte?.numero || '',
+      compteNom: compte?.nom || ''
+    };
+    if (!data.date) { alert('Merci d\'indiquer une date.'); return; }
+    try {
+      if (e) await updateDoc(doc(db, 'comptabilite_ecritures', e.id), data);
+      else await addDoc(collection(db, 'comptabilite_ecritures'), { ...data, createdAtMs: Date.now() });
+      window.fermerModal();
+      const anneeEcriture = parseInt(data.date.slice(0,4), 10);
+      if (anneeEcriture !== compteActuelAnnee) {
+        compteActuelAnnee = anneeEcriture;
+        document.getElementById('cpt-annee').value = anneeEcriture;
+      }
+      chargerCompta();
+    } catch (err) {
+      alert('Erreur : ' + (err.code || err.message));
+    }
+  });
+};
+
+document.getElementById('btnExporterCompta').addEventListener('click', () => {
+  const ecritures = window._ecrituresCompta || [];
+  if (ecritures.length === 0) { alert('Aucune écriture à exporter pour ' + compteActuelAnnee + '.'); return; }
+  const lignes = ecritures.map(e => {
+    const montant = Number(e.montant) || 0;
+    return {
+      'Date': e.date,
+      'Libellé': e.libelle || '',
+      'Compte n°': e.compteNumero || '',
+      'Intitulé compte': e.compteNom || '',
+      'Achat (€)': e.type !== 'vente' ? montant : '',
+      'Vente (€)': e.type === 'vente' ? montant : '',
+      '% déductible': e.tauxDeductible ?? '',
+      'Montant déductible (€)': e.montantDeductible ?? ''
+    };
+  });
+  const feuille = XLSX.utils.json_to_sheet(lignes);
+  feuille['!cols'] = [{wch:12},{wch:32},{wch:12},{wch:24},{wch:12},{wch:12},{wch:12},{wch:16}];
+  const classeur = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(classeur, feuille, `Compta ${compteActuelAnnee}`);
+  XLSX.writeFile(classeur, `Comptabilite-Lar-Allegria-${compteActuelAnnee}.xlsx`);
+});
+
+// ==========================================================================
+// LIVRE DES RECETTES — une ligne par jour de l'année (journal des recettes)
+// ==========================================================================
+let anneeActuelleRecettes = new Date().getFullYear();
+
+function initSelecteurAnneeRecettes() {
+  const sel = document.getElementById('lr-annee');
+  const anneeCourante = new Date().getFullYear();
+  const annees = [];
+  for (let a = 2025; a <= anneeCourante + 1; a++) annees.push(a);
+  sel.innerHTML = annees.map(a => `<option value="${a}" ${a === anneeCourante ? 'selected' : ''}>${a}</option>`).join('');
+  anneeActuelleRecettes = anneeCourante;
+  sel.addEventListener('change', () => { anneeActuelleRecettes = parseInt(sel.value, 10); chargerLivreRecettes(); });
+}
+
+let categoriesRecettesCache = [];
+const CATEGORIES_RECETTES_DE_BASE = ['Abonnement', 'Cours sans abonnement', 'Cotisation', 'Sponsor', 'Don', 'Autre'];
+async function chargerCategoriesRecettes() {
+  const snap = await getDocs(collection(db, 'livre_recettes_categories'));
+  categoriesRecettesCache = [];
+  snap.forEach(d => categoriesRecettesCache.push({ ...d.data(), id: d.id }));
+  categoriesRecettesCache.sort((a, b) => (a.nom || '').localeCompare(b.nom || ''));
+  const wrap = document.getElementById('listeCategoriesRecettes');
+  wrap.innerHTML = categoriesRecettesCache.length === 0
+    ? '<div class="empty-state">Aucune catégorie — clique sur "Initialiser" ou ajoutes-en une.</div>'
+    : categoriesRecettesCache.map(c => `
+      <div class="data-row">
+        <div class="data-main"><div class="data-title">${escapeHtml(c.nom)}</div></div>
+        <div class="data-actions"><button class="btn-sm danger" onclick="window.supprimerCategorieRecette('${c.id}')">Supprimer</button></div>
+      </div>`).join('');
+}
+document.getElementById('btnInitCategoriesRecettes').addEventListener('click', async () => {
+  if (!confirm("Créer les catégories de base (Abonnement, Cours sans abonnement, Cotisation, Sponsor, Don, Autre) ? (à ne faire qu'une fois)")) return;
+  try {
+    await Promise.all(CATEGORIES_RECETTES_DE_BASE.map(nom => addDoc(collection(db, 'livre_recettes_categories'), { nom })));
+    chargerCategoriesRecettes();
+  } catch (err) {
+    alert('Erreur : ' + (err.code || err.message) + '\n\nSi le message mentionne "permissions", il faut mettre à jour les règles Firestore (voir le README, section 4).');
+  }
+});
+document.getElementById('btnAjouterCategorieRecette').addEventListener('click', async () => {
+  const nom = document.getElementById('cr-nom').value.trim();
+  if (!nom) { alert('Merci de donner un nom à cette catégorie.'); return; }
+  try {
+    await addDoc(collection(db, 'livre_recettes_categories'), { nom });
+    document.getElementById('cr-nom').value = '';
+    chargerCategoriesRecettes();
+  } catch (err) {
+    alert('Erreur : ' + (err.code || err.message));
+  }
+});
+window.supprimerCategorieRecette = async (id) => {
+  if (!confirm('Supprimer cette catégorie ? (les recettes déjà encodées avec ne sont pas modifiées)')) return;
+  await deleteDoc(doc(db, 'livre_recettes_categories', id));
+  chargerCategoriesRecettes();
+};
+
+function totalLignesJour(r) {
+  if (!r) return 0;
+  if (Array.isArray(r.lignes) && r.lignes.length > 0) {
+    return r.lignes.reduce((s, l) => s + (Number(l.montant) || 0), 0);
+  }
+  return Number(r.montant) || 0; // ancien format (un seul montant, sans catégorie)
+}
+
+async function chargerLivreRecettes() {
+  const corps = document.getElementById('corpsTableauRecettes');
+  const an = anneeActuelleRecettes;
+  const dateDebut = `${an}-01-01`;
+  const dateFin = `${an}-12-31`;
+  const snap = await getDocs(query(collection(db, 'livre_recettes'), where('date', '>=', dateDebut), where('date', '<=', dateFin)));
+  const parDate = {};
+  snap.forEach(d => { parDate[d.id] = d.data(); });
+
+  const bissextile = (an % 4 === 0 && (an % 100 !== 0 || an % 400 === 0));
+  const joursParMois = [31, bissextile ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  let total = 0;
+  let lignes = '';
+  for (let mois = 0; mois < 12; mois++) {
+    for (let jour = 1; jour <= joursParMois[mois]; jour++) {
+      const dateISO = `${an}-${String(mois+1).padStart(2,'0')}-${String(jour).padStart(2,'0')}`;
+      const r = parDate[dateISO];
+      const montant = totalLignesJour(r);
+      total += montant;
+      const dateLabel = capitalize(new Date(dateISO + 'T00:00:00').toLocaleDateString('fr-BE', { weekday:'short', day:'2-digit', month:'2-digit' }));
+      const nbCategories = r?.lignes?.length ? ` <span class="badge badge-neutral">${r.lignes.length} cat.</span>` : '';
+      lignes += `<tr onclick="window.ouvrirModalRecette('${dateISO}')" style="cursor:pointer;">
+        <td>${dateLabel}</td>
+        <td class="${montant>0?'montant-recette':''}">${montant.toFixed(2)} €${nbCategories}</td>
+        <td>${r?.factureJournalVente ? '✓' : ''}</td>
+        <td>${escapeHtml(r?.referenceJournalVente||'')}</td>
+        <td class="solde">${total.toFixed(2)} €</td>
+        <td><button class="btn-sm" onclick="event.stopPropagation(); window.ouvrirModalRecette('${dateISO}')">Éditer</button></td>
+      </tr>`;
+    }
+  }
+  corps.innerHTML = lignes;
+  document.getElementById('totauxRecettes').innerHTML = `<strong>Chiffre d'affaires ${an} : ${total.toFixed(2)} €</strong>`;
+  window._livreRecettesParDate = parDate;
+  window._livreRecettesAnnee = an;
+}
+
+window.ouvrirModalRecette = (dateISO) => {
+  const r = window._livreRecettesParDate[dateISO];
+  const dateLabel = capitalize(new Date(dateISO + 'T00:00:00').toLocaleDateString('fr-BE', { weekday:'long', day:'numeric', month:'long', year:'numeric' }));
+  // Reprend les lignes existantes, ou convertit l'ancien format (un seul
+  // montant sans catégorie) en une première ligne "Autre" éditable.
+  let lignesInitiales = Array.isArray(r?.lignes) && r.lignes.length > 0
+    ? r.lignes.map(l => ({ ...l }))
+    : (r?.montant ? [{ categorie: '', montant: r.montant }] : []);
+  if (lignesInitiales.length === 0) lignesInitiales = [{ categorie: '', montant: '' }];
+
+  const optionsCategories = (categorieChoisie) => categoriesRecettesCache.map(c =>
+    `<option value="${escapeHtml(c.nom)}" ${categorieChoisie === c.nom ? 'selected' : ''}>${escapeHtml(c.nom)}</option>`).join('');
+
+  const ligneHtml = (l, i) => `
+    <div class="form-grid lr-ligne" data-index="${i}" style="align-items:end;">
+      <div class="field"><label>Catégorie</label>
+        <select class="lr-ligne-categorie">${categoriesRecettesCache.length ? `<option value="">— Choisir —</option>${optionsCategories(l.categorie)}` : '<option value="">Aucune catégorie créée</option>'}</select>
+      </div>
+      <div class="field" style="display:flex; gap:6px; align-items:end;">
+        <div style="flex:1;"><label>Montant (€)</label><input type="number" step="0.01" class="lr-ligne-montant" value="${l.montant ?? ''}"></div>
+        <button class="btn-sm danger" type="button" onclick="this.closest('.lr-ligne').remove(); window._recalculerTotalLigneRecette()">✕</button>
+      </div>
+    </div>`;
+
+  const html = `
+    <div class="modal-overlay" id="modalOverlayRecette">
+      <div class="modal-box">
+        <h3>Recette du ${dateLabel}</h3>
+        <p style="color:var(--terre); font-size:0.85rem; margin-bottom:8px;">Ventile la recette du jour par catégorie (une ligne par catégorie). Le total se calcule tout seul.</p>
+        <div id="lr-lignesZone">${lignesInitiales.map(ligneHtml).join('')}</div>
+        <button class="btn-sm" type="button" id="lr-ajouterLigne">+ Ajouter une catégorie</button>
+        <p style="margin-top:10px; font-weight:700;">Total du jour : <span id="lr-totalCalcule">0.00</span> €</p>
+        <div class="field"><label>Facturé (via journal de vente) ?</label>
+          <select id="lr-facture">
+            <option value="non" ${!r?.factureJournalVente?'selected':''}>Non</option>
+            <option value="oui" ${r?.factureJournalVente?'selected':''}>Oui</option>
+          </select>
+        </div>
+        <div class="field"><label>Référence dans le journal de vente</label><input id="lr-reference" value="${escapeHtml(r?.referenceJournalVente||'')}" placeholder="ex: facture n°2025-014"></div>
+        <div class="modal-actions">
+          <button class="btn-sm" type="button" onclick="window.fermerModal()">Annuler</button>
+          <button class="btn-sm primary" type="button" id="lr-save">Enregistrer</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modalZone').innerHTML = html;
+
+  window._recalculerTotalLigneRecette = () => {
+    let total = 0;
+    document.querySelectorAll('#lr-lignesZone .lr-ligne-montant').forEach(inp => { total += parseFloat(inp.value) || 0; });
+    document.getElementById('lr-totalCalcule').textContent = total.toFixed(2);
+  };
+  document.getElementById('lr-lignesZone').addEventListener('input', (e) => {
+    if (e.target.classList.contains('lr-ligne-montant')) window._recalculerTotalLigneRecette();
+  });
+  document.getElementById('lr-ajouterLigne').addEventListener('click', () => {
+    const zone = document.getElementById('lr-lignesZone');
+    const div = document.createElement('div');
+    div.innerHTML = ligneHtml({ categorie: '', montant: '' }, zone.children.length);
+    zone.appendChild(div.firstElementChild);
+  });
+  window._recalculerTotalLigneRecette();
+
+  document.getElementById('lr-save').addEventListener('click', async () => {
+    const lignesSaisies = [...document.querySelectorAll('#lr-lignesZone .lr-ligne')].map(el => ({
+      categorie: el.querySelector('.lr-ligne-categorie')?.value || '',
+      montant: parseFloat(el.querySelector('.lr-ligne-montant').value) || 0
+    })).filter(l => l.montant > 0);
+    const factureJournalVente = document.getElementById('lr-facture').value === 'oui';
+    const referenceJournalVente = document.getElementById('lr-reference').value.trim();
+    try {
+      await setDoc(doc(db, 'livre_recettes', dateISO), {
+        date: dateISO, lignes: lignesSaisies, montant: null, factureJournalVente, referenceJournalVente
+      }, { merge: true });
+      window.fermerModal();
+      chargerLivreRecettes();
+    } catch (err) {
+      alert('Erreur : ' + (err.code || err.message) + '\n\nSi le message mentionne "permissions", il faut mettre à jour les règles Firestore (voir le README, section 4).');
+    }
+  });
+};
+
+document.getElementById('btnExporterRecettes').addEventListener('click', () => {
+  const parDate = window._livreRecettesParDate || {};
+  const an = window._livreRecettesAnnee || anneeActuelleRecettes;
+  const bissextile = (an % 4 === 0 && (an % 100 !== 0 || an % 400 === 0));
+  const joursParMois = [31, bissextile ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  let total = 0;
+  const lignesExport = [];
+  for (let mois = 0; mois < 12; mois++) {
+    for (let jour = 1; jour <= joursParMois[mois]; jour++) {
+      const dateISO = `${an}-${String(mois+1).padStart(2,'0')}-${String(jour).padStart(2,'0')}`;
+      const r = parDate[dateISO];
+      const montantJour = totalLignesJour(r);
+      total += montantJour;
+      if (Array.isArray(r?.lignes) && r.lignes.length > 0) {
+        r.lignes.forEach((l, i) => {
+          lignesExport.push({
+            'Date': i === 0 ? dateISO : '',
+            'Catégorie': l.categorie || '',
+            'Montant (€)': Number(l.montant) || 0,
+            'Total du jour (€)': i === 0 ? montantJour : '',
+            'Facturé ?': i === 0 ? (r?.factureJournalVente ? 'Oui' : 'Non') : '',
+            'Référence journal de vente': i === 0 ? (r?.referenceJournalVente || '') : '',
+            'Cumul (€)': i === 0 ? Number(total.toFixed(2)) : ''
+          });
+        });
+      } else {
+        lignesExport.push({
+          'Date': dateISO, 'Catégorie': '', 'Montant (€)': montantJour, 'Total du jour (€)': montantJour,
+          'Facturé ?': r?.factureJournalVente ? 'Oui' : 'Non',
+          'Référence journal de vente': r?.referenceJournalVente || '',
+          'Cumul (€)': Number(total.toFixed(2))
+        });
+      }
+    }
+  }
+  const feuille = XLSX.utils.json_to_sheet(lignesExport);
+  feuille['!cols'] = [{wch:12},{wch:18},{wch:12},{wch:14},{wch:9},{wch:22},{wch:12}];
+  const classeur = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(classeur, feuille, `Recettes ${an}`);
+  XLSX.writeFile(classeur, `Livre-des-recettes-Lar-Allegria-${an}.xlsx`);
+});
+
+// ==========================================================================
+// LIVRE D'OR — modération des messages publics
+// ==========================================================================
+async function chargerLivreOrAdmin() {
+  const snap = await getDocs(collection(db, 'livre_or'));
+  let messages = [];
+  snap.forEach(d => messages.push({ ...d.data(), id: d.id }));
+  messages.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+
+  const enAttente = messages.filter(m => m.statut === 'en_attente');
+  const publies = messages.filter(m => m.statut === 'publie');
+
+  const ligneAttente = (m) => `
+    <div class="data-row">
+      <div class="data-main">
+        <div class="data-title">${escapeHtml(m.nom)}</div>
+        <div class="data-sub">${escapeHtml(m.message)}</div>
+      </div>
+      <div class="data-actions">
+        <button class="btn-sm primary" onclick="window.publierLivreOr('${m.id}')">Publier</button>
+        <button class="btn-sm danger" onclick="window.supprimerLivreOr('${m.id}')">Refuser</button>
+      </div>
+    </div>`;
+  const lignePubliee = (m) => `
+    <div class="data-row">
+      <div class="data-main">
+        <div class="data-title">${escapeHtml(m.nom)}</div>
+        <div class="data-sub">${escapeHtml(m.message)}</div>
+      </div>
+      <div class="data-actions">
+        <button class="btn-sm danger" onclick="window.supprimerLivreOr('${m.id}')">Supprimer</button>
+      </div>
+    </div>`;
+
+  document.getElementById('listeLivreOrAttente').innerHTML =
+    enAttente.length ? enAttente.map(ligneAttente).join('') : '<div class="empty-state">Aucun message en attente.</div>';
+  document.getElementById('listeLivreOrPublies').innerHTML =
+    publies.length ? publies.map(lignePubliee).join('') : '<div class="empty-state">Aucun message publié pour l\'instant.</div>';
+
+  window._livreOr = messages;
+}
+window.publierLivreOr = async (id) => {
+  await updateDoc(doc(db, 'livre_or', id), { statut: 'publie' });
+  chargerLivreOrAdmin();
+};
+window.supprimerLivreOr = async (id) => {
+  if (!confirm('Supprimer ce message ?')) return;
+  await deleteDoc(doc(db, 'livre_or', id));
+  chargerLivreOrAdmin();
+};
+
+// ==========================================================================
+// PARTENAIRES (page publique) — la fiche par défaut "Hexelya" n'est
+// gérable que depuis le Super Admin ; l'Admin simple n'y voit aucun bouton.
+// ==========================================================================
+const HEXELYA_PARTENAIRE_DEFAUT = {
+  nom: 'Hexelya',
+  slogan: 'Anticiper. Structurer. Accompagner.',
+  logoUrl: 'https://hexelya.web.app/logo-full.png',
+  lien: 'https://hexelya.web.app/index.html',
+  ordre: 1,
+  visiblePublic: true,
+  partenaireDefaut: true,
+  texte: `Vous êtes indépendant, dirigez une ASBL ou une petite entreprise ?
+Vous avez besoin d’organisation, de structure… mais pas forcément d’une personne à temps plein ?
+
+Hexelya vous apporte une seule interlocutrice pour plusieurs facettes de votre activité.
+
+Administration, comptabilité, finance, RH, gestion du personnel : je vous aide à remettre de l’ordre et à garder le cap.
+Besoin de renfort ponctuel ? D’un accompagnement dans un rush ou un remplacement ? Hexelya s’adapte.
+Besoin de moderniser votre organisation ? Je vous accompagne aussi dans vos outils digitaux et l’implémentation d’ERP.
+Et parce qu’une entreprise ne fonctionne plus sans le digital, Hexelya crée également des sites vitrines et des espaces membres sécurisés.
+
+Une structure simple, plusieurs compétences, un objectif : vous libérer du temps.
+
+HEXELYA — L’organisation qui permet aux entrepreneurs d’avancer sereinement.`
+};
+
+async function chargerPartenairesAdmin() {
+  const snap = await getDocs(collection(db, 'partenaires'));
+  let partenaires = [];
+  snap.forEach(d => partenaires.push({ ...d.data(), id: d.id }));
+  partenaires.sort((a, b) => (a.ordre ?? 999) - (b.ordre ?? 999));
+  window._partenaires = {}; partenaires.forEach(p => window._partenaires[p.id] = p);
+  const wrap = document.getElementById('listePartenaires');
+  if (partenaires.length === 0) { wrap.innerHTML = '<div class="empty-state">Aucun partenaire pour l\'instant.</div>'; return; }
+  const estSuper = compteActuel.role === 'superadmin';
+  wrap.innerHTML = partenaires.map(p => {
+    const peutGerer = !p.partenaireDefaut || estSuper; // Admin simple : rien du tout sur la fiche par défaut
+    return `
+    <div class="data-row">
+      <div class="data-main">
+        <div class="data-title">${escapeHtml(p.nom)} ${p.slogan ? `<span style="font-weight:400; color:var(--terre);">— ${escapeHtml(p.slogan)}</span>` : ''}</div>
+        <div class="data-sub">${p.visiblePublic === false ? '<span class="badge badge-neutral">Masqué du site public</span>' : '<span class="badge badge-ok">Visible</span>'}</div>
+      </div>
+      ${peutGerer ? `<div class="data-actions">
+        <button class="btn-sm" onclick="window.editerPartenaire('${p.id}')">Modifier</button>
+        <button class="btn-sm danger" onclick="window.supprimerPartenaire('${p.id}')">Supprimer</button>
+      </div>` : ''}
+    </div>`;
+  }).join('');
+}
+window.editerPartenaire = (id) => window.ouvrirModalPartenaire(window._partenaires[id]);
+window.supprimerPartenaire = async (id) => {
+  const p = window._partenaires[id];
+  if (p?.partenaireDefaut && compteActuel.role !== 'superadmin') return;
+  if (!confirm('Supprimer ce partenaire ?')) return;
+  await deleteDoc(doc(db, 'partenaires', id));
+  chargerPartenairesAdmin();
+};
+document.getElementById('btnAjouterPartenaire').addEventListener('click', () => window.ouvrirModalPartenaire());
+window.ouvrirModalPartenaire = (p) => {
+  const html = `
+    <div class="modal-overlay" id="modalOverlayPartenaire">
+      <div class="modal-box" style="max-width:620px;">
+        <h3>${p ? 'Modifier le partenaire' : 'Ajouter un partenaire'}</h3>
+        <div class="form-grid">
+          <div class="field"><label>Nom *</label><input id="pt-nom" value="${escapeHtml(p?.nom||'')}"></div>
+          <div class="field"><label>Ordre d'affichage</label><input type="number" id="pt-ordre" value="${p?.ordre ?? 50}"></div>
+        </div>
+        <div class="field"><label>Slogan <span class="hint">— affiché après le nom</span></label><input id="pt-slogan" value="${escapeHtml(p?.slogan||'')}"></div>
+        <div class="field"><label>Adresse du logo (URL)</label><input id="pt-logo" value="${escapeHtml(p?.logoUrl||'')}" placeholder="https://..."></div>
+        <div class="field"><label>Texte de présentation</label><textarea id="pt-texte" rows="9" spellcheck="true" lang="fr">${escapeHtml(p?.texte||'')}</textarea></div>
+        <div class="form-grid">
+          <div class="field"><label>Lien du site</label><input id="pt-lien" value="${escapeHtml(p?.lien||'')}" placeholder="https://..."></div>
+          <div class="field"><label>Visible sur le site public</label>
+            <select id="pt-visible"><option value="oui" ${p?.visiblePublic!==false?'selected':''}>Oui</option><option value="non" ${p?.visiblePublic===false?'selected':''}>Non</option></select>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-sm" type="button" onclick="window.fermerModal()">Annuler</button>
+          <button class="btn-sm primary" type="button" id="pt-save">Enregistrer</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modalZone').innerHTML = html;
+  document.getElementById('pt-save').addEventListener('click', async () => {
+    const data = {
+      nom: document.getElementById('pt-nom').value.trim(),
+      slogan: document.getElementById('pt-slogan').value.trim(),
+      logoUrl: document.getElementById('pt-logo').value.trim(),
+      texte: document.getElementById('pt-texte').value.trim(),
+      lien: document.getElementById('pt-lien').value.trim(),
+      ordre: parseInt(document.getElementById('pt-ordre').value, 10) || 50,
+      visiblePublic: document.getElementById('pt-visible').value === 'oui'
+    };
+    if (!data.nom) { alert('Le nom est obligatoire.'); return; }
+    if (data.lien && !/^https?:\/\//i.test(data.lien)) { alert('Le lien doit commencer par http:// ou https://'); return; }
+    if (data.logoUrl && !/^https?:\/\//i.test(data.logoUrl) && !data.logoUrl.startsWith('assets/')) { alert('L\'adresse du logo doit commencer par https:// (ou assets/ pour un fichier du site).'); return; }
+    try {
+      if (p) await updateDoc(doc(db, 'partenaires', p.id), data);
+      else await addDoc(collection(db, 'partenaires'), data);
+      window.fermerModal();
+      chargerPartenairesAdmin();
+    } catch (err) {
+      alert('Erreur : ' + (err.code || err.message) + '\n\nSi le message mentionne "permissions", il faut mettre à jour les règles Firestore.');
+    }
+  });
+};
+document.getElementById('btnCreerPartenaireHexelya').addEventListener('click', async () => {
+  try {
+    const existant = await getDocs(query(collection(db, 'partenaires'), where('partenaireDefaut', '==', true)));
+    if (!existant.empty) { alert('Le partenaire Hexelya existe déjà (onglet Partenaires).'); return; }
+    await addDoc(collection(db, 'partenaires'), HEXELYA_PARTENAIRE_DEFAUT);
+    ongletsCharges.delete('partenaires');
+    alert('Partenaire Hexelya créé. Il apparaît maintenant sur la page publique "Partenaires".');
+  } catch (err) {
+    alert('Erreur : ' + (err.code || err.message) + '\n\nSi le message mentionne "permissions", il faut mettre à jour les règles Firestore.');
+  }
+});
+
+// ==========================================================================
+// STOCK — point rouge "à recommander" quand une quantité est à 1 ou moins
+// ==========================================================================
+const SEUIL_RECOMMANDE_STOCK = 1;
+function majPointRougeStockAdmin(stock) {
+  const btn = document.querySelector('.tab-btn[data-tab="stock"]');
+  if (btn) btn.classList.toggle('has-unread', stock.some(s => (Number(s.quantite) || 0) <= SEUIL_RECOMMANDE_STOCK));
+}
+async function chargerAlerteStockAdmin() {
+  try {
+    const snap = await getDocs(collection(db, 'stock'));
+    const stock = [];
+    snap.forEach(d => stock.push(d.data()));
+    majPointRougeStockAdmin(stock);
+  } catch (err) { /* sans conséquence : l'onglet Stock reste consultable */ }
+}
