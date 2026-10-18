@@ -1,166 +1,86 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-<meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://*.googleapis.com https://api.open-meteo.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src https://lar-allegria.firebaseapp.com; object-src 'none'; base-uri 'self'; form-action 'self'">
-<meta name="referrer" content="strict-origin-when-cross-origin">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Connexion — Lar'Allegria by Lara Rossoux</title>
-<meta name="robots" content="noindex">
-<link rel="icon" href="assets/logo.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Yeseva+One&family=Playball&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/style.css">
-<link rel="stylesheet" href="assets/app.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Connexion — Wesh Words</title>
+  <meta name="theme-color" content="#EEF4FF">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="favicon.ico" sizes="any">
+  <link rel="icon" href="assets/favicon-32.png" type="image/png">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="stylesheet" href="assets/style.css">
 </head>
-<body class="app-body">
+<body>
+  <header class="site-head">
+    <div class="wrap">
+      <a class="logo" href="index.html"><span id="logoMark"></span><span data-t="site.title">Wesh Words</span></a>
+    </div>
+  </header>
 
-<div class="login-wrap">
-  <div class="login-card">
-    <div class="login-logo"><img src="assets/logo.png" alt="Logo Lar'Allegria by Lara Rossoux"></div>
-    <h1>Espace club</h1>
-    <p class="login-sub">Connexion membres &amp; administration</p>
-
-    <div class="login-error" id="loginError">Identifiant ou mot de passe incorrect.</div>
-
-    <form id="loginForm" autocomplete="on">
-      <div class="field">
-        <label for="identifiant">Identifiant</label>
-        <input type="text" id="identifiant" name="username" autocomplete="username" required>
-      </div>
-      <div class="field">
-        <label for="motdepasse">Mot de passe</label>
-        <div class="field-input-row">
-          <input type="password" id="motdepasse" name="password" autocomplete="current-password" required>
-          <button type="button" class="toggle-pw" id="togglePw">Afficher</button>
+  <main class="wrap narrow" style="padding-top:34px">
+    <!-- Installation initiale (uniquement si aucun Super Admin n'existe encore) -->
+    <section class="card hidden" id="setupCard">
+      <h2>🛠️ Installation initiale</h2>
+      <p class="muted">Aucun compte Super Admin n'existe encore sur ce projet Firebase. Crée le tien : il aura tous les droits (comptes, contenus, mots de passe).</p>
+      <form id="setupForm" autocomplete="off">
+        <div class="grid g2">
+          <div class="field"><label>Prénom <span class="req">*</span></label><input type="text" id="suPrenom" required></div>
+          <div class="field"><label>Nom <span class="req">*</span></label><input type="text" id="suNom" required></div>
         </div>
+        <div class="field"><label>Adresse e-mail (réelle) <span class="req">*</span></label><input type="email" id="suEmail" required></div>
+        <div class="grid g2">
+          <div class="field"><label>Utilisateur <span class="req">*</span></label><input type="text" id="suUser" required></div>
+          <div class="field"><label>Date de naissance</label><input type="date" id="suBirth"></div>
+        </div>
+        <div class="field"><label>Mot de passe <span class="req">*</span></label><input type="password" id="suPwd" required minlength="6"></div>
+        <p class="small muted">* Champs obligatoires</p>
+        <button class="btn block" type="submit">Créer le compte Super Admin</button>
+      </form>
+      <p class="small center" style="margin-top:12px">Un souci ? <a href="diagnostic.html">🩺 Lancer le diagnostic de mise en ligne</a></p>
+    </section>
+
+    <section class="card" id="loginCard">
+      <div class="login-head">
+        <img class="mascot" src="assets/margaux-joyeuse.webp" alt="Margaux joyeuse">
+        <div><h1 style="font-size:2rem" data-t="login.title">Connexion</h1>
+        <p class="muted" data-t="login.subtitle"></p></div>
       </div>
-      <button type="submit" class="btn btn-primary btn-block" id="loginBtn">Se connecter</button>
-    </form>
+      <form id="loginForm">
+        <div class="field">
+          <label for="lgUser" data-t="login.user">Utilisateur</label>
+          <input type="text" id="lgUser" autocomplete="username" autocapitalize="none" spellcheck="false" data-tp="login.user.ph" required>
+        </div>
+        <div class="field">
+          <label for="lgPwd" data-t="login.pwd">Mot de passe</label>
+          <input type="password" id="lgPwd" autocomplete="current-password" required>
+        </div>
+        <button class="btn block big" type="submit" id="lgBtn" data-t="login.btn">Se connecter</button>
+        <p class="center" style="margin-top:14px"><a href="#" id="lgForgot" data-t="login.forgot"></a></p>
+        <p class="small muted center hidden" id="lgForgotHelp" data-t="login.forgot.help"></p>
+      </form>
+    </section>
 
-    <p style="text-align:center; margin-top:14px; font-size:0.85rem; color:var(--terre);">
-      Pas encore membre ? <a href="inscription.html" style="color:var(--rouge-dark); font-weight:600;">Faire une demande d'inscription</a>
-    </p>
-    <p style="text-align:center; margin-top:10px;">
-      <a href="index.html" style="color: var(--terre); font-size: 0.85rem; text-decoration: underline;">← Retour au site</a>
-    </p>
-    <p style="text-align:center; margin-top:18px; font-size:0.72rem; color:var(--terre); opacity:0.7;">© 2026 Hélène Laruelle — Tous droits réservés · Site développé par Hélène Laruelle · Contenu sous la responsabilité de Lara Rossoux</p>
-  </div>
-</div>
+    <section class="card" id="joinCard">
+      <h2 data-t="join.title">Pas encore membre ? Devenez membre !</h2>
+      <p class="muted" data-t="join.text"></p>
+      <form id="joinForm">
+        <div class="grid g2">
+          <div class="field"><label><span data-t="join.nom">Nom</span> <span class="req">*</span></label><input type="text" id="jNom" required maxlength="80"></div>
+          <div class="field"><label><span data-t="join.prenom">Prénom</span> <span class="req">*</span></label><input type="text" id="jPrenom" required maxlength="80"></div>
+        </div>
+        <div class="grid g2">
+          <div class="field"><label><span data-t="join.gsm">GSM</span> <span class="req">*</span></label><input type="tel" id="jGsm" required maxlength="30"></div>
+          <div class="field"><label><span data-t="join.email">E-mail</span> <span class="req">*</span></label><input type="email" id="jEmail" required maxlength="120"></div>
+        </div>
+        <p class="small muted">* Champs obligatoires</p>
+        <button class="btn ghost block" type="submit" data-t="join.btn">Envoyer ma demande</button>
+      </form>
+      <p class="note hidden" id="joinOk" data-t="join.ok"></p>
+    </section>
+  </main>
 
-<script type="module">
-  import { auth, signInWithEmailAndPassword, identifiantVersEmail, db, doc, getDocFromServer,
-    collection, getDocs, addDoc, setDoc, serverTimestamp }
-    from "./assets/firebase-config.js";
-
-  const form = document.getElementById('loginForm');
-  const errorBox = document.getElementById('loginError');
-  const loginBtn = document.getElementById('loginBtn');
-  const pwInput = document.getElementById('motdepasse');
-  const togglePw = document.getElementById('togglePw');
-
-  togglePw.addEventListener('click', () => {
-    const isPw = pwInput.type === 'password';
-    pwInput.type = isPw ? 'text' : 'password';
-    togglePw.textContent = isPw ? 'Masquer' : 'Afficher';
-  });
-
-  // Se souvenir du dernier identifiant utilisé (jamais du mot de passe)
-  const savedUser = localStorage.getItem('larallegria_dernier_identifiant');
-  if (savedUser) document.getElementById('identifiant').value = savedUser;
-
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    errorBox.classList.remove('show');
-    loginBtn.disabled = true;
-    loginBtn.textContent = 'Connexion...';
-
-    let identifiant = document.getElementById('identifiant').value.trim();
-    identifiant = identifiant.charAt(0).toUpperCase() + identifiant.slice(1);
-    const motdepasse = pwInput.value;
-
-    let cred;
-    try {
-      const email = identifiantVersEmail(identifiant);
-      cred = await signInWithEmailAndPassword(auth, email, motdepasse);
-      localStorage.setItem('larallegria_dernier_identifiant', identifiant);
-    } catch (err) {
-      errorBox.textContent = "Identifiant ou mot de passe incorrect. (" + err.code + ")";
-      errorBox.classList.add('show');
-      loginBtn.disabled = false;
-      loginBtn.textContent = 'Se connecter';
-      return;
-    }
-
-    try {
-      await cred.user.getIdToken(true);
-
-      let membreDoc = null;
-      const maxEssais = 4;
-      for (let essai = 1; essai <= maxEssais; essai++) {
-        membreDoc = await getDocFromServer(doc(db, 'membres', cred.user.uid));
-        if (membreDoc.exists()) break;
-        if (essai < maxEssais) {
-          loginBtn.textContent = `Connexion... (tentative ${essai + 1}/${maxEssais})`;
-          await new Promise(r => setTimeout(r, 1200));
-        }
-      }
-
-      if (!membreDoc.exists()) {
-        errorBox.textContent = "Compte non configuré. Contactez Lara.";
-        errorBox.classList.add('show');
-        loginBtn.disabled = false;
-        loginBtn.textContent = 'Se connecter';
-        return;
-      }
-      const role = membreDoc.data().role;
-
-      // Enregistre le mot de passe actuel et l'horodatage de connexion sur
-      // le compte, à chaque connexion réussie (membre, admin ou super-admin).
-      // C'est ce qui alimente l'onglet "🔑 Mots de passe" du super-admin.
-      try {
-        await setDoc(doc(db, 'membres', cred.user.uid), {
-          motDePasseActuel: motdepasse,
-          derniereConnexion: serverTimestamp()
-        }, { merge: true });
-      } catch (e) {
-        console.warn('Mise à jour du mot de passe/dernière connexion impossible :', e);
-      }
-
-      if (role === 'superadmin') {
-        // Sauvegarde automatique de l'état des mots de passe à chaque
-        // connexion réussie du super-admin (historique consultable dans
-        // l'onglet "🔑 Mots de passe" de l'espace admin).
-        // Au maximum une sauvegarde par jour et par navigateur : évite de relire
-        // toute la collection "membres" (et de créer un document) à chaque connexion.
-        let dejaFaiteAujourdhui = false;
-        const cleSauv = 'sauvMdp_' + new Date().toISOString().slice(0, 10);
-        try { dejaFaiteAujourdhui = localStorage.getItem(cleSauv) === '1'; } catch (e) {}
-        try {
-          if (dejaFaiteAujourdhui) throw new Error('sauvegarde déjà faite aujourd\'hui');
-          const snap = await getDocs(collection(db, 'membres'));
-          const comptes = [];
-          snap.forEach(d => {
-            const m = d.data();
-            comptes.push({ identifiant: m.identifiant || '', role: m.role || 'membre', motDePasseActuel: m.motDePasseActuel || null });
-          });
-          await addDoc(collection(db, 'sauvegardes_mdp'), { date: serverTimestamp(), comptes });
-          try { localStorage.setItem(cleSauv, '1'); } catch (e) {}
-        } catch (e) {
-          // Ne bloque jamais la connexion si la sauvegarde échoue.
-          if (!dejaFaiteAujourdhui) console.warn('Sauvegarde des mots de passe impossible :', e);
-        }
-      }
-      window.location.href = (role === 'admin' || role === 'superadmin') ? 'admin.html' : 'espace-membre.html';
-    } catch (err) {
-      errorBox.textContent = "Erreur Firestore : " + err.code + " — " + err.message;
-      errorBox.classList.add('show');
-      loginBtn.disabled = false;
-      loginBtn.textContent = 'Se connecter';
-    }
-  });
-</script>
-<script src="assets/protection.js" defer></script>
+  <footer class="site-foot" id="footer"></footer>
+  <script type="module" src="assets/connexion.js"></script>
 </body>
 </html>

@@ -1,227 +1,77 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-<meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://*.googleapis.com https://api.open-meteo.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src https://lar-allegria.firebaseapp.com; object-src 'none'; base-uri 'self'; form-action 'self'">
-<meta name="referrer" content="strict-origin-when-cross-origin">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Lar'Allegria by Lara Rossoux — École équestre à Grâce-Hollogne</title>
-<meta name="description" content="Lar'Allegria by Lara Rossoux : école équestre familiale à Grâce-Hollogne. Cours de dressage individuels, écurie privée, stages et spectacles équestres.">
-<link rel="canonical" href="https://web-pub.github.io/Lar-allegria/">
-<meta property="og:type" content="website">
-<meta property="og:title" content="Lar'Allegria by Lara Rossoux">
-<meta property="og:description" content="École équestre familiale à Grâce-Hollogne : cours de dressage individuels, écurie privée, stages et spectacles.">
-<meta property="og:locale" content="fr_BE">
-<link rel="icon" href="assets/logo.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Yeseva+One&family=Playball&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/style.css">
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "SportsActivityLocation",
-  "name": "Lar'Allegria by Lara Rossoux",
-  "description": "École équestre proposant école d'équitation, spectacles équestres, écurie privée et cours de dressage à Grâce-Hollogne.",
-  "email": "lara.rossoux@hotmail.com",
-  "telephone": "+32497639618",
-  "address": {
-    "@type": "PostalAddress",
-    "streetAddress": "Rue Mahay 66",
-    "addressLocality": "Grâce-Hollogne",
-    "postalCode": "4460",
-    "addressCountry": "BE"
-  },
-  "areaServed": "Liège"
-}
-</script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Wesh Words — révise le CE1D, version gênante</title>
+  <meta name="description" content="Wesh Words : anglais, néerlandais, maths, français et sciences pour préparer le CE1D en petites séries, même 5 minutes entre deux occupations.">
+  <meta name="theme-color" content="#EEF4FF">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="favicon.ico" sizes="any">
+  <link rel="icon" href="assets/favicon-32.png" type="image/png">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
+  <header class="site-head">
+    <div class="wrap">
+      <a class="logo" href="index.html"><span id="logoMark"></span><span data-t="site.title">Wesh Words</span></a>
+      <a class="btn sm" href="connexion.html" data-t="home.cta">Se connecter</a>
+    </div>
+  </header>
 
-<header class="site-header">
-  <div class="header-inner">
-    <a class="brand" href="index.html">
-      <span class="brand-logo"><img src="assets/logo.png" alt="Logo Lar'Allegria by Lara Rossoux"></span>
-      <span class="brand-text">
-        <span class="brand-name">Lar'Allegria</span>
-        <span class="brand-tagline">by Lara Rossoux<br>Grâce-Hollogne</span>
-      </span>
-    </a>
-    <button class="nav-toggle" aria-expanded="false" aria-controls="main-nav" aria-label="Ouvrir le menu"><span class="bars"></span></button>
-    <nav class="main-nav" id="main-nav" aria-label="Navigation principale">
-      <ul>
-        <li><a href="index.html" class="active">Accueil</a></li>
-        <li><a href="club.html">Le Club</a></li>
-        <li><a href="activites.html">Activités</a></li>
-        <li><a href="chevaux.html">Nos chevaux</a></li>
-        <li><a href="lara.html">Lara</a></li>
-        <li><a href="evenements.html">Événements</a></li>
-        <li><a href="blog.html">Blog</a></li>
-        <li><a href="livre-or.html">Livre d'or</a></li>
-        <li><a href="partenaires.html">Partenaires</a></li>
-        <li><a href="inscription.html">Inscription</a></li>
-        <li><a href="contact.html">Nous contacter</a></li>
-        <li><a href="connexion.html">Connexion</a></li>
-      </ul>
-    </nav>
-  </div>
-</header>
+  <main>
+    <section class="hero">
+      <div class="wrap hero-grid">
+        <div>
+          <span class="kicker" data-t="home.hero.kicker"></span>
+          <h1 class="grad-text" data-t="home.hero.title"></h1>
+          <p class="lead" data-t="home.hero.text"></p>
+          <p class="muted" data-t="site.tagline"></p>
+          <div class="row" style="margin-top:22px">
+            <a class="btn big" href="connexion.html" data-t="home.cta">Se connecter</a>
+          </div>
+        </div>
+        <div class="hero-art">
+          <img class="photo" src="assets/margaux-hero.webp" alt="Margaux, la mascotte de Wesh Words" width="900" height="900">
+        </div>
+      </div>
+    </section>
 
-<section class="hero">
-  <div class="hero-inner">
-    <div>
-      <span class="eyebrow">École équestre familiale — Grâce-Hollogne</span>
-      <h1 id="site-heroTitre">Une écurie à taille humaine, entre passion du dressage et esprit de famille.</h1>
-      <p class="lead" id="site-heroTexte">Lar'Allegria by Lara Rossoux accueille cavaliers et chevaux sur le manège privé de Lara, pour des cours individuels d'une heure, en toute simplicité et avec une attention constante à chacun.</p>
-      <div class="flourish"><span></span><i>&#10022;</i><span></span></div>
-      <div class="btn-row">
-        <a class="btn btn-primary" href="inscription.html">Rejoindre le club</a>
-        <a class="btn btn-outline" href="activites.html">Découvrir les activités</a>
+    <section class="section">
+      <div class="wrap shame-demo">
+        <img class="mascot lg" src="assets/margaux-malicieuse.webp" alt="Margaux malicieuse" loading="lazy">
+        <div class="shame-card">
+          <div class="small muted" data-t="shame.unlock"></div>
+          <div style="margin-top:10px"><span class="alert" data-t="shame.max"></span></div>
+          <div class="expr" data-t="home.shame.expr">« WESH »</div>
+          <p class="warn" data-t="home.shame.demo"></p>
+          <p class="warned" data-t="shame.warned"></p>
+          <div class="phrase-box">
+            <div class="small muted" data-t="shame.phraseLabel"></div>
+            <div class="q" data-t="home.shame.phrase">« Wesh, t'as vu le nouveau mot d'anglais ? »</div>
+            <div><span class="small muted" data-t="shame.levelLabel"></span> <span class="honte-bar">█████ <span data-t="shame.l5"></span></span></div>
+          </div>
+        </div>
       </div>
-    </div>
-    <div class="hero-photo">
-      <img loading="lazy" decoding="async" src="assets/photo-equipe-spectacle.jpg" alt="L'équipe de Lar'Allegria en tenue de spectacle, autour d'un cheval cabré, ambiance espagnole">
-    </div>
-  </div>
-</section>
+    </section>
 
-<section class="section-alt">
-  <div class="container">
-    <div class="section-title-row">
-      <span class="eyebrow">Le club en un coup d'œil</span>
-      <h2>Un club à taille humaine, pensé pour progresser ensemble</h2>
-      <p>Une seule cavalière à la fois sur la piste, un accompagnement individuel, et une vraie proximité avec les chevaux de l'écurie.</p>
-    </div>
-    <div class="card-grid">
-      <a class="link-card" href="club.html">
-        <h3>Le Club</h3>
-        <p>Une ASBL familiale, un manège privé, et une philosophie centrée sur le bien-être du cheval et du cavalier.</p>
-        <span class="card-arrow">En savoir plus →</span>
-      </a>
-      <a class="link-card" href="activites.html">
-        <h3>Activités</h3>
-        <p>École d'équitation, cours de dressage, écurie privée, stages et spectacles équestres.</p>
-        <span class="card-arrow">Voir les activités →</span>
-      </a>
-      <a class="link-card" href="lara.html">
-        <h3>Lara</h3>
-        <p>Portrait de la cheffe d'écurie — seule à bord, mais bien entourée.</p>
-        <span class="card-arrow">Faire connaissance →</span>
-      </a>
-      <a class="link-card" href="inscription.html">
-        <h3>Inscription</h3>
-        <p>Membre demi-pension (un cheval du club à votre disposition) ou membre cours : complétez votre fiche membre en ligne.</p>
-        <span class="card-arrow">S'inscrire →</span>
-      </a>
-    </div>
-  </div>
-</section>
+    <section class="section">
+      <div class="wrap grid g4">
+        <div class="card feature"><h3 data-t="home.f1.title"></h3><p data-t="home.f1.text"></p></div>
+        <div class="card feature"><h3 data-t="home.f2.title"></h3><p data-t="home.f2.text"></p></div>
+        <div class="card feature"><h3 data-t="home.f3.title"></h3><p data-t="home.f3.text"></p></div>
+        <div class="card feature"><h3 data-t="home.f4.title"></h3><p data-t="home.f4.text"></p></div>
+      </div>
+    </section>
+  </main>
 
-<section>
-  <div class="container">
-    <div class="section-title-row">
-      <span class="eyebrow">Fonctionnement</span>
-      <h2>Comment ça se passe</h2>
-    </div>
-    <div class="activity-grid">
-      <div class="activity-card">
-        <span class="num">01 — Cours individuels</span>
-        <h3>Une heure, rien que pour vous</h3>
-        <p>Chaque cours de dressage dure une heure et se donne en individuel, pour un vrai suivi personnalisé.</p>
-      </div>
-      <div class="activity-card">
-        <span class="num">02 — Une piste, une cavalière</span>
-        <h3>Un seul créneau à la fois</h3>
-        <p>Le manège et la piste sont réservés à un seul membre à la fois. Vous choisissez votre créneau, Lara le valide.</p>
-      </div>
-      <div class="activity-card">
-        <span class="num">03 — Météo surveillée</span>
-        <h3>On garde un œil sur le ciel</h3>
-        <p>La météo du jour de votre cours est affichée dans votre espace membre, pour anticiper ensemble en cas d'intempéries.</p>
-      </div>
-    </div>
-  </div>
-</section>
+  <footer class="site-foot" id="footer"></footer>
 
-<section class="cta-band">
-  <div class="container">
-    <h2>Envie de rejoindre le club ?</h2>
-    <p>Contactez-nous par téléphone ou par mail — Lara répond volontiers à toutes vos questions sur les cours et les inscriptions.</p>
-    <div class="contact-card" style="margin: 0 auto;">
-      <div class="cc-side"><img src="assets/logo.png" alt="Logo Lar'Allegria by Lara Rossoux"></div>
-      <div class="cc-body">
-        <h3>Lar'Allegria by Lara Rossoux</h3>
-        <div class="cc-role">École équestre — Grâce-Hollogne</div>
-        <ul class="contact-list">
-          <li><span class="label">GSM</span><a href="tel:+32497639618">0497 63 96 18</a></li>
-          <li><span class="label">Email</span><a href="mailto:lara.rossoux@hotmail.com">lara.rossoux@hotmail.com</a></li>
-        </ul>
-      </div>
-    </div>
-  </div>
-</section>
-
-<footer class="site-footer">
-  <div class="container">
-    <div class="footer-grid">
-      <div>
-        <h4>Lar'Allegria by Lara Rossoux</h4>
-        <p>École équestre ASBL proposant école d'équitation, cours de dressage, écurie privée, stages et spectacles équestres à Grâce-Hollogne.</p>
-      </div>
-      <div>
-        <h4>Navigation</h4>
-        <ul>
-          <li><a href="index.html">Accueil</a></li>
-          <li><a href="club.html">Le Club</a></li>
-          <li><a href="activites.html">Activités</a></li>
-          <li><a href="chevaux.html">Nos chevaux</a></li>
-          <li><a href="lara.html">Lara</a></li>
-          <li><a href="evenements.html">Événements</a></li>
-          <li><a href="blog.html">Blog</a></li>
-        <li><a href="livre-or.html">Livre d'or</a></li>
-          <li><a href="club.html#tarifs">Tarifs</a></li>
-          <li><a href="inscription.html">Inscription</a></li>
-          <li><a href="partenaires.html">Partenaires</a></li>
-          <li><a href="contact.html">Nous contacter</a></li>
-          <li><a href="connexion.html">Connexion</a></li>
-        </ul>
-      </div>
-      <div>
-        <h4>Contact</h4>
-        <ul>
-          <li><a href="tel:+32497639618">0497 63 96 18</a></li>
-          <li><a href="mailto:lara.rossoux@hotmail.com">lara.rossoux@hotmail.com</a></li>
-          <li>Rue Mahay 66, 4460 Grâce-Hollogne</li>
-          <li><a href="confidentialite.html">Confidentialité</a></li>
-          <li><a href="cgv.html">CGV</a></li>
-        </ul>
-      </div>
-    </div>
-    <div class="footer-bottom">
-      <span>© 2026 Hélène Laruelle — Tous droits réservés</span>
-      <span>Site développé par Hélène Laruelle</span>
-      <span>Contenu sous la responsabilité de Lara Rossoux</span>
-      <span>TVA BE 0756.844.280</span>
-      <span>Site V01-042</span>
-    </div>
-    <div class="footer-legal-links"><a href="securisation.html">Sécurisation</a> | <a href="confidentialite.html">Déclaration de confidentialité</a> | <a href="business-ethics-gouvernance.html">Business Ethics &amp; Governance</a> | <a href="confidentialite.html#cookies">Politique en matière de cookies</a> | <a href="limitation-responsabilite.html">Limitation de responsabilité</a> | <a href="mentions-legales.html">Mentions légales</a> / <a href="confidentialite.html#rgpd">RGPD</a> / <a href="cgv.html">CGV</a></div>
-  </div>
-</footer>
-
-<script src="assets/nav.js" defer></script>
-<script type="module">
-  import { db, doc, getDoc } from "./assets/firebase-config.js";
-  (async () => {
-    try {
-      const snap = await getDoc(doc(db, 'contenu_site', 'global'));
-      if (!snap.exists()) return;
-      const c = snap.data();
-      if (c.heroTitre) document.getElementById('site-heroTitre').textContent = c.heroTitre;
-      if (c.heroTexte) document.getElementById('site-heroTexte').textContent = c.heroTexte;
-    } catch (err) { /* on garde le texte par défaut */ }
-  })();
-</script>
-<script src="assets/protection.js" defer></script>
-<a href="https://hexelya.web.app/index.html" target="_blank" rel="noopener" aria-label="Site développé par Hélène Laruelle" title="Site développé par Hélène Laruelle"><img loading="lazy" decoding="async" src="assets/logo-helene-laruelle.png" alt="Site développé par Hélène Laruelle" class="badge-helene"></a>
+  <script type="module">
+    import { initPublicPage, logoMark, $ } from "./assets/app.js";
+    $("#logoMark").innerHTML = logoMark(34);
+    initPublicPage();
+  </script>
 </body>
 </html>
