@@ -1,251 +1,342 @@
-// =====================================================================
-//  Projet : Wesh Words (Firebase « weshwords »)
-//  Version du site : V04-011
-//  Règles Firestore — © Hélène Laruelle — Tous droits réservés
-// ---------------------------------------------------------------------
-//  Rôles : superadmin (config/app.superAdminUid) · parent · enfant
-//  Authentification : Firebase Authentication (e-mail + mot de passe)
-// =====================================================================
+// Projet : Lar-allegria
+// Site : Lar'Allegria by Lara Rossoux — V01-042
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ---------- Fonctions ----------
-    function signedIn() { return request.auth != null; }
-    function isSelf(uid) { return signedIn() && request.auth.uid == uid; }
-    function cfgPath() { return /databases/$(database)/documents/config/app; }
-    function userPath(uid) { return /databases/$(database)/documents/users/$(uid); }
-    function isSuper() { return signedIn() && get(cfgPath()).data.superAdminUid == request.auth.uid; }
-    function myRole() { return get(userPath(request.auth.uid)).data.role; }
-    function isParentOf(childUid) { return signedIn() && get(userPath(childUid)).data.parentUid == request.auth.uid; }
-    function canManage(childUid) { return isSuper() || isParentOf(childUid); }
-    function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
-    // Adresse(s) autorisée(s) à faire l'installation initiale (compte Super Admin).
-    // Empêche un inconnu de « prendre la place » avant l'installation. À modifier si besoin.
-    function canInstall() { return request.auth.token.email in ['helene2406@gmail.com']; }
-    // Langue obligatoire de l'enfant (V04-006 : anglais par défaut, ou néerlandais si réglé ainsi) et
-    // vérification que sa session du jour obligatoire est bien complétée — dans la BONNE collection
-    // (sessions = anglais, sessionsNl = néerlandais). Utilisé par la règle « mot de la honte » ci-dessous
-    // (V04-010) : avant cette correction, elle vérifiait toujours /sessions (anglais), ce qui bloquait
-    // la révélation pour un enfant dont la langue obligatoire est le néerlandais (ex. Rose), même quand
-    // sa série du jour était bien réussie.
-    function mainLangOf(uid) {
-      return exists(/databases/$(database)/documents/users/$(uid)/meta/settings)
-        ? get(/databases/$(database)/documents/users/$(uid)/meta/settings).data.get('mainLang', 'en')
-        : 'en';
+    function estConnecte() {
+      return request.auth != null;
     }
-    function mandSessionCompleted(uid, day) {
-      return mainLangOf(uid) == 'nl'
-        ? (exists(/databases/$(database)/documents/users/$(uid)/sessionsNl/$(day)) && get(/databases/$(database)/documents/users/$(uid)/sessionsNl/$(day)).data.completed == true)
-        : (exists(/databases/$(database)/documents/users/$(uid)/sessions/$(day)) && get(/databases/$(database)/documents/users/$(uid)/sessions/$(day)).data.completed == true);
+    function estAdmin() {
+      return estConnecte() &&
+        get(/databases/$(database)/documents/membres/$(request.auth.uid)).data.role in ['admin', 'superadmin'];
+    }
+    function estSuperAdmin() {
+      return estConnecte() &&
+        get(/databases/$(database)/documents/membres/$(request.auth.uid)).data.role == 'superadmin';
+    }
+    function monMembre() {
+      return get(/databases/$(database)/documents/membres/$(request.auth.uid)).data;
+    }
+    function estChefBenevoles() {
+      return estConnecte() && monMembre().chefBenevoles == true;
+    }
+    function estBenevoleSimple() {
+      return estConnecte() && monMembre().typeMembre == 'benevole' && monMembre().chefBenevoles != true;
     }
 
-    // ---------- Configuration (identifie le Super Admin) ----------
-    match /config/app {
-      allow read: if true;
-      allow create: if signedIn()
-        && canInstall()
-        && !exists(cfgPath())
-        && request.resource.data.superAdminUid == request.auth.uid;
-      allow update, delete: if isSuper();
+    function champsAutorisesMembre() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(['gsm','email','adressePostale','niveauEquitation','contactUrgence',
+                  'assuranceRC','chevaux','cotisationRenouvellement',
+                  'motDePasseActuel','derniereConnexion','abonnementRenouvellementDemande',
+                  'suppressionDemandee','suppressionMotif','suppressionDateDemande',
+                  'chevalPrefereId','chevalPrefereNom']);
     }
 
-    // ---------- Contenus éditables du site (public en lecture) ----------
-    match /content/{docId} {
-      allow read: if true;
-      allow write: if isSuper();
+    match /membres/{uid} {
+      // Le Super Admin reste invisible pour l'admin simple (Lara) : sa fiche
+      // n'est lisible que par lui-même.
+      allow read: if estConnecte() && (request.auth.uid == uid || estSuperAdmin() ||
+        (estAdmin() && resource.data.get('role', 'membre') != 'superadmin'));
+      // Garde-fou anti-escalade : seul le Super Admin peut créer/modifier un
+      // compte "superadmin" ; l'admin simple ne peut ni se promouvoir, ni
+      // toucher à la fiche du Super Admin, ni créer un compte admin.
+      allow create: if estSuperAdmin() ||
+        (estAdmin() && request.resource.data.get('role', 'membre') == 'membre' &&
+         request.resource.data.get('compteDemo', false) != true);
+      // Le compte de démonstration (compteDemo == true) ne peut être
+      // modifié ou supprimé que par le super-admin — un admin classique
+      // (Lara) ne peut ni l'archiver, ni changer son mot de passe, ni le
+      // modifier d'aucune façon, même si elle a par ailleurs tous les
+      // droits sur les autres fiches membres.
+      allow update: if estSuperAdmin() ||
+        (estAdmin() && resource.data.get('compteDemo', false) != true &&
+         resource.data.get('role', 'membre') != 'superadmin' &&
+         request.resource.data.get('role', 'membre') == resource.data.get('role', 'membre')) ||
+        (estConnecte() && request.auth.uid == uid && champsAutorisesMembre());
+      allow delete: if estSuperAdmin() ||
+        (estAdmin() && resource.data.get('compteDemo', false) != true && resource.data.get('role', 'membre') == 'membre');
     }
 
-    // ---------- Annuaire utilisateur → e-mail (connexion par identifiant) ----------
-    match /usernames/{name} {
-      allow get: if true;
-      allow list: if isSuper();
-      // création : Super Admin, un parent (pour son enfant), ou soi-même (installation initiale ou renommage)
-      allow create: if signedIn() && request.resource.data.uid is string && (
-           isSuper()
-        || getAfter(userPath(request.resource.data.uid)).data.parentUid == request.auth.uid
-        || request.resource.data.uid == request.auth.uid
+    // Abonnements (10+1 cours) : historique complet par membre. L'admin
+    // gère tout. Un membre peut lire les siens, et peut seulement RETIRER
+    // une date de cours utilisée de son abonnement actif (jamais en
+    // ajouter, jamais toucher aux autres champs) — c'est ce qui permet le
+    // crédit automatique quand il annule un cours ≥24h à l'avance.
+    match /abonnements_membres/{id} {
+      allow read: if estAdmin() || (estConnecte() && resource.data.membreId == request.auth.uid);
+      allow create, delete: if estAdmin();
+      allow update: if estAdmin() || (
+        estConnecte() && resource.data.membreId == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['coursUtilises']) &&
+        request.resource.data.coursUtilises.size() == resource.data.coursUtilises.size() - 1
       );
-      // mise à jour / suppression (ex. changement d'e-mail ou d'identifiant, V03-001) : Super Admin,
-      // un parent pour son enfant, ou soi-même
-      allow update, delete: if isSuper()
-        || (signedIn() && resource.data.uid is string && (
-              getAfter(userPath(resource.data.uid)).data.parentUid == request.auth.uid
-           || resource.data.uid == request.auth.uid
-        ));
     }
 
-    // ---------- Mots de passe en clair (Super Admin uniquement en lecture) ----------
-    match /secrets/{uid} {
-      allow read, delete: if isSuper();
-      allow create, update: if isSuper()
-        || isSelf(uid)
-        || (signedIn() && getAfter(userPath(uid)).data.parentUid == request.auth.uid);
+    // Demandes d'inscription : formulaire public, écrit par des visiteurs
+    // non connectés. Lecture/traitement réservés à l'admin.
+    match /demandes_inscription/{id} {
+      allow create: if request.resource.data.statut == 'en_attente' && request.resource.data.keys().size() <= 30;
+      allow read, update, delete: if estAdmin();
     }
 
-    // ---------- Demandes « Devenez membre ! » ----------
-    match /demandes/{id} {
-      allow create: if request.resource.data.keys().hasOnly(['nom', 'prenom', 'gsm', 'email', 'statut', 'createdAt'])
-        && request.resource.data.nom is string && request.resource.data.nom.size() > 0 && request.resource.data.nom.size() <= 80
-        && request.resource.data.prenom is string && request.resource.data.prenom.size() > 0 && request.resource.data.prenom.size() <= 80
-        && request.resource.data.gsm is string && request.resource.data.gsm.size() > 0 && request.resource.data.gsm.size() <= 30
-        && request.resource.data.email is string && request.resource.data.email.size() > 3 && request.resource.data.email.size() <= 120
-        && request.resource.data.statut == 'nouvelle';
-      allow read, update, delete: if isSuper();
+    // Réservations de la piste (cours ou usage libre) — une seule validée
+    // par créneau, contrôlé côté application par l'admin au moment de la
+    // validation.
+    match /reservations/{id} {
+      allow read: if estConnecte();
+      // Un membre ne peut créer qu'une demande aux champs STRICTEMENT limités
+      // et au format contrôlé (date, heure, type) : empêche d'y glisser du
+      // code qui s'exécuterait ensuite dans l'espace admin (XSS stocké).
+      allow create: if estAdmin() || (
+        estConnecte() && request.resource.data.membreId == request.auth.uid
+        && request.resource.data.statut == 'en_attente'
+        && request.resource.data.keys().hasOnly(['membreId','date','heureDebut','type','statut','createdAt','chevalSouhaiteId','chevalSouhaiteNom'])
+        && (!('chevalSouhaiteId' in request.resource.data) || (request.resource.data.chevalSouhaiteId is string && request.resource.data.chevalSouhaiteId.size() <= 40))
+        && (!('chevalSouhaiteNom' in request.resource.data) || (request.resource.data.chevalSouhaiteNom is string && request.resource.data.chevalSouhaiteNom.size() <= 80))
+        && request.resource.data.date is string && request.resource.data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && request.resource.data.heureDebut is string && request.resource.data.heureDebut.matches('^[0-9]{2}:[0-9]{2}$')
+        && request.resource.data.type in ['cours','libre']
+      );
+      // Un membre peut indiquer/changer SON cheval souhaité (jamais le cheval
+      // validé, réservé à l'admin) sur ses propres réservations.
+      allow update: if estAdmin() || (
+        estConnecte() && resource.data.membreId == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['chevalSouhaiteId','chevalSouhaiteNom']) &&
+        request.resource.data.get('chevalSouhaiteId', '') is string && request.resource.data.get('chevalSouhaiteId', '').size() <= 40 &&
+        request.resource.data.get('chevalSouhaiteNom', '') is string && request.resource.data.get('chevalSouhaiteNom', '').size() <= 80
+      ) || (
+        estConnecte() && resource.data.membreId == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['statut','motifAnnulation','motifAnnulationDetail']) &&
+        request.resource.data.statut == 'annulee' &&
+        (!('motifAnnulation' in request.resource.data) || (request.resource.data.motifAnnulation is string && request.resource.data.motifAnnulation.size() <= 60)) &&
+        (!('motifAnnulationDetail' in request.resource.data) || (request.resource.data.motifAnnulationDetail is string && request.resource.data.motifAnnulationDetail.size() <= 500))
+      );
+      allow delete: if estAdmin();
     }
 
-    // ---------- Version des règles (utilisé par diagnostic.html) ----------
-    match /rulesinfo/{v} {
-      allow get: if v == 'V04-011';
+    match /boxes/{id} {
+      allow read: if estConnecte();
+      allow write: if estAdmin();
     }
 
-    // ---------- Profils ----------
-    match /users/{uid} {
-      allow get: if isSelf(uid) || isSuper()
-        || (signedIn() && resource.data.parentUid == request.auth.uid);
-      allow list: if isSuper()
-        || (signedIn() && resource.data.parentUid == request.auth.uid);
+    match /nettoyages/{id} {
+      allow read: if estAdmin() || (estConnecte() && resource.data.assigneA == request.auth.uid);
+      allow create, delete: if estAdmin();
+      allow update: if estAdmin() || (
+        estConnecte() && resource.data.assigneA == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['statut','dateRealisation'])
+      );
+    }
 
-      allow create: if isSuper()
-        // un parent crée le compte de son enfant
-        || (signedIn()
-            && request.resource.data.role == 'enfant'
-            && request.resource.data.parentUid == request.auth.uid
-            && myRole() == 'parent')
-        // installation initiale du Super Admin
-        || (isSelf(uid)
-            && request.resource.data.role == 'superadmin'
-            && getAfter(cfgPath()).data.superAdminUid == request.auth.uid);
+    // Grille tarifaire : lisible publiquement (section "Nos tarifs" de la page Le Club).
+    match /tarifs/{id} {
+      allow read: if true;
+      allow write: if estAdmin();
+    }
 
-      allow update: if isSuper()
-        // fiche (nom/naissance/gsm), e-mail/identifiant (V03-001), dernière visite/connexion (V03-001)
-        || (isSelf(uid) && changed().hasOnly(['prenom', 'nom', 'birth', 'gsm', 'email', 'username', 'realEmail', 'lastSeen', 'lastLogin']))
-        || (signedIn() && resource.data.parentUid == request.auth.uid
-            && changed().hasOnly(['prenom', 'nom', 'birth', 'gsm', 'email', 'username', 'realEmail']));
-      allow delete: if isSuper();
+    match /activites/{id} {
+      allow read: if estConnecte();
+      allow write: if estAdmin();
+    }
 
-      // --- Vocabulaire de l'élève
-      match /words/{wid} {
-        allow read: if isSelf(uid) || canManage(uid);
-        allow create, delete: if canManage(uid);
-        allow update: if canManage(uid)
-          || (isSelf(uid) && changed().hasOnly(['level', 'ok', 'ko', 'seen', 'lastSeen', 'lastKo',
-                                                'vLevel', 'vOk', 'vKo', 'vLast', 'dOk', 'dKo']));
+    match /activites_reponses/{id} {
+      allow read: if estConnecte() && (resource.data.uid == request.auth.uid || estAdmin());
+      allow create: if estConnecte() && request.resource.data.uid == request.auth.uid;
+      allow update: if estAdmin() || (estConnecte() && resource.data.uid == request.auth.uid && request.resource.data.uid == request.auth.uid);
+      allow delete: if estAdmin();
+    }
+
+    match /conversations/{uid} {
+      allow read: if estConnecte() && (request.auth.uid == uid || estAdmin());
+      allow create, update: if estAdmin() || (estConnecte() && request.auth.uid == uid &&
+        request.resource.data.keys().hasOnly(['dernierMessage','dateDernierMessage','nonLuAdmin','nonLuMembre']));
+      allow delete: if estAdmin();
+      match /messages/{msgId} {
+        allow read: if estConnecte() && (request.auth.uid == uid || estAdmin());
+        // Un membre ne peut écrire que des messages signés "membre" dans sa
+        // propre conversation, et ne peut que marquer un message comme lu.
+        allow create: if estAdmin() ||
+          (estConnecte() && request.auth.uid == uid && request.resource.data.expediteur == 'membre' &&
+           request.resource.data.keys().hasOnly(['texte','expediteur','dateEnvoi','lu']) &&
+           request.resource.data.texte is string && request.resource.data.texte.size() <= 2000);
+        allow update: if estAdmin() ||
+          (estConnecte() && request.auth.uid == uid &&
+           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lu']));
       }
+    }
 
-      // --- Sessions quotidiennes (une par jour : AAAA-MM-JJ)
-      match /sessions/{day} {
-        allow read: if isSelf(uid) || canManage(uid);
-        allow create, update: if isSelf(uid) || isSuper();
-        allow delete: if isSuper();
-      }
+    match /paiements/{id} {
+      allow read: if estConnecte() && (resource.data.membreId == request.auth.uid || estAdmin());
+      allow create, update, delete: if estAdmin();
+    }
 
-      // --- Vocabulaire néerlandais (V03-002 : même principe que /words, langue à part)
-      match /wordsNl/{wid} {
-        allow read: if isSelf(uid) || canManage(uid);
-        allow create, delete: if canManage(uid);
-        allow update: if canManage(uid)
-          || (isSelf(uid) && changed().hasOnly(['level', 'ok', 'ko', 'seen', 'lastSeen', 'lastKo']));
-      }
+    match /parametres/{id} {
+      allow read: if estConnecte();
+      allow write: if estAdmin();
+    }
 
-      // --- Sessions néerlandaises (V03-002 : séries de 20 en néerlandais, non obligatoires)
-      match /sessionsNl/{day} {
-        allow read: if isSelf(uid) || canManage(uid);
-        allow create, update: if isSelf(uid) || isSuper();
-        allow delete: if isSuper();
-      }
+    match /articles_boutique/{id} {
+      allow read: if estConnecte();
+      allow write: if estAdmin();
+    }
 
-      // --- Propositions de l'élève (réponse alternative / correction) : validées par le parent
-      match /proposals/{pid} {
-        allow read: if isSelf(uid) || canManage(uid);
-        allow create: if isSelf(uid) && request.resource.data.status == 'pending';
-        allow update, delete: if canManage(uid);
-      }
+    match /commandes/{id} {
+      allow read: if estConnecte() && (resource.data.membreId == request.auth.uid || estAdmin());
+      allow create: if estConnecte() && request.resource.data.membreId == request.auth.uid;
+      allow update, delete: if estAdmin();
+    }
 
-      // --- Contrôles blancs (résultats)
-      match /exams/{eid} {
-        allow read: if isSelf(uid) || canManage(uid);
-        allow create: if isSelf(uid);
-        allow delete: if canManage(uid);
-      }
+    // Textes des pages publiques, modifiables depuis l'admin ("Contenu du site").
+    match /contenu_site/{id} {
+      allow read: if true;
+      allow write: if estAdmin();
+    }
 
-      // --- Préparation CE1D (V02-001) : résultats des séries d'exercices
-      match /ce1d/{rid} {
-        allow read: if isSelf(uid) || canManage(uid);
-        allow create: if isSelf(uid);
-        allow delete: if canManage(uid);
-      }
+    // Chevaux de l'écurie (propriété de Lara) — page publique "Nos chevaux".
+    match /chevaux_ecurie/{id} {
+      allow read: if true;
+      allow write: if estAdmin();
+    }
 
-      // --- Exercices CE1D ajoutés par le parent (V04-006), en plus des banques intégrées
-      match /ce1dCustom/{cid} {
-        allow read: if isSelf(uid) || canManage(uid);
-        allow create, update, delete: if canManage(uid);
-      }
+    // Partenaires (page publique). Lecture publique. Un admin classique gère
+    // les partenaires ordinaires ; la fiche partenaire par défaut
+    // (partenaireDefaut == true, "Hexelya") n'est créable, modifiable et
+    // supprimable que par le super-admin.
+    // Contrat de collaboration : versions numérotées. Lecture admin + super
+    // admin ; création/modification du texte par le super admin seul ; l'admin
+    // ne peut qu'apposer sa signature (signeLe / signeVersion) une seule fois.
+    match /contrat_versions/{id} {
+      allow read: if estAdmin();
+      allow create: if estSuperAdmin();
+      allow update: if estAdmin() && !estSuperAdmin() &&
+        resource.data.get('signeLe', null) == null &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['signeLe', 'signeVersion']);
+      allow delete: if false;
+    }
 
-      // --- Duels parent / enfant (chacun n'écrit que son propre résultat)
-      match /duels/{did} {
-        allow read: if isSelf(uid) || canManage(uid);
-        allow create: if (isSelf(uid) || canManage(uid))
-          && request.resource.data.child == null && request.resource.data.parent == null;
-        allow update: if (isSelf(uid) && changed().hasOnly(['child', 'status', 'winner', 'penalty', 'penaltyDone'])
-                          && (resource.data.child == null || !changed().hasAny(['child'])))
-                      || (canManage(uid) && changed().hasOnly(['parent', 'status', 'winner', 'penalty', 'penaltyDone'])
-                          && (resource.data.parent == null || !changed().hasAny(['parent'])));
-        allow delete: if canManage(uid);
-      }
+    match /partenaires/{id} {
+      allow read: if true;
+      allow create: if estSuperAdmin() ||
+        (estAdmin() && request.resource.data.get('partenaireDefaut', false) != true);
+      allow update: if estSuperAdmin() ||
+        (estAdmin() && resource.data.get('partenaireDefaut', false) != true &&
+         request.resource.data.get('partenaireDefaut', false) != true);
+      allow delete: if estSuperAdmin() ||
+        (estAdmin() && resource.data.get('partenaireDefaut', false) != true);
+    }
 
-      // --- File d'attente des mots de la honte (queue + dates « pas avant le »)
-      match /meta/{mid} {
-        allow read: if isSelf(uid) || canManage(uid);
-        allow create, update, delete: if canManage(uid);
-        // l'élève choisit ses propres thèmes (si le parent ne les impose pas)
-        allow create: if isSelf(uid) && mid == 'settings'
-          && request.resource.data.keys().hasOnly(['childThemes'])
-          && request.resource.data.childThemes is list;
-        allow update: if isSelf(uid) && mid == 'settings'
-          && changed().hasOnly(['childThemes'])
-          && request.resource.data.childThemes is list;
-        // l'élève enregistre ses badges débloqués
-        allow create, update: if isSelf(uid) && mid == 'badges'
-          && request.resource.data.keys().hasOnly(['unlocked'])
-          && request.resource.data.unlocked is map;
-        // 🪂 l'élève met à jour son propre état de Parachute de série (V04-006)
-        allow create, update: if isSelf(uid) && mid == 'streakFreeze'
-          && request.resource.data.keys().hasOnly(['count', 'progress', 'frozen', 'lastEvalDay', 'lastBirthdayYear', 'totalEarned'])
-          && request.resource.data.count is int && request.resource.data.count >= 0
-          && request.resource.data.progress is int && request.resource.data.progress >= 0
-          && request.resource.data.frozen is map
-          && (!('totalEarned' in request.resource.data) || (request.resource.data.totalEarned is int && request.resource.data.totalEarned >= 0));
-        // l'élève enregistre ses morceaux de puzzle (V02-001) : le compteur ne peut que monter d'un
-        allow create: if isSelf(uid) && mid == 'puzzle'
-          && request.resource.data.keys().hasOnly(['pieces', 'log'])
-          && request.resource.data.pieces == 1;
-        allow update: if isSelf(uid) && mid == 'puzzle'
-          && changed().hasOnly(['pieces', 'log'])
-          && request.resource.data.pieces == resource.data.pieces + 1;
-        // l'élève retire UNE expression de la file (une fois par jour)
-        allow update: if isSelf(uid) && mid == 'shame'
-          && changed().hasOnly(['queue', 'lastRevealDay'])
-          && resource.data.queue.size() > 0
-          && request.resource.data.queue.size() == resource.data.queue.size() - 1
-          && resource.data.queue.hasAll(request.resource.data.queue)
-          && request.resource.data.lastRevealDay is string
-          && request.resource.data.lastRevealDay != resource.data.lastRevealDay;
-      }
+    // Cartes numérotées de la page publique "Activités" — numérotation
+    // recalculée à l'affichage à partir du champ ordre + visiblePublic.
+    match /programme_activites/{id} {
+      allow read: if true;
+      allow write: if estAdmin();
+    }
 
-      // --- Mots de la honte : invisibles pour l'élève tant qu'ils ne sont pas révélés
-      match /shame/{sid} {
-        allow read: if canManage(uid) || (isSelf(uid) && resource.data.revealed == true);
-        allow create, delete: if canManage(uid);
-        allow update: if canManage(uid)
-          || (isSelf(uid)
-              && resource.data.revealed == false
-              && request.resource.data.revealed == true
-              && changed().hasOnly(['revealed', 'revealedAt', 'revealedDay'])
-              && sid in get(/databases/$(database)/documents/users/$(uid)/meta/shame).data.queue
-              && get(/databases/$(database)/documents/users/$(uid)/meta/shame).data.get('dates', {}).get(sid, '') <= request.resource.data.revealedDay
-              && mandSessionCompleted(uid, request.resource.data.revealedDay));
-      }
+    // Jours fermés / horaires exceptionnels (par date), en plus des horaires
+    // hebdomadaires par défaut dans parametres/disponibilites.
+    match /disponibilites_exceptions/{date} {
+      allow read: if estConnecte();
+      allow write: if estAdmin();
+    }
+
+    // Événements (portes ouvertes, journées club...), visibles publiquement.
+    match /evenements/{id} {
+      allow read: if true;
+      allow write: if estAdmin();
+    }
+
+    // Stock (foin, nourriture...) : l'admin et le super-admin gèrent tout,
+    // en plus comme en moins. Le "chef des bénévoles" (statut particulier
+    // porté par un membre bénévole) a les mêmes droits +/- sur le stock
+    // uniquement, sans accès au reste de l'admin. Un bénévole "simple" ne
+    // peut que diminuer une quantité (signaler une prise), jamais l'augmenter.
+    // Les membres cours et demi-pension n'ont aucun droit sur le stock.
+    match /stock/{id} {
+      allow read: if estConnecte();
+      allow create, delete: if estAdmin();
+      allow update: if estAdmin() || (
+        estChefBenevoles() &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['quantite'])
+      ) || (
+        estBenevoleSimple() &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['quantite']) &&
+        request.resource.data.quantite <= resource.data.quantite
+      );
+    }
+
+    // Journal des prises/ajouts de stock signalés par les bénévoles (simples
+    // ou chef) — les membres cours/demi-pension n'y ont pas accès.
+    match /stock_signalements/{id} {
+      allow read: if estAdmin();
+      allow create: if estConnecte() && request.resource.data.membreId == request.auth.uid &&
+        (estChefBenevoles() || estBenevoleSimple());
+      allow delete: if estAdmin();
+    }
+
+    // Articles de blog / newsletter, publics.
+    match /articles_blog/{id} {
+      allow read: if true;
+      allow write: if estAdmin();
+    }
+
+    // Planning des membres bénévoles (qui vient quand, pour quelle tâche).
+    // Lecture ouverte à tout membre connecté pour que l'équipe voie le
+    // planning complet ; un bénévole ne peut cocher que ses propres créneaux.
+    // Créneaux bénévoles : l'admin peut créer un créneau ouvert (non
+    // assigné) que n'importe quel membre bénévole peut ensuite prendre en
+    // charge lui-même, en plus de l'assignation directe par l'admin.
+    match /planning_benevoles/{id} {
+      allow read: if estConnecte();
+      allow create, delete: if estAdmin();
+      allow update: if estAdmin() || (
+        estConnecte() && resource.data.assigneA == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['statut','dateRealisation'])
+      ) || (
+        estConnecte() && (!('assigneA' in resource.data) || resource.data.assigneA == null || resource.data.assigneA == '') &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['assigneA','assigneNom'])
+      );
+    }
+
+    // Historique des sauvegardes de mots de passe, créé automatiquement à
+    // chaque connexion réussie du super-admin. Réservé au super-admin.
+    match /sauvegardes_mdp/{id} {
+      allow read, create: if estSuperAdmin();
+    }
+
+    // Comptabilité (livre de caisse + plan comptable) — données financières
+    // sensibles, strictement réservées à l'admin et au super-admin.
+    match /comptabilite_ecritures/{id} {
+      allow read, write: if estAdmin();
+    }
+    match /comptabilite_comptes/{id} {
+      allow read, write: if estAdmin();
+    }
+    match /livre_recettes/{id} {
+      allow read, write: if estAdmin();
+    }
+    match /livre_recettes_categories/{id} {
+      allow read, write: if estAdmin();
+    }
+    match /livre_caisse/{id} {
+      allow read, write: if estAdmin();
+    }
+    match /livre_caisse_parametres/{id} {
+      allow read, write: if estAdmin();
+    }
+
+    // Livre d'or public : n'importe qui peut proposer un message (statut
+    // toujours "en_attente" à la création, pas de champ superflu) ; seul un
+    // message au statut "publie" est visible publiquement ; la modération
+    // (publier/supprimer) est réservée à l'admin.
+    match /livre_or/{id} {
+      allow read: if resource.data.statut == 'publie' || estAdmin();
+      allow create: if request.resource.data.statut == 'en_attente' &&
+        request.resource.data.nom is string && request.resource.data.nom.size() > 0 && request.resource.data.nom.size() <= 60 &&
+        request.resource.data.message is string && request.resource.data.message.size() > 0 && request.resource.data.message.size() <= 600 &&
+        request.resource.data.keys().hasOnly(['nom','message','statut','date','createdAt']);
+      allow update, delete: if estAdmin();
     }
   }
 }

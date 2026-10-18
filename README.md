@@ -1,181 +1,268 @@
-# Wesh Words — V04-011
+# Lar'Allegria by Lara Rossoux — site du club (V01-042)
 
-Révisions de vocabulaire anglais 🇫🇷 ↔ 🇬🇧 : 20 bonnes réponses par jour (10 FR→EN + 10 EN→FR), et au 20/20… le **mot de la honte**. 💀
+Dépôt GitHub : **web-pub/Lar-allegria**. Projet Firebase : **Lar-allegria**.
 
-© Hélène Laruelle — Tous droits réservés.
+Site de l'école équestre **Lar'Allegria by Lara Rossoux** (ASBL, Grâce-Hollogne),
+construit sur le même modèle que le site "Les Cabots de Fernelmont" : un site
+statique (HTML/CSS/JS, sans framework ni étape de build) hébergé sur
+**Firebase Hosting** et connecté à **Firebase Authentication** + **Firestore**
+pour tout ce qui est dynamique (espace membre, espace admin, réservations,
+boutique...).
 
----
+## 1. Ce que fait le site
 
-## 1. Structure du ZIP
+- Pages publiques : Accueil, Le Club, Activités, **Nos chevaux**, Lara,
+  **Événements**, **Blog**, Tarifs (grille tenue à jour par Lara), Inscription
+  (formulaire public de demande d'adhésion), Contact, CGV, Confidentialité.
+- **Inscription en ligne** : un visiteur choisit "membre cours", "membre
+  demi-pension" (les chevaux appartiennent tous à Lara ; un membre demi-pension
+  en a un mis à sa disposition comme s'il était le sien) ou **"membre
+  bénévole"** (vient régulièrement aider au club selon un planning de tâches)
+  et remplit sa fiche complète. La demande part dans Firestore
+  (`demandes_inscription`) ; Lara la valide depuis l'espace admin et crée le
+  compte membre.
+- **Espace membre** (après connexion) : profil, cheval (si membre demi-pension),
+  réservation de la piste dans une grille horaire (cours d'1h ou usage libre
+  de la piste, avec prise en compte des jours fermés / horaires exceptionnels
+  fixés par Lara), météo affichée sur chaque créneau, activités (stages,
+  spectacles), nettoyage du box (si assigné), tarifs, boutique, **stock du
+  club** (signaler ce qu'on a pris), messages, historique. Un membre
+  "bénévole" voit en plus l'onglet **"Bénévolat"** : ses propres créneaux
+  (avec bouton "marquer comme fait") et le planning complet de l'équipe, pour
+  que chacun voie qui vient quand et pour quelle tâche.
+- **Espace admin** (Lara) : validation des réservations (une seule personne
+  à la fois sur la piste), gestion des membres et des demandes d'inscription,
+  box et planning de nettoyage, **planning des bénévoles** (assigner une
+  tâche, une date et une heure à chaque bénévole, marquer fait, supprimer),
+  tarifs, activités, **fiches des chevaux de l'écurie** (nom,
+  race, photo, description — les photos sont déposées manuellement dans
+  `assets/chevaux/` sur GitHub puis leur URL est collée dans la fiche),
+  **calendrier** (jours fermés / horaires exceptionnels de la piste),
+  **événements publics** (titre, date, heure, photo, description — visibles
+  de tous les visiteurs), **articles de blog** (mode newsletter, brouillon ou
+  publié), **stock** (foin, nourriture...), boutique/commandes, messages,
+  horaires d'ouverture de la piste, et un onglet **"Contenu du site"** pour
+  modifier les textes principaux des pages publiques (titre et texte
+  d'accueil, présentation du club, bio de Lara) sans toucher au code.
+- **Météo** : via [Open-Meteo](https://open-meteo.com/) (gratuit, sans clé),
+  coordonnées de Grâce-Hollogne. Une alerte (pluie, vent, chaleur, gel)
+  s'affiche automatiquement sur les créneaux concernés.
 
-```
-index.html            Accueil public
-connexion.html        Connexion (utilisateur + mot de passe) + « Devenez membre ! » + installation initiale
-eleve.html            Espace élève (session du jour, contrôle blanc, série, collection de hontes)
-parent.html           Espace parent (bilan de la semaine, vocabulaire, import/export, suivi, mots de la honte, réglages thèmes/aides, comptes)
-admin.html            Espace Super Admin (membres, mots de passe, demandes, contenus, pages légales)
-diagnostic.html       Diagnostic de mise en ligne (Firebase + GitHub Pages)
-legal.html            Pages légales (?p=securisation | confidentialite | ethique | cookies | responsabilite | mentions)
-sw.js                 Service worker (PWA, ouverture hors connexion)
-manifest.webmanifest  Manifeste PWA (installable)
-firestore.rules       Règles de sécurité Firestore
-firebase.json         Config Firebase CLI (règles + hébergement optionnel)
-.firebaserc           Projet par défaut : weshwords
-favicon.ico           Icône d'onglet (mascotte bulle)
-assets/               CSS, JS, logo, icônes, personnage Margaux (margaux-*.webp, scene-*.webp), vocabulaire de départ
-```
+## 2. Projet Firebase
 
-## 2. Mise en ligne pas à pas (≈ 15 minutes)
+✅ Déjà fait : le projet Firebase **`lar-allegria`** est créé et sa config
+est déjà branchée dans `assets/firebase-config.js` et `.firebaserc`. Il reste
+seulement à activer les deux services suivants dans la
+[console Firebase](https://console.firebase.google.com/project/lar-allegria) :
 
-### Étape A — Firebase (console : https://console.firebase.google.com/project/weshwords)
+1. **Authentication** → Sign-in method → active **E-mail/Mot de passe** (si
+   ce n'est pas déjà fait).
+2. **Firestore Database** → Créer une base de données → région Europe (ex.
+   `eur3` ou `europe-west1`) → mode production (si ce n'est pas déjà fait).
 
-1. **Authentication** → « Commencer » (si demandé) → onglet **Méthode de connexion** → **E-mail/Mot de passe** → Activer → **Enregistrer**.
-2. **Authentication** → onglet **Paramètres** → **Domaines autorisés** → **Ajouter un domaine** → `web-pub.github.io`.
-3. **Firestore Database** → **Créer une base de données** → emplacement Europe (`eur3` ou `europe-west1`) → **mode production** → Créer.
-4. **Firestore Database** → onglet **Règles** → tout effacer → coller **tout** le contenu du fichier `firestore.rules` → **Publier**.
-   ⚠️ À refaire à **chaque nouvelle version** du ZIP (le diagnostic le signale).
+## 3. Créer le compte de Lara (administratrice)
 
-### Étape B — GitHub Pages (dépôt `web-pub/weshwords`), sans ligne de commande
+Comme le site n'a pas de serveur (pas de Cloud Functions), la création d'un
+compte se fait en deux étapes toutes simples. **Identifiant prévu pour
+Lara : `ADMIN`** — choisis toi-même un mot de passe fort au moment de créer
+le compte (ne le note pas ici ni dans aucun fichier du dépôt : garde-le dans
+un gestionnaire de mots de passe). Lara pourra le changer elle-même ensuite
+depuis l'espace admin, onglet "Paramètres" → "Mon mot de passe".
 
-1. Décompresser le ZIP sur le PC (clic droit → Extraire tout).
-2. Sur https://github.com/web-pub/weshwords → **Add file** → **Upload files**.
-3. Ouvrir le dossier décompressé, **sélectionner tout son contenu** (Ctrl + A : les pages HTML, `sw.js`, `favicon.ico`… **et le dossier `assets`**) et le glisser dans la page GitHub.
-   Les fichiers doivent arriver **à la racine** du dépôt (pas dans un sous-dossier « WeshWords-V04-011 »).
-4. En bas : message « Wesh Words V04-011 » → **Commit changes**.
-5. Première fois seulement : **Settings** → **Pages** → Source « Deploy from a branch » → Branch **main** / **(root)** → Save.
-6. Attendre 1 à 2 minutes. Adresse du site : `https://web-pub.github.io/weshwords/`
+1. Dans la console Firebase → **Authentication** → **Users** → **Add user**.
+   - Email : `admin@membres.lar-allegria.local` (le mot-clé, ici "admin",
+     est l'identifiant que Lara tapera pour se connecter sur
+     `connexion.html`, qui transforme automatiquement l'identifiant saisi en
+     cette adresse — donc taper "ADMIN" ou "admin" fonctionne pareil).
+   - Mot de passe : au choix (fort, non stocké ici).
+   - Une fois créé, **copie l'UID** généré (une longue chaîne du type
+     `8f3kd92J...`).
+2. Dans la console Firebase → **Firestore Database** → **Start collection** →
+   nom de la collection : `membres`. Crée un document dont l'**ID est
+   exactement cet UID**, avec au minimum les champs :
+   - `role` (string) = `admin`
+   - `identifiant` (string) = `ADMIN`
+   - `prenom` (string) = `Lara`
+   - `nom` (string) = `Rossoux`
 
-> Pour une mise à jour : refaire B.2 → B.4 (GitHub remplace les fichiers existants).
-> Le fichier caché `.firebaserc` n'est pas nécessaire sur GitHub (il ne sert qu'à la ligne de commande Firebase).
+Lara peut alors se connecter sur `connexion.html` avec l'identifiant `ADMIN`
+et le mot de passe choisi à l'étape 1, et elle arrive sur `admin.html`. Elle
+peut changer ce mot de passe à tout moment depuis l'onglet **Paramètres** de
+l'espace admin.
 
-Alternative en ligne de commande :
+## 3bis. Créer le compte super-admin (HeleneL)
+
+Même principe, mais avec `role` = `superadmin` : ce compte a toutes les
+permissions d'un admin classique, plus un onglet exclusif **"🔑 Mots de
+passe"** invisible pour Lara, qui liste le mot de passe actuel de tous les
+comptes (admin et membres) et permet de les réinitialiser. Comme pour
+Katia/Lara côté club canin, ce compte est invisible dans les listes de
+membres et ne peut pas recevoir de messages (déjà géré par construction :
+les requêtes excluent les rôles `admin` et `superadmin`).
+
+1. Firebase Console → **Authentication** → **Users** → **Add user**.
+   - Email : `helenel@membres.lar-allegria.local`
+   - Mot de passe : au choix (fort, non stocké ici).
+   - Copie l'UID généré.
+2. Firebase Console → **Firestore Database** → collection `membres` → crée un
+   document dont l'**ID est exactement cet UID**, avec les champs :
+   - `role` (string) = `superadmin`
+   - `identifiant` (string) = `HeleneL`
+   - `prenom` (string) = `Hélène`
+   - `motDePasseActuel` (string) = le même mot de passe choisi à l'étape 1 —
+     **important** : c'est ce champ que l'onglet "Mots de passe" affiche et
+     utilise pour pouvoir réinitialiser les mots de passe des autres comptes
+     (le SDK Firebase client ne permet de changer le mot de passe d'un
+     compte tiers qu'en se connectant brièvement avec son mot de passe actuel
+     connu — pas d'accès Admin SDK sur le plan Spark).
+3. Pour que le mot de passe de Lara soit lui aussi visible/réinitialisable
+   dès le départ (son compte a été créé avant cette fonctionnalité), ajoute
+   aussi le champ `motDePasseActuel` sur le document `membres` de Lara, avec
+   la valeur exacte de son mot de passe actuel. Les comptes créés ensuite
+   (nouveaux membres, ou tout compte dont le mot de passe est changé depuis
+   le site) ont ce champ renseigné automatiquement.
+
+HeleneL se connecte alors sur `connexion.html` avec l'identifiant `HeleneL`
+et le mot de passe choisi à l'étape 1.
+
+**⚠️ Aucun mot de passe réel ne doit jamais être écrit dans ce fichier ni
+dans aucun fichier du dépôt** — ce dépôt GitHub est public, tout son contenu
+(y compris ce README) est donc lisible par n'importe qui à l'adresse du site.
+
+**Pour chaque membre ensuite**, tout se fait directement depuis l'espace
+admin du site (onglet "Membres") → **"+ Ajouter un membre"** : Lara choisit
+un identifiant et un mot de passe temporaire (pré-rempli, modifiable), remplit
+la fiche, clique **Enregistrer** — le compte Firebase Authentication *et* la
+fiche Firestore sont créés automatiquement en un seul clic, sans passer par
+la console Firebase. Depuis une **demande d'inscription**, le bouton "Créer
+la fiche membre" pré-remplit tout le formulaire automatiquement. Le membre
+pourra ensuite changer ce mot de passe lui-même depuis son espace, onglet
+"Mon profil" → "Mon mot de passe" (même fonctionnement que pour Lara).
+
+Seul le tout premier compte (celui de Lara, l'administratrice) doit être créé
+à la main via la console Firebase, comme décrit ci-dessus — logique, puisqu'il
+n'y a pas encore d'espace admin accessible avant que ce compte existe.
+
+## 4. Déployer les règles Firestore
+
+⚠️ **Étape indispensable à chaque fois que `firestore.rules` change** (par
+exemple à chaque nouvelle fonctionnalité livrée : chevaux, événements, blog,
+stock, planning bénévoles, contenu du site...). Uploader les fichiers sur
+GitHub ne suffit pas : les règles de sécurité vivent dans le projet Firebase
+et doivent être copiées à part. Tant que ce n'est pas fait, toute tentative
+d'écriture sur une collection qui n'existe pas encore dans les règles
+publiées échoue silencieusement (le bouton "Enregistrer" ne fait rien, ou
+affiche une erreur de type "permissions insuffisantes").
+
+**Option simple, sans rien installer (recommandée)** :
+
+1. Ouvre la [console Firebase](https://console.firebase.google.com/project/lar-allegria/firestore/rules).
+2. Va dans **Firestore Database** → onglet **Règles**.
+3. Ouvre le fichier `firestore.rules` du projet (avec un éditeur de texte, ou
+   directement sur GitHub), sélectionne tout son contenu et copie-le.
+4. Colle-le dans l'éditeur de règles de la console Firebase, à la place du
+   contenu existant.
+5. Clique sur **Publier**.
+
+C'est tout — pas besoin d'installer quoi que ce soit. À refaire à chaque fois
+que le fichier `firestore.rules` est mis à jour.
+
+**Option CLI** (si tu as déjà Node.js et que tu préfères la ligne de commande) :
 
 ```bash
-git clone https://github.com/web-pub/weshwords.git
-cd weshwords
-# décompresser le ZIP ici (fichiers à la racine + dossier assets/)
-git add -A
-git commit -m "Wesh Words V04-011"
-git push origin main
+npm install -g firebase-tools
+firebase login
+cd lar-allegria
+firebase deploy --only firestore:rules,firestore:indexes
 ```
 
-> ⚠️ **Installation initiale protégée** : seule l'adresse `helene2406@gmail.com` peut créer le compte Super Admin
-> (fonction `canInstall()` en tête de `firestore.rules`). Pour utiliser une autre adresse, modifie-la dans ce fichier avant de publier les règles.
+## 5. Héberger le site
 
-### Étape C — Vérifier : page de diagnostic
+### Option recommandée : Firebase Hosting
 
-Ouvrir **`https://web-pub.github.io/weshwords/diagnostic.html`**. Elle teste et explique quoi corriger :
-
-| Test | Si ❌ / ⚠️ |
-|---|---|
-| Site en ligne, dossier `assets` présent | renvoyer le dossier `assets` à la racine du dépôt |
-| Base Firestore créée | étape A.3 |
-| Règles publiées **et à jour** (V04-011) | étape A.4 |
-| Méthode E-mail/Mot de passe active | étape A.1 |
-| Super Admin installé | ouvrir `connexion.html` → Installation initiale |
-| Application installable | recharger la page une fois |
-
-Astuce : après une mise à jour, si l'ancienne version s'affiche encore, recharger avec **Ctrl + F5**.
-
-## 3. Premier démarrage
-
-1. Ouvrir `connexion.html` : tant qu'aucun Super Admin n'existe, le bloc **🛠️ Installation initiale** s'affiche.
-2. Créer le compte Super Admin (e-mail réel + utilisateur + mot de passe). Le bloc disparaît ensuite définitivement.
-3. Super Admin → **Membres** : créer le compte **Parent** (e-mail réel obligatoire).
-4. Espace parent → créer le compte **élève** (e-mail facultatif : un e-mail technique
-   `identifiant@weshwords.firebaseapp.com` est alors utilisé en coulisses).
-5. Espace parent → **Vocabulaire** → « 📦 Vocabulaire de départ » (1 029 mots) ou import d'un fichier Excel.
-6. Espace parent → **Mots de la honte** → « 💡 Ajouter 20 idées » ou ses propres expressions.
-
-## 4. Connexion
-
-- Dans l'application : **Utilisateur + mot de passe** (ex. `margaux.h`).
-- Dans Firebase : e-mail + mot de passe (l'identifiant est traduit en e-mail via la collection `usernames`).
-- Une adresse e-mail complète fonctionne aussi dans le champ « Utilisateur ».
-
-## 5. Règles métier
-
-| Règle | Détail |
-|---|---|
-| Objectif du jour | 20 **bonnes** réponses : 10 🇫🇷→🇬🇧 et 10 🇬🇧→🇫🇷 |
-| Erreur | ne compte pas, fait **baisser** le niveau du mot (0 à 5) et le mot revient 3 questions plus tard |
-| Choix des mots | pondéré : niveaux bas, mots ratés et jamais vus sortent plus souvent |
-| Réponses | insensible aux majuscules/minuscules, articles facultatifs (a/an/the/to, le/la/les…), variantes séparées par « / », accents tolérés en français (avec remarque) |
-| Série | nombre de jours consécutifs à 20/20 |
-| Aides (V01-002) | 💡 indice (1re lettre de chaque mot + nombre de lettres), puis 🔢 choix multiple. Réussi avec aide = compte pour les 20, **le mot ne monte pas de niveau**. Activable/désactivable par le parent. |
-| QCM automatique (V01-002) | pour les longues phrases (par défaut ≥ 4 mots) : choix multiple d'office, compte normalement. « ✍️ Je préfère écrire » reste possible. |
-| Thèmes (V01-002) | l'élève choisit ses catégories, ou le parent les **impose** (éventuellement jusqu'à une date, ex. le jour du contrôle). |
-| Contrôle blanc (V01-004) | l'élève choisit un ou plusieurs thèmes et le sens : chaque mot passe une fois, score final (%), puis « Revoir mes erreurs ». Les bonnes réponses comptent aussi pour les 20 du jour. Résultats visibles par le parent (Historique + Bilan). |
-| Bilan de la semaine (V01-004) | espace parent → 📅 Bilan : jours à 20/20, bonnes réponses, taux de réussite, série, mots maîtrisés, mots difficiles, contrôles blancs, hontes révélées. Semaine précédente/suivante, impression / PDF, copie du texte, envoi par e-mail. |
-| Badges (V01-005) | 23 badges à débloquer (séries, jours à 20/20, sans-faute, mots maîtrisés, contrôles blancs, hontes…). Pop-up « 🏆 Nouveau badge ! », collection dans l'espace élève et l'espace parent, badges de la semaine dans le Bilan. |
-| Verbes irréguliers (V01-006) | à partir de la colonne « conjugation » (ex. `be — was/were — been`) : mode 🇫🇷 → 3 formes ou base donnée → 2 formes, 10 / 20 / tous les verbes, niveau propre à chaque verbe. Suivi séparé (ne compte pas dans les 20 du jour). |
-| Dictée audio (V01-006) | le mot anglais est lu (voix britannique, 🐢 version lente), l'élève l'écrit. Mots de 4 mots maximum, suivi séparé. |
-| Duel (V01-006) | 10 mots identiques pour Maman et Margaux, chrono. Meilleur score gagne (égalité : le plus rapide). Le gagnant choisit une expression anglaise que la perdante doit placer dans une phrase ; « C'est fait ✅ ». |
-| Dates de déblocage (V01-006) | une expression de la honte peut porter une date « pas avant le… » : elle reste en file mais n'est révélée qu'à partir de cette date (la suivante disponible passe devant). |
-| Photo du cours (V01-007) | espace parent → Vocabulaire → 📷 Photo du cours : la liste du cahier est lue dans le navigateur (Tesseract.js, rien n'est envoyé ni stocké), les paires FR/EN sont proposées dans un tableau modifiable (⇄ inverser, cocher/décocher), puis passent par l'import habituel avec détection des doublons. |
-| Propositions (V01-008) | après une réponse, l'élève peut proposer « ✋ Ma réponse est juste aussi » (réponse alternative) ou « 🚩 Il y a une erreur dans ce mot » (correction FR/EN). Le parent valide ou refuse dans son tableau de bord ; une réponse acceptée est ensuite toujours comptée juste. Réponses alternatives aussi modifiables dans ✏️ Modifier le mot. |
-| Corrections du vocabulaire de départ (V01-008) | les 32 adjectifs de nationalité n'avaient pas de traduction française (« American = American ») : corrigés dans le fichier de départ, et bouton « 🛠️ Corriger automatiquement » dans Vocabulaire pour les mots déjà importés. « ice cream » accepte aussi « glace ». |
-| Séries de 20 & points (V02-001) | la 1re série de 20 du jour est obligatoire ; ensuite « 🔁 Nouvelle série de 20 » autant de fois que voulu, toujours par blocs complets de 20 (10 + 10). Chaque série rapporte des points : 100, −5 par erreur, −2 par aide, +20 si zéro faute (minimum 10). Espace parent : séries et points par série dans le Tableau de bord, l'Historique et le Bilan. |
-| Puzzle Margaux (V02-001) | une image de Margaux « wesh » découpée en 12 morceaux (4 × 3). Chaque série de 20 réussie à plus de 90 % (2 erreurs maximum) fait gagner 1 morceau. Puzzle complet → une nouvelle image commence (6 images). |
-| Préparer le CE1D (V02-001) | espace élève → 📚 : Mathématiques (5 thèmes), Français (5), Sciences (6), Anglais – langues modernes (4, avec écoute audio). Environ 460 questions originales dans l'esprit des épreuves externes (QCM, vrai/faux, réponse numérique ou courte), dont 45 générateurs d'exercices de calcul aléatoires. Séries de 10, explication après chaque réponse, résultats et erreurs visibles par le parent. |
-| Réponses (V02-001) | espaces, apostrophes, tirets et caractères spéciaux ignorés (« ice-cream » = « icecream », « I'm » = « im »). |
-| Import (V02-001) | étape « associer les colonnes » : chaque colonne du fichier est reliée à un champ (Français, Anglais, Catégorie…), avec aperçu. Bouton 🗑️ « Tout supprimer et recommencer à zéro » (taper SUPPRIMER). |
-| Verbes irréguliers (V02-001) | bouton « 🔤 Liste des verbes irréguliers (113) » : ajoute la liste de référence (nature « verbe irrégulier »). Dans le quiz, un mot du vocabulaire qui contient un verbe irrégulier (« to keep in touch ») affiche ses 3 formes après la réponse. |
-| Historique navigable (V03-001) | espace parent → 🕓 Historique : boutons « Mois précédent / suivant » et « Tout afficher » pour remonter dans le temps, en plus de l'affichage habituel. |
-| Fiches modifiables (V03-001) | espace parent (fiche de son/ses enfant(s)) et Super Admin (tous les membres) → « ✏️ Modifier la fiche » : prénom, nom, naissance, GSM, et un formulaire séparé pour changer l'adresse e-mail / l'identifiant (mot de passe actuel requis). |
-| Suivi des connexions (V03-001) | Super Admin → Membres : colonnes « Dernière visite » (dès que la personne ouvre une page de l'appli, même reconnectée automatiquement sans retaper son mot de passe) et « Dernière connexion » (dernière fois où le mot de passe a été tapé avec succès). Le mot de passe réellement tapé à la connexion est aussi réenregistré automatiquement dans l'onglet Mots de passe. |
-| Mots de la honte 2026 (V03-001) | 67 nouvelles expressions d'argot ajoutées (wesh, six seven / 67, rizz, aura farming, la hess, pain brioché, GOAT absolu…), dont plusieurs variantes autour du fameux « six seven » (67). Bouton « 💡 Ajouter des idées toutes prêtes » dans Vocabulaire → Mots de la honte. |
-| Mot de la honte | 1 révélation max par jour, uniquement après le 20/20, dans l'ordre de la file du parent. Jamais visible par l'élève avant révélation (règles Firestore). Ne consomme aucune question et ne touche pas aux niveaux. |
-| Néerlandais (V03-002) | Nouvel onglet « 🇳🇱 Néerlandais » (à côté de « 🇬🇧 Anglais », renommé en V03-003 pour la symétrie), en plus de l'anglais : vocabulaire, ajout, import/export et vérification séparés (espace parent → onglet dédié), séries de 20 **libres** (pas d'obligation quotidienne comme pour l'anglais), mêmes points et mêmes pièces de puzzle. Vocabulaire de départ fourni : 975 mots CE1D A1-A2 + 126 verbes irréguliers (liste officielle, V03-003), à importer via « 📦 Vocabulaire néerlandais CE1D » et « 🔤 Liste des verbes irréguliers ». *(Correction V03-006 : la liste importée en V03-002 annonçait 1500 mots mais contenait 525 entrées de remplissage fabriquées, sans valeur pédagogique — elles ont été retirées après audit ; 975 mots réels restent.)* Les outils dictée audio, duel et contrôle blanc restent pour l'instant réservés à l'anglais. |
-| Vérification automatique (V03-002) | 🤖 Assistant intégré au site (pas un service d'IA externe payant : le site n'a pas de serveur pour garder une clé API en sécurité) qui relit chaque mot ajouté à la main ou importé (anglais et néerlandais) et signale ce qui semble louche : colonnes inversées, mot vide, texte identique en français et dans l'autre langue, phrase entière collée par erreur… Un avertissement n'empêche pas d'ajouter/importer, il demande juste une confirmation. |
-| Import « OK / à vérifier » séparés (V03-003) | À l'import (fichier ou listes fournies), les mots jugés OK par la vérification automatique s'importent directement en un clic, sans avoir à faire défiler la liste. Les mots « à vérifier » sont affichés **en entier** (plus de limite à 30 lignes) dans un tableau à part, avec la raison de chaque alerte visible directement (plus besoin de survoler le ⚠️), pour les relire un par un avant de les importer ou non. |
-| Verbes irréguliers néerlandais officiels (V03-003) | La liste des 126 verbes irréguliers néerlandais a été remplacée par la liste de référence officielle (Enseignement à Distance, Communauté française) : infinitif, prétérit, participe passé, traduction et auxiliaire (zijn/hebben) pour chaque verbe. |
-| Puzzle « Six Seven » (V03-002) | Un 7e puzzle à collectionner (image de Margaux façon « SIX SEVEN », le mème TikTok) rejoint la rotation des 6 puzzles existants. Un petit sticker animé de Margaux « Six Seven » apparaît aussi à côté de la carte Néerlandais dans l'espace élève. |
-| Confidentialité des espaces parent (V03-003) | Chaque parent (y compris le Super Admin, dans son propre espace parent) ne voit que ses propres enfants. Le Super Admin peut toujours consulter le bilan de n'importe quel enfant, mais uniquement via Super Admin → Membres → lien « Suivi » sur la ligne de l'enfant. |
-| Page d'accueil CE1D (V03-004) | La page d'accueil (et le contenu, modifiable depuis Super Admin → Contenus du site) ne présente plus le site comme un simple outil d'anglais, mais comme une appli de révision pour le CE1D : anglais, néerlandais, maths, français, sciences, pensée pour de courtes séries de révision (« 5 minutes de libre ? »). |
-| Matières & niveaux par enfant (V03-004) | Espace parent → 🎛️ Réglages → « 📚 Matières & niveaux » : le parent choisit, pour chaque enfant, quelles matières sont visibles dans son espace élève (anglais, néerlandais, mathématiques, français, sciences) et le niveau de langue à étudier (2e, 4e ou 6e/fin de rhéto) pour l'anglais et le néerlandais séparément. Une matière décochée disparaît entièrement de l'espace élève ; le vocabulaire de la langue choisie est filtré par niveau. Par défaut (comptes existants compris) : toutes les matières sont activées, niveau 2. |
-| Niveau du vocabulaire (V03-004) | Chaque mot anglais/néerlandais porte désormais un niveau (2 / 4 / 6). Le vocabulaire déjà présent est au niveau 2. À l'import, une colonne « Niveau » (à mettre en colonne A du fichier Excel) permet de préciser le niveau de chaque mot importé ; sans cette colonne, les mots importés sont au niveau 2 par défaut. L'export (💾 Exporter) inclut aussi cette colonne. |
-| Cartes mentales & Flashcards (V03-005) | Nouvelle carte « 🗺️ Cartes mentales & Flashcards » dans l'espace élève : une bulle par matière activée (anglais, néerlandais, maths, français, sciences), qui ouvre une carte mentale visuelle — une bulle par catégorie/thème, taille selon le nombre d'éléments. Toucher une bulle (ou le centre pour tout mélanger) ouvre une session de flashcards recto/verso (question/réponse pour le CE1D, français/langue pour le vocabulaire) avec prononciation audio, pensée pour réviser en quelques minutes. Construites à partir des catégories et thèmes déjà existants, sans contenu à maintenir en double. |
-| Audit complet — code & contenu (V03-006) | Passage en revue de tout le code et de toute la matière (maths, français, sciences, anglais, néerlandais) par rapport au programme belge de 2e secondaire (CE1D). **Bugs corrigés :** plantage possible du quiz si un parent change le niveau de langue d'un enfant pendant qu'il joue ; message d'état vide trompeur côté néerlandais ; correcteur d'exercices CE1D qui refusait un signe moins normal ou mélangeait un chiffre d'unité (ex. « cm3 ») à la réponse ; question d'arrondi qui affichait un nombre déjà arrondi ; QCM générés pouvant proposer deux fois « la même » réponse écrite différemment (ex. 6/4 et 3/2). **Contenu corrigé :** un exercice de grammaire française mal formé, une explication d'étymologie imprécise, deux notes de conjugaison néerlandaise erronées, une vingtaine de traductions FR↔NL et FR↔EN incorrectes ou approximatives, une trentaine d'accords d'adjectifs néerlandais mal formés, une centaine de phrases d'exemple incohérentes (nettoyées plutôt que laissées fausses). **Correction de données :** la liste de vocabulaire néerlandais importée en V03-002 annonçait 1500 mots mais 525 étaient des entrées de remplissage fabriquées (« mot utile 1 », « mot utile 2 »…) sans aucune valeur pédagogique ; elles ont été retirées, il reste 975 mots néerlandais réels. |
-| Onglet « 📚 Cours » + exercices CE1D personnalisés (V04-006) | Espace parent : Anglais et Néerlandais sont désormais regroupés avec Maths/Français/Sciences dans un même onglet « 📚 Cours » à sous-onglets, pour corriger le débordement de la barre d'onglets (le bouton « Réglages » était inatteignable sur petit écran — corrigé aussi). Le parent peut maintenant ajouter ses propres exercices CE1D (QCM, vrai/faux, numérique ou texte à trous) dans **toutes** les matières — Maths, Français, Sciences — comme c'était déjà possible pour Anglais/Néerlandais ; ils s'ajoutent aux banques intégrées sans les remplacer. |
-| Banque CE1D néerlandaise (V04-006) | La carte « Préparer le CE1D » de l'espace élève affiche maintenant aussi 🇳🇱 Néerlandais (elle n'apparaissait qu'en anglais jusqu'ici) : nouvelle banque complète d'environ 75 questions (lecture, écoute, grammaire, vocabulaire), même format et même niveau d'exigence que la banque anglaise. |
-| Langue obligatoire par enfant (V04-006) | En secondaire, chaque élève n'a qu'une seule langue germanique obligatoire (anglais **ou** néerlandais selon l'école) : le parent choisit maintenant, dans Réglages → « 🗣️ Langue obligatoire », laquelle est la langue étudiée en 1er pour chaque enfant. C'est cette langue qui porte désormais la série quotidienne des 20 mots, le calendrier, la série gardée (mot de la honte) et les badges ; l'autre langue reste disponible en séries libres, sans obligation, comme le néerlandais l'était jusqu'ici pour tout le monde. **Limite assumée :** les verbes irréguliers, la dictée audio, le duel et le contrôle blanc restent pour l'instant des outils réservés à l'anglais quelle que soit la langue obligatoire choisie (ils ne sont pas encore déclinés en néerlandais) ; pour un enfant dont la langue obligatoire est le néerlandais, le contrôle blanc anglais reste utilisable en pratique libre mais ne compte plus dans l'objectif quotidien. |
-| 800 QCM CE1D ajoutés — Maths, Français, Sciences, Anglais (V04-006) | Les 4 banques « Préparer le CE1D » (Mathématiques, Français, Sciences, Anglais) reçoivent chacune 200 questions à choix multiples supplémentaires (8 chapitres de 25 questions, calqués sur les chapitres du programme de 2e secondaire), fournies par la famille et intégrées telles quelles. Elles s'ajoutent aux exercices déjà présents dans chaque matière, sans rien remplacer. Comme pour tous les exercices CE1D, une explication s'affiche automatiquement dès que l'enfant répond, qu'il ait juste ou faux. Pour les questions de compréhension de lecture (français/anglais), le texte à lire s'affiche dans un encadré séparé au-dessus de la question. **Une correction :** une des 200 questions de maths proposait deux fois exactement la même réponse (« 50 000 cm² ») comme choix C et D ; le choix D a été remplacé par une valeur différente et clairement fausse (« 500 000 cm² ») pour que la question ait un sens. |
-| Bouton « ± » pour les réponses numériques CE1D (V04-006) | Correction : pour les exercices CE1D à réponse numérique (maths surtout), le clavier numérique des téléphones (notamment sur iPhone) n'affiche pas toujours le signe « − », rendant impossible de répondre à une question dont la réponse est négative. Un bouton « ± » a été ajouté juste avant le champ de réponse (espace élève **et** formulaire parent d'ajout d'exercice personnalisé) : il bascule le signe du nombre déjà tapé. |
-| 🪂 Parachute de série (V04-006) | Nouvelle mécanique de série, sur le modèle « gel de série » mais avec son propre nom et sa propre icône pour rester dans l'univers du site. **Fonctionnement :** chaque enfant démarre avec 1 Parachute. 10 jours de leçon réussie **de suite** (dans sa langue obligatoire) rapportent +1 Parachute. Si un jour est manqué et qu'un Parachute est disponible, il est utilisé automatiquement : la série (🔥) continue normalement, mais ce jour apparaît d'une autre couleur dans le calendrier (icône 🪂 à la place du numéro du jour) — et ce jour-là ne compte ni pour ni contre les 10 jours nécessaires au prochain Parachute. Sans Parachute disponible, un jour manqué casse la série comme avant. **Anniversaire :** le jour de son anniversaire (date de naissance renseignée dans sa fiche), l'enfant reçoit automatiquement 1 Parachute supplémentaire, avec un écran « Joyeux anniversaire » dédié (confettis, une seule fois par an). Le nombre de Parachutes disponibles s'affiche dans les statistiques de l'espace élève (🪂). Tous les textes (titres, messages) sont modifiables depuis Super Admin → Contenus du site, groupe « Parachute (série) ». **Limite assumée :** pour un enfant qui utilisait déjà l'appli avant cette mise à jour, le compteur des 10 jours démarre à partir d'aujourd'hui (l'historique des séries passées n'est pas ré-analysé rétroactivement) ; le Parachute de départ, lui, est bien offert à tous. |
-| 🪂 Parachutes visibles côté parent (V04-006) | Correction : le nombre de Parachutes n'apparaissait que dans l'espace élève. Il s'affiche maintenant aussi dans le Tableau de bord de l'espace parent (nouvelle case « 🪂 Parachutes », à côté de « jours de série » / « mots maîtrisés » / « mots au total »), en lecture seule. |
-| 🪂 Correction : le Parachute ne se déclenchait pas toujours après un jour manqué (V04-006) | Bug trouvé et corrigé : au chargement de l'espace élève, le réglage « langue obligatoire » du parent (anglais/néerlandais) pouvait arriver un instant après les autres données. Pendant ce court instant, le Parachute de série (et le reste de l'écran d'accueil) risquait de se baser par erreur sur les séries d'anglais même pour un enfant dont la langue obligatoire est le néerlandais — ce qui pouvait empêcher un Parachute de se déclencher correctement après un jour manqué, ou fausser le compteur des 10 jours. L'application attend maintenant que ce réglage soit bien arrivé avant de vérifier le Parachute (et avant le tout premier affichage de l'écran d'accueil). Un enfant dont la langue obligatoire est l'anglais n'était pas concerné par ce bug. **Autre amélioration liée :** si l'enregistrement du Parachute échoue (par ex. règles Firestore pas encore publiées après une mise à jour), un message d'erreur s'affiche désormais à l'enfant au lieu de rester silencieux. |
-| 10 nouveaux badges « progression » (V04-006) | En plus des badges existants (volume de séries, de mots, etc.), 10 nouveaux badges récompensent une **évolution** plutôt qu'un simple cumul : **Progrès réels** — 🥇 *Nouveau record* / 🏆 *Toujours plus loin* (battre son meilleur score à un contrôle blanc, 1 puis 3 fois), 🔁 *Revanche* (3 mots qui posaient souvent problème, maintenant maîtrisés), 🧘 *Autonome* (15 jours sans le moindre indice), 🌈 *Rebond* (relancer une série d'au moins 7 jours, 2 fois différentes — se relever compte aussi) ; **Régularité** — 🌙 *Régulière comme une horloge* (60 jours de suite à 20/20) ; **Nouveaux outils** — ⚔️ *Première victoire* / 🛡️ *Invincible* (gagner 1 puis 10 duels), 🪂 *Mérité* (gagner un Parachute de série par les 10 jours, en plus de celui de départ), 🎓 *Touche-à-tout* (réussir une série « Préparer le CE1D » à 80 % ou plus dans 3 matières différentes). Comme tous les badges, titres et descriptions sont modifiables depuis Super Admin → Contenus du site, groupe « Badges ». **Limite assumée :** faute d'historique détaillé antérieur à cette mise à jour, certains badges (record de contrôle, mots « revanche », rebonds de série) ne comptent que les progrès réalisés à partir de maintenant. |
-| 10 nouveaux visuels de puzzle « ado tendance » (V04-007) | Le puzzle à collectionner (récompense des séries de 20 réussies à plus de 90 %) passe de 7 à 17 images différentes, avec 10 nouveaux visuels dans l'esprit « ado » (musique, ambiance concert, casque audio, copines, chambre cosy, style). Fournis par la famille. **Note :** deux visuels proposés représentaient des chanteuses réelles de façon très réaliste — ils n'ont pas été repris (droit à l'image). |
-| 4 nouveaux visuels de puzzle « pochette d'album » (V04-008) | Le puzzle passe de 17 à 21 images : 4 nouveaux visuels reprenant le personnage « Margaux » déjà utilisé dans les tout premiers puzzles, façon pochette d'album (Rap ×2, Pop, K-Pop). Fournis par la famille. |
-| 🪲 Correction : le tableau de bord parent ignorait la langue obligatoire de l'enfant (V04-009) | Bug trouvé et corrigé : depuis l'ajout du choix de langue obligatoire par enfant (anglais **ou** néerlandais, V04-006), l'espace élève avait bien été adapté, mais **tout le tableau de bord parent** (Accueil, Historique des sessions, Bilan de la semaine à imprimer/copier/envoyer, et les badges) était resté câblé sur l'anglais. Résultat : pour un enfant dont la langue obligatoire est le néerlandais, le parent voyait "0/20", une série à 0 jour et un historique vide — même quand l'enfant faisait très bien sa série quotidienne (en néerlandais). Tous ces écrans utilisent désormais la bonne langue automatiquement ; les colonnes de l'historique (🇫🇷→🇬🇧 / 🇬🇧→🇫🇷) s'adaptent aussi en 🇫🇷↔🇳🇱 le cas échéant. Les outils volontairement réservés à l'anglais (verbes irréguliers, dictée, contrôle blanc, duel) ne sont pas concernés, comme documenté depuis V04-006. Un enfant dont la langue obligatoire est l'anglais (ex. Margaux) n'était pas affecté par ce bug. |
-| 🪲 Correction : le « mot de la honte » ne pouvait pas s'ouvrir pour un enfant en néerlandais (V04-010) | Bug trouvé et corrigé, dans le même esprit que V04-009 mais côté règles de sécurité Firestore cette fois : la règle qui autorise l'élève à révéler un mot de la honte vérifiait toujours que la série du jour était complétée dans la collection anglaise, même pour un enfant dont la langue obligatoire est le néerlandais. Pour un enfant comme Rose, cela bloquait silencieusement l'ouverture du coffre (« Impossible d'ouvrir le coffre pour l'instant ») même quand sa série du jour était bien réussie et que le parent avait pourtant bien préparé des expressions à l'avance. La règle vérifie désormais la bonne collection de sessions selon la langue obligatoire de l'enfant. **Important :** comme pour toute mise à jour des règles Firestore, il faut republier le fichier `firestore.rules` (étape A.4 du guide) pour que cette correction prenne effet. |
-| 🪲 Audit complet « multi-langue » + 2 corrections côté élève (V04-011) | Suite aux bugs trouvés en V04-009 et V04-010, tout le site a été relu méthodiquement pour repérer d'éventuels autres endroits câblés en dur sur l'anglais au lieu de respecter la langue obligatoire choisie par enfant. **Puzzle à collectionner :** vérifié sain — les pièces de puzzle et les points sont partagés entre les deux langues depuis le début, aucune correction nécessaire. **Deux problèmes trouvés et corrigés côté espace élève :** (1) le personnage animé de l'accueil (content·e, réfléchie, déçue…) regardait toujours l'historique des séries en anglais pour décider si l'enfant avait « raté » la veille — un enfant en néerlandais ne voyait donc jamais le personnage déçu après un jour manqué ; (2) un filet de sécurité qui protège une série en cours de révision contre un rafraîchissement serveur mal synchronisé existait pour l'anglais mais était incomplet pour le néerlandais depuis que celui-ci peut aussi porter la série obligatoire (V04-006) — risque rare mais réel de perdre un peu de progression en cours de série dans ce cas précis. Les autres outils vérifiés (étude/fiches, séries libres, verbes irréguliers, dictée, duel, contrôle blanc, suppression de compte) étaient déjà corrects ou volontairement réservés à l'anglais, comme documenté depuis V04-006. |
-
-## 6. Données Firestore
-
-```
-config/app                     { superAdminUid }
-content/site                   { texts: { clé: texte personnalisé } }
-usernames/{utilisateur}        { email, uid }
-secrets/{uid}                  { username, email, password }   ← Super Admin uniquement
-demandes/{id}                  { nom, prenom, gsm, email, statut }
-users/{uid}                    { prenom, nom, username, email, realEmail, role, parentUid, birth, gsm, lastSeen, lastLogin }   ← lastSeen/lastLogin V03-001
-users/{uid}/proposals/{id}     { type: alt|fix, wordId, dir, given, oldFr, oldEn, fr, en, note, status, decidedDay }
-users/{uid}/words/{id}         { fr, en, altFr[], altEn[], cat, nature, ex, conj, niveau (2/4/6, V03-004), level, ok, ko, seen, lastSeen, lastKo, vLevel, vOk, vKo, dOk, dKo }
-users/{uid}/sessions/{AAAA-MM-JJ} { frEn, enFr, attempts, errors, completed, wrong[], helped, qcm, bonus, exam, mastered[], verbs, verbsOk, dictee, dicteeOk,
-                                 series[{n, attempts, errors, helped, acc, points}], cur }
-users/{uid}/shame/{id}         { expression, phrase, honte, revealed, revealedDay }
-users/{uid}/exams/{id}         { day, themes[], dir, total, ok, ko, score, helped, wrong[], durationSec }
-users/{uid}/meta/shame         { queue: [ids], lastRevealDay, dates: { id: AAAA-MM-JJ } }
-users/{uid}/duels/{id}         { createdBy, day, items[], child{score,total,timeMs}, parent{…}, winner, penalty{text,for}, penaltyDone }
-users/{uid}/meta/badges        { unlocked: { idBadge: AAAA-MM-JJ } }
-users/{uid}/meta/puzzle        { pieces, log[{day, n, points}] }                      ← V02-001
-users/{uid}/ce1d/{id}          { subject, theme, themeName, day, ok, total, score, wrong[], seen[], durationSec }   ← V02-001
-users/{uid}/meta/settings      { hints, autoQcm, qcmMinWords, themes[], themesLocked, themesUntil, childThemes[],
-                                 subjects: {en,nl,math,francais,sciences}, levels: {en,nl} (2/4/6) }              ← subjects/levels V03-004
-users/{uid}/wordsNl/{id}       { fr, en (= mot néerlandais), cat, nature, ex, conj, niveau (2/4/6, V03-004), level, ok, ko, seen, lastSeen, lastKo }   ← V03-002
-users/{uid}/sessionsNl/{AAAA-MM-JJ} { series[{n, attempts, errors, helped, acc, points}], cur }                              ← V03-002, séries toujours libres
+```bash
+firebase deploy --only hosting
 ```
 
-⚠️ Les mots de passe sont également stockés en clair dans `secrets` (lecture Super Admin uniquement) — risque connu et accepté.
+Le site sera en ligne sur `https://TON-PROJET.web.app`.
+
+### Alternative : GitHub Pages
+
+Le dépôt `web-pub/Lar-allegria` existe déjà (vide) sur GitHub. Pour y pousser
+le site :
+
+```bash
+cd lar-allegria
+git init
+git add .
+git commit -m "Site Lar'Allegria V04"
+git branch -M main
+git remote add origin https://github.com/web-pub/Lar-allegria.git
+git push -u origin main
+```
+
+Puis dans le dépôt GitHub → **Settings** → **Pages** → **Build and
+deployment** → Source = "Deploy from a branch" → Branch = `main`, dossier
+`/ (root)` → **Save**. Le site sera en ligne en 1-2 minutes sur
+`https://web-pub.github.io/Lar-allegria/` (déjà l'adresse utilisée dans les
+`canonical`, `sitemap.xml` et `robots.txt` de ce projet).
+
+Dans les deux cas, Firebase Authentication + Firestore restent utilisés
+normalement (ils ne dépendent pas de l'endroit où le HTML est hébergé) —
+pense juste à ajouter le domaine final (`....github.io` ou `....web.app`)
+dans Firebase Authentication → **Settings** → **Authorized domains**.
+
+## 6. Premiers pas une fois en ligne
+
+1. Connecte-toi en tant que Lara sur `/connexion.html`.
+2. Onglet **Paramètres** : règle les horaires d'ouverture de la piste — un
+   horaire différent est possible pour chaque jour de la semaine (coche les
+   jours ouverts, indique l'heure d'ouverture et de fermeture pour chacun) —
+   c'est cette grille qui apparaît ensuite côté membres. Pour un jour précis
+   qui déroge à ces horaires habituels (fermeture exceptionnelle, horaire
+   spécial ponctuel), utilise le bloc "Jours fermés / horaires exceptionnels"
+   juste en dessous.
+3. Onglet **Tarifs** : encode la grille tarifaire (cours, demi-pension, stages...).
+   Elle apparaît automatiquement sur la page publique `tarifs.html` et dans
+   l'espace membre.
+4. Onglet **Nettoyage box** : crée les box de l'écurie.
+5. Partage le lien `inscription.html` pour que les premiers membres
+   s'inscrivent, puis crée leurs comptes comme décrit au point 3 ci-dessus.
+
+## 7. Arborescence du projet
+
+```
+lar-allegria/
+├── index.html, club.html, activites.html, chevaux.html, lara.html,
+│   evenements.html, blog.html, tarifs.html, inscription.html, contact.html,
+│   connexion.html, cgv.html, confidentialite.html   → pages publiques
+├── espace-membre.html             → espace membre (connecté)
+├── admin.html                     → espace admin (Lara)
+├── assets/
+│   ├── style.css, app.css         → charte graphique (ambiance flamenco)
+│   ├── firebase-config.js         → config Firebase (à compléter, voir §2)
+│   ├── meteo.js                   → météo Open-Meteo (Grâce-Hollogne)
+│   ├── app-membre.js              → logique espace membre
+│   ├── app-admin.js               → logique espace admin
+│   ├── chevaux/                   → photos des chevaux déposées par Lara (voir §1)
+│   ├── logo.png, photo-spectacle-lara.jpg, photo-equipe-spectacle.jpg → visuels du club
+├── firebase.json, .firebaserc, firestore.rules, firestore.indexes.json
+└── robots.txt, sitemap.xml
+```
+
+Nouvelles collections Firestore (V06-V08) : `contenu_site` (textes éditables des
+pages publiques), `chevaux_ecurie` (fiches chevaux), `disponibilites_exceptions`
+(jours fermés / horaires spéciaux, un document par date), `evenements`,
+`articles_blog`, `stock` et `stock_signalements` (journal des prises de stock
+par les membres), `planning_benevoles` (créneaux des membres bénévoles : qui
+vient quand et pour quelle tâche). Les règles d'accès sont dans `firestore.rules`.
+
+## 8. Prochaines pistes d'évolution
+
+Ce premier site couvre l'ensemble des besoins décrits (inscription en ligne,
+réservation de piste avec météo et validation, gestion des deux types de
+membres, nettoyage des box, tarifs, boutique, stages/spectacles). Des
+évolutions naturelles pour la suite : facturation/PDF automatique,
+notifications par e-mail (nécessiterait des Cloud Functions, donc le plan
+Firebase payant à l'usage "Blaze"), ou une page publique listant les
+prochains stages/spectacles ouverts au public.

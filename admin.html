@@ -1,107 +1,576 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Super Admin — Wesh Words</title>
-  <meta name="theme-color" content="#EEF4FF">
-  <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" href="favicon.ico" sizes="any">
-  <link rel="icon" href="assets/favicon-32.png" type="image/png">
-  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
-  <link rel="stylesheet" href="assets/style.css">
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://*.googleapis.com https://api.open-meteo.com https://*.firebaseio.com wss://*.firebaseio.com; frame-src https://lar-allegria.firebaseapp.com; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Administration — Lar'Allegria by Lara Rossoux</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="assets/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Yeseva+One&family=Playball&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+<link rel="stylesheet" href="assets/app.css">
 </head>
-<body>
-  <header class="app-head"><div class="wrap" id="appHead"></div></header>
-  <div class="loader" id="loader"><div><div class="spin"></div>Chargement…</div></div>
+<body class="app-body">
 
-  <main class="wrap hidden" id="main" style="padding-top:20px;padding-bottom:40px">
-    <nav class="tabs" id="tabs">
-      <button class="tab on" data-tab="members">👥 Membres</button>
-      <button class="tab" data-tab="pwd">🔑 Mots de passe</button>
-      <button class="tab" data-tab="req">📨 Demandes <span id="reqCount"></span></button>
-      <button class="tab" data-tab="content">✏️ Contenus du site</button>
-      <button class="tab" data-tab="legal">⚖️ Pages légales</button>
-      <button class="tab" data-tab="me">⚙️ Mon compte</button>
-    </nav>
+<div class="app-topbar">
+  <div class="app-title">Bonjour <span id="adminNom">Lara</span> <small>Espace administrateur · <span id="versionTag" style="opacity:0.6;"></span></small></div>
+  <div style="display:flex; align-items:center; gap:8px;">
+    <button class="btn-sm" id="logoutBtn" style="background:transparent; border-color:rgba(255,255,255,0.4); color:#fff;">Déconnexion</button>
+    <a class="app-home-link" href="index.html" title="Retour au site" aria-label="Retour au site">⌂</a>
+  </div>
+</div>
 
-    <!-- MEMBRES -->
-    <section class="panel on" id="p-members">
-      <div class="grid g4" style="margin-bottom:16px">
-        <div class="stat"><div class="v" id="sParents">0</div><div class="l">Parents</div></div>
-        <div class="stat"><div class="v" id="sKids">0</div><div class="l">Élèves</div></div>
-        <div class="stat"><div class="v" id="sReq">0</div><div class="l">Demandes en attente</div></div>
-        <div class="stat"><div class="v js-ver"></div><div class="l">Version du site</div></div>
-      </div>
-      <div class="card">
-        <h3>👥 Tous les membres</h3>
-        <div class="table-wrap"><table><thead><tr><th>Nom</th><th>Utilisateur</th><th>Rôle</th><th>Parent lié</th><th>E-mail</th><th>Créé le</th><th>Dernière visite</th><th>Dernière connexion</th><th></th></tr></thead><tbody id="mBody"></tbody></table></div>
-      </div>
-      <div class="card">
-        <h3>➕ Créer un membre</h3>
-        <div id="memberFormHost"></div>
-      </div>
-    </section>
+<main class="app-main">
 
-    <!-- MOTS DE PASSE -->
-    <section class="panel" id="p-pwd">
-      <div class="card">
-        <h3>🔑 Mots de passe (Super Admin uniquement)</h3>
-        <p class="note warn small">⚠️ Ces mots de passe sont stockés en clair dans Firestore (collection <code>secrets</code>, lisible uniquement par le Super Admin). Risque connu et accepté. Si un membre change son mot de passe hors de Wesh Words (lien e-mail), la valeur affichée ici ne sera plus à jour.</p>
-        <div class="table-wrap"><table><thead><tr><th>Nom</th><th>Utilisateur</th><th>Rôle</th><th>E-mail de connexion</th><th>Mot de passe</th><th>Modifié le</th><th></th></tr></thead><tbody id="pwBody"></tbody></table></div>
-      </div>
-    </section>
+  <div class="tab-bar">
+    <button class="tab-btn active" data-tab="reservations">Réservations</button>
+    <button class="tab-btn" data-tab="membres" id="tabMembresBtn">Membres</button>
+    <button class="tab-btn" data-tab="planningchevaux">🐴 Planning chevaux</button>
+    <button class="tab-btn" data-tab="chevaux">Chevaux</button>
+    <button class="tab-btn" data-tab="nettoyage">Nettoyage box</button>
+    <button class="tab-btn" data-tab="tarifs">Tarifs</button>
+    <button class="tab-btn" data-tab="activites">Activités</button>
+    <button class="tab-btn" data-tab="evenements">Événements</button>
+    <button class="tab-btn" data-tab="blog">Blog</button>
+    <button class="tab-btn" data-tab="livreor">📖 Livre d'or</button>
+    <button class="tab-btn" data-tab="partenaires">🤝 Partenaires</button>
+    <button class="tab-btn" data-tab="boutique" id="tabBoutiqueBtn">Boutique</button>
+    <button class="tab-btn" data-tab="stock">Stock</button>
+    <button class="tab-btn" data-tab="planning-benevoles">Planning bénévoles</button>
+    <button class="tab-btn" data-tab="messages" id="tabMessagesBtn">Messages</button>
+    <button class="tab-btn" data-tab="contenu">Contenu du site</button>
+    <button class="tab-btn" data-tab="parametres">Paramètres</button>
+    <button class="tab-btn" data-tab="livrecaisse">💰 Livre de caisse</button>
+    <button class="tab-btn" data-tab="comptabilite">📒 Comptabilité</button>
+    <button class="tab-btn" data-tab="livrerecettes">📗 Livre des recettes</button>
+    <button class="tab-btn" data-tab="contrat">📄 Contrat</button>
+    <button class="tab-btn hidden" data-tab="motsdepasse" id="tabMotsDePasseBtn">🔑 Mots de passe</button>
+    <button class="tab-btn hidden" data-tab="maintenance" id="tabMaintenanceBtn">🛠 Maintenance</button>
+  </div>
 
-    <!-- DEMANDES -->
-    <section class="panel" id="p-req">
-      <div class="card">
-        <h3>📨 Demandes « Devenez membre ! »</h3>
-        <div class="table-wrap"><table><thead><tr><th>Date</th><th>Nom</th><th>Prénom</th><th>GSM</th><th>E-mail</th><th>Statut</th><th></th></tr></thead><tbody id="rqBody"></tbody></table></div>
+  <!-- ==================== RÉSERVATIONS ==================== -->
+  <div id="panel-reservations" class="tab-panel">
+    <div class="app-panel">
+      <h2>Météo des prochains jours</h2>
+      <div id="meteoResume" style="margin-bottom:0;"></div>
+    </div>
+    <div class="app-panel">
+      <div class="section-heading"><h2>Demandes en attente de validation</h2></div>
+      <p style="color:var(--terre); font-size:0.85rem; margin-bottom:14px;">Une seule réservation validée par créneau : en validant l'une, pense à refuser les éventuelles autres demandes sur le même créneau.</p>
+      <div class="data-list" id="listeReservationsAttente"><div class="empty-state">...</div></div>
+    </div>
+    <div class="app-panel">
+      <div class="resa-nav">
+        <button class="btn-sm" id="resaAdminSemainePrec">← Semaine précédente</button>
+        <h3 id="resaAdminSemaineLabel">Semaine du ...</h3>
+        <button class="btn-sm" id="resaAdminSemaineSuiv">Semaine suivante →</button>
       </div>
-    </section>
-
-    <!-- CONTENUS -->
-    <section class="panel" id="p-content">
-      <div class="card">
-        <div class="row between">
-          <h3 style="margin:0">✏️ Contenus du site</h3>
-          <button class="btn" id="btnSaveContent">💾 Enregistrer les contenus</button>
+      <div class="section-heading"><h2>Planning de la piste</h2>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <button class="btn-sm primary" id="btnAjouterReservation">+ Ajouter une réservation</button>
+          <button class="collapse-toggle" data-target="wrapPlanningPiste" aria-expanded="true" aria-label="Afficher/masquer">▾</button>
         </div>
-        <p class="muted small">Tous les textes du site sont modifiables ici. Variables utilisables : <code>{prenom}</code>, <code>{annee}</code>, <code>{owner}</code>, <code>{site}</code>.</p>
-        <div id="contentForm"></div>
       </div>
-    </section>
-
-    <!-- LÉGAL -->
-    <section class="panel" id="p-legal">
-      <div class="card">
-        <div class="row between">
-          <h3 style="margin:0">⚖️ Pages légales</h3>
-          <button class="btn" id="btnSaveLegal">💾 Enregistrer les pages légales</button>
+      <div id="wrapPlanningPiste">
+        <div class="data-list" id="listePlanningSemaine"><div class="empty-state">...</div></div>
+      </div>
+    </div>
+    <div class="app-panel">
+      <div class="section-heading"><h2>Cours avec récurrence en cours</h2>
+        <button class="collapse-toggle" data-target="wrapRecurrences" aria-expanded="false" aria-label="Afficher/masquer">▸</button>
+      </div>
+      <div id="wrapRecurrences" class="hidden">
+        <p style="color:var(--terre); font-size:0.85rem; margin-bottom:14px;">Qui a un créneau fixe régulier, et à quelle heure — calculé à partir des réservations récurrentes actives.</p>
+        <div class="data-list" id="listeRecurrences"><div class="empty-state">...</div></div>
+      </div>
+    </div>
+    <div class="app-panel">
+      <div class="resa-nav">
+        <button class="btn-sm" id="calBlocPrec">← 15 jours précédents</button>
+        <h3 id="calBlocLabel">Du ... au ...</h3>
+        <button class="btn-sm" id="calBlocSuiv">15 jours suivants →</button>
+      </div>
+      <div class="section-heading"><h2>Calendrier — 15 jours</h2>
+        <button class="collapse-toggle" data-target="wrapCalendrier15j" aria-expanded="true" aria-label="Afficher/masquer">▾</button>
+      </div>
+      <div id="wrapCalendrier15j">
+        <p style="color:var(--terre); font-size:0.85rem; margin-bottom:14px;">Vue d'ensemble par blocs de 15 jours (3 lignes de 5 jours). Cliquez sur un créneau libre pour l'attribuer directement à un membre (ex : un cavalier qui vient chaque samedi de 13h à 14h).</p>
+        <div class="resa-jours" id="calendrierDeuxSemaines"><div class="empty-state">Chargement...</div></div>
+      </div>
+    </div>
+    <div class="app-panel">
+      <div class="section-heading"><h2>🔍 Historique des réservations (contrôle)</h2>
+        <button class="collapse-toggle" data-target="wrapHistoriqueResa" aria-expanded="false">▸</button>
+      </div>
+      <div id="wrapHistoriqueResa" class="hidden">
+        <p style="color:var(--terre); font-size:0.85rem; margin-bottom:14px;">Retrouve qui est venu (ou doit venir) sur n'importe quelle période, passée ou future — utile en cas de contrôle. Exporte le résultat en Excel.</p>
+        <div class="form-grid">
+          <div class="field"><label>Du</label><input type="date" id="hr-dateDebut"></div>
+          <div class="field"><label>Au</label><input type="date" id="hr-dateFin"></div>
         </div>
-        <p class="muted small">Contenu en HTML simple (&lt;h2&gt;, &lt;p&gt;, &lt;ul&gt;&lt;li&gt;, &lt;a&gt;…). Chaque page est accessible depuis le pied de page du site.</p>
-        <div id="legalForm"></div>
+        <div style="display:flex; gap:8px; margin-bottom:14px;">
+          <button class="btn-sm primary" id="btnRechercherHistorique">Rechercher</button>
+          <button class="btn-sm" id="btnExporterHistorique">Exporter en Excel</button>
+        </div>
+        <div class="data-list" id="listeHistoriqueResa"><div class="empty-state">Choisis une période puis clique sur "Rechercher".</div></div>
       </div>
-    </section>
+    </div>
+    <div class="app-panel">
+      <div class="section-heading"><h2>Réservations orphelines</h2>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <button class="btn-sm" id="btnVerifierOrphelines">Vérifier</button>
+          <button class="collapse-toggle" data-target="wrapOrphelines" aria-expanded="false" aria-label="Afficher/masquer">▸</button>
+        </div>
+      </div>
+      <div id="wrapOrphelines" class="hidden">
+        <p style="color:var(--terre); font-size:0.85rem; margin-bottom:14px;">Réservations qui pointent vers un compte membre qui n'existe plus (ex : compte supprimé directement depuis Firebase). Elles s'affichent avec un identifiant brut au lieu d'un nom dans les autres listes.</p>
+        <div class="data-list" id="listeOrphelines"><div class="empty-state">Clique sur "Vérifier" pour lancer la recherche.</div></div>
+      </div>
+    </div>
+  </div>
 
-    <!-- MON COMPTE -->
-    <section class="panel" id="p-me">
-      <div class="card">
-        <h3>🔒 Mon mot de passe</h3>
-        <form id="myPwdForm" class="grid g3" style="align-items:end">
-          <div class="field"><label>Mot de passe actuel</label><input type="password" id="mpOld" required></div>
-          <div class="field"><label>Nouveau mot de passe</label><input type="password" id="mpNew" required minlength="6"></div>
-          <div class="field"><button class="btn soft" type="submit">Changer</button></div>
-        </form>
+  <!-- ==================== MEMBRES ==================== -->
+  <div id="panel-membres" class="tab-panel hidden">
+    <div class="app-panel">
+      <div class="section-heading"><h2>Demandes d'inscription</h2></div>
+      <div class="data-list" id="listeDemandesInscription"><div class="empty-state">...</div></div>
+    </div>
+    <div class="app-panel">
+      <div class="section-heading">
+        <h2>Membres</h2>
+        <button class="btn-sm primary" id="btnAjouterMembre">+ Ajouter un membre</button>
       </div>
-      <div class="card">
-        <h3>ℹ️ Informations techniques</h3>
-        <p class="small muted">Projet Firebase : <b>weshwords</b> · Dépôt GitHub : <b>web-pub/weshwords</b> · Version : <b class="js-ver"></b></p>
-      </div>
-    </section>
-  </main>
+      <p style="color:var(--terre); font-size:0.85rem; margin-bottom:14px;">Pour créer l'accès d'un membre, crée d'abord son compte dans Firebase Authentication (voir README), puis ajoute sa fiche ici avec l'UID généré.</p>
+      <input type="text" id="rechercheMembre" placeholder="🔍 Rechercher un membre..." style="width:100%; box-sizing:border-box; padding:10px 12px; border:1px solid #DCCBA8; border-radius:6px; margin-bottom:14px; font-size:0.95rem;">
+      <div class="data-list" id="listeMembres"><div class="empty-state">...</div></div>
+      <button class="btn-sm" id="btnVoirArchives" style="margin-top:14px;">Voir les membres archivés</button>
+      <div class="data-list" id="listeMembresArchives" style="margin-top:10px; display:none;"></div>
+    </div>
+  </div>
 
-  <div class="overlay hidden" id="overlay"><div class="inner card" id="overlayInner" style="max-width:560px"></div></div>
-  <script type="module" src="assets/admin.js"></script>
+  <!-- ==================== CHEVAUX ==================== -->
+  <div id="panel-chevaux" class="tab-panel hidden">
+    <div class="app-panel">
+      <div class="section-heading">
+        <h2>Chevaux de l'écurie</h2>
+        <button class="btn-sm primary" id="btnAjouterCheval">+ Ajouter un cheval</button>
+      </div>
+      <p style="color:var(--terre); font-size:0.85rem; margin-bottom:14px;">Ces fiches alimentent la page publique "Nos chevaux". Pour la photo, dépose l'image dans le dépôt GitHub (ex: dans <code>assets/chevaux/</code>) puis colle son chemin ou son URL ici.</p>
+      <div class="data-list" id="listeChevauxEcurie"><div class="empty-state">...</div></div>
+    </div>
+  </div>
+
+  <!-- ==================== NETTOYAGE BOX ==================== -->
+  <div id="panel-nettoyage" class="tab-panel hidden">
+    <div class="app-panel">
+      <div class="section-heading">
+        <h2>Box</h2>
+        <button class="btn-sm primary" id="btnAjouterBox">+ Ajouter un box</button>
+      </div>
+      <div class="data-list" id="listeBoxes"><div class="empty-state">...</div></div>
+    </div>
+    <div class="app-panel">
+      <div class="section-heading">
+        <h2>Planning de nettoyage</h2>
+        <button class="btn-sm primary" id="btnAjouterNettoyage">+ Assigner une tâche</button>
+      </div>
+      <div class="data-list" id="listeNettoyages"><div class="empty-state">...</div></div>
+    </div>
+  </div>
+
+  <!-- ==================== TARIFS ==================== -->
+  <div id="panel-tarifs" class="tab-panel hidden">
+    <div class="app-panel">
+      <div class="section-heading">
+        <h2>Grille tarifaire</h2>
+        <button class="btn-sm primary" id="btnAjouterTarif">+ Ajouter un tarif</button>
+      </div>
+      <div id="listeTarifs"><div class="empty-state">...</div></div>
+    </div>
+  </div>
+
+  <!-- ==================== ACTIVITÉS ==================== -->
+  <div id="panel-activites" class="tab-panel hidden">
+    <div class="app-panel">
+      <h3>Compte bancaire du club (pour les virements)</h3>
+      <div class="form-grid">
+        <div class="field"><label>IBAN</label><input id="act-iban" placeholder="ex: BE00 0000 0000 0000"></div>
+      </div>
+      <button class="btn-sm" id="btnSauverIban">Enregistrer</button>
+    </div>
+    <div class="app-panel">
+      <div class="section-heading">
+        <h2>Nos programmes <span class="hint">— cartes numérotées de la page publique "Activités"</span></h2>
+        <button class="btn-sm primary" id="btnAjouterProgramme">+ Ajouter un programme</button>
+      </div>
+      <p style="color:var(--terre); font-size:0.85rem; margin-bottom:14px;">La numérotation (01, 02, 03...) se calcule automatiquement selon l'ordre et se réajuste toute seule si tu en masques ou supprimes un.</p>
+      <div class="data-list" id="listeProgrammesActivites"><div class="empty-state">...</div></div>
+      <button class="btn-sm" id="btnInitProgrammes" style="margin-top:10px;">Initialiser avec les 5 programmes actuels du site</button>
+    </div>
+    <div class="app-panel">
+      <div class="section-heading">
+        <h2>Stages &amp; spectacles</h2>
+        <button class="btn-sm primary" id="btnAjouterActivite">+ Créer une activité</button>
+      </div>
+      <div class="data-list" id="listeActivites"><div class="empty-state">...</div></div>
+    </div>
+  </div>
+
+  <!-- ==================== ÉVÉNEMENTS ==================== -->
+  <div id="panel-evenements" class="tab-panel hidden">
+    <div class="app-panel">
+      <div class="section-heading">
+        <h2>Événements</h2>
+        <button class="btn-sm primary" id="btnAjouterEvenement">+ Créer un événement</button>
+      </div>
+      <p style="color:var(--terre); font-size:0.85rem; margin-bottom:14px;">Affichés sur la page publique "Événements", visible de tous les visiteurs. Pour la photo, colle une URL (image déposée sur GitHub ou ailleurs).</p>
+      <div class="data-list" id="listeEvenements"><div class="empty-state">...</div></div>
+    </div>
+  </div>
+
+  <!-- ==================== BLOG ==================== -->
+  <div id="panel-blog" class="tab-panel hidden">
+    <div class="app-panel">
+      <div class="section-heading">
+        <h2>Articles de blog</h2>
+        <button class="btn-sm primary" id="btnAjouterArticleBlog">+ Écrire un article</button>
+      </div>
+      <p style="color:var(--terre); font-size:0.85rem; margin-bottom:14px;">Publiés sur la page publique "Blog", visible de tous les visiteurs.</p>
+      <div class="data-list" id="listeArticlesBlog"><div class="empty-state">...</div></div>
+    </div>
+  </div>
+
+  <!-- ==================== LIVRE D'OR ==================== -->
+  <div id="panel-livreor" class="tab-panel hidden">
+    <div class="app-panel">
+      <h2>Messages en attente de relecture</h2>
+      <p style="color:var(--terre); font-size:0.85rem; margin-bottom:14px;">Un message envoyé depuis la page publique "Livre d'or" n'apparaît sur le site qu'une fois publié ici.</p>
+      <div class="data-list" id="listeLivreOrAttente"><div class="empty-state">...</div></div>
+    </div>
+    <div class="app-panel">
+      <h2>Messages publiés</h2>
+      <div class="data-list" id="listeLivreOrPublies"><div class="empty-state">...</div></div>
+    </div>
+  </div>
+
+  <!-- ==================== BOUTIQUE ==================== -->
+  <div id="panel-boutique" class="tab-panel hidden">
+    <div class="app-panel">
+      <div class="section-heading">
+        <h2>Articles</h2>
+        <button class="btn-sm primary" id="btnAjouterArticleBoutique">+ Ajouter un article</button>
+      </div>
+      <div class="data-list" id="listeArticlesBoutique"><div class="empty-state">...</div></div>
+    </div>
+    <div class="app-panel">
+      <h2>Commandes</h2>
+      <div class="data-list" id="listeCommandes"><div class="empty-state">...</div></div>
+    </div>
+  </div>
+
+  <!-- ==================== STOCK ==================== -->
+  <div id="panel-stock" class="tab-panel hidden">
+    <div class="app-panel">
+      <div class="section-heading">
+        <h2>Stock (foin, nourriture...)</h2>
+        <button class="btn-sm primary" id="btnAjouterStock">+ Ajouter un article de stock</button>
+      </div>
+      <p style="color:var(--terre); font-size:0.85rem; margin-bottom:14px;">Les membres peuvent signaler qu'ils ont pris quelque chose depuis leur espace — la quantité se met à jour automatiquement ici.</p>
+      <div class="data-list" id="listeStock"><div class="empty-state">...</div></div>
+    </div>
+    <div class="app-panel">
+      <h2>Dernières prises signalées</h2>
+      <div class="data-list" id="listeStockSignalements"><div class="empty-state">...</div></div>
+    </div>
+  </div>
+
+  <!-- ==================== PLANNING BÉNÉVOLES ==================== -->
+  <div id="panel-planning-benevoles" class="tab-panel hidden">
+    <div class="app-panel">
+      <div class="section-heading">
+        <h2>Planning des bénévoles</h2>
+        <button class="btn-sm primary" id="btnAjouterPlanningBenevole">+ Ajouter un créneau</button>
+      </div>
+      <p style="color:var(--terre); font-size:0.85rem; margin-bottom:14px;">Créez des créneaux assignés directement à un bénévole, ou laissez-les "ouverts" pour que n'importe quel bénévole vienne les prendre lui-même. Une récurrence (hebdomadaire ou mensuelle) permet de créer plusieurs créneaux d'un coup.</p>
+      <div class="data-list" id="listePlanningBenevoles"><div class="empty-state">...</div></div>
+    </div>
+  </div>
+
+  <!-- ==================== MESSAGES ==================== -->
+  <div id="panel-messages" class="tab-panel hidden">
+    <div class="app-panel">
+      <h2>Messages</h2>
+      <div style="display:flex; gap:10px; margin-bottom:14px; flex-wrap:wrap;">
+        <input type="text" id="rechercheMessage" placeholder="🔍 Rechercher un membre..." style="flex:1; min-width:200px; box-sizing:border-box; padding:10px 12px; border:1px solid #DCCBA8; border-radius:6px; font-size:0.95rem;">
+        <button class="btn-sm primary" id="btnNouveauMessage">✏️ Nouveau message</button>
+      </div>
+      <div class="data-list" id="listeConversations"><div class="empty-state">...</div></div>
+    </div>
+  </div>
+
+  <!-- ==================== CONTENU DU SITE ==================== -->
+  <div id="panel-contenu" class="tab-panel hidden">
+    <div class="app-panel">
+      <h2>Textes des pages publiques</h2>
+      <p style="color:var(--terre); font-size:0.85rem; margin-bottom:14px;">Modifie les textes affichés sur le site. Laisse un champ vide pour garder le texte par défaut.</p>
+      <h3>Accueil</h3>
+      <div class="field"><label>Titre principal</label><textarea id="ct-heroTitre" rows="2" spellcheck="true" lang="fr"></textarea></div>
+      <div class="field"><label>Texte d'introduction</label><textarea id="ct-heroTexte" rows="3" spellcheck="true" lang="fr"></textarea></div>
+      <h3 style="margin-top:18px;">Le Club</h3>
+      <div class="field"><label>"Notre philosophie" — premier paragraphe</label><textarea id="ct-clubIntro" rows="3" spellcheck="true" lang="fr"></textarea></div>
+      <div class="field"><label>"Ce que propose le club" — paragraphe</label><textarea id="ct-clubOffre" rows="3" spellcheck="true" lang="fr"></textarea></div>
+      <h3 style="margin-top:18px;">Lara</h3>
+      <div class="field"><label>"Seule à bord, bien entourée" — premier paragraphe</label><textarea id="ct-laraBio" rows="3" spellcheck="true" lang="fr"></textarea></div>
+      <div class="field"><label>"Seule à bord, bien entourée" — second paragraphe</label><textarea id="ct-laraBio2" rows="3" spellcheck="true" lang="fr"></textarea></div>
+      <div class="field"><label>"Sa méthode" — paragraphe</label><textarea id="ct-laraMethode" rows="3" spellcheck="true" lang="fr"></textarea></div>
+      <h3 style="margin-top:18px;">Activités</h3>
+      <div class="field"><label>"Membre cours ou membre demi-pension" — paragraphe</label><textarea id="ct-activitesIntro" rows="3" spellcheck="true" lang="fr"></textarea></div>
+      <h3 style="margin-top:18px;">Nous contacter</h3>
+      <div class="field"><label>"Nos cours" — paragraphe</label><textarea id="ct-contactCours" rows="3" spellcheck="true" lang="fr"></textarea></div>
+      <div class="field"><label>"Rejoindre le club" — paragraphe</label><textarea id="ct-contactRejoindre" rows="3" spellcheck="true" lang="fr"></textarea></div>
+      <button class="btn-sm primary" id="btnSauverContenu" style="margin-top:14px;">Enregistrer les textes</button>
+    </div>
+  </div>
+
+  <!-- ==================== PARAMÈTRES ==================== -->
+  <div id="panel-parametres" class="tab-panel hidden">
+    <div class="app-panel">
+      <h2>Mon mot de passe</h2>
+      <p style="color:var(--terre); font-size:0.85rem; margin-bottom:14px;">Change ton mot de passe de connexion à l'espace admin.</p>
+      <div class="login-error" id="pwError"></div>
+      <div class="form-success" id="pwSuccess">✅ Mot de passe modifié.</div>
+      <div class="form-grid">
+        <div class="field"><label>Mot de passe actuel</label><input type="password" id="pw-actuel" autocomplete="current-password"></div>
+        <div class="field"><label>Nouveau mot de passe</label><input type="password" id="pw-nouveau" autocomplete="new-password"></div>
+      </div>
+      <div class="field" style="max-width:220px;"><label>Confirmer le nouveau</label><input type="password" id="pw-confirme" autocomplete="new-password"></div>
+      <button class="btn-sm primary" id="btnChangerMotDePasse">Changer mon mot de passe</button>
+    </div>
+    <div class="app-panel">
+      <h2>Horaires d'ouverture de la piste</h2>
+      <p style="color:var(--terre); font-size:0.85rem; margin-bottom:14px;">Définit la grille de créneaux d'une heure proposée aux membres pour les réservations — les horaires peuvent être différents pour chaque jour de la semaine.</p>
+      <div id="param-jours"></div>
+      <button class="btn-sm primary" id="btnSauverDisponibilites" style="margin-top:14px;">Enregistrer les horaires</button>
+    </div>
+    <div class="app-panel">
+      <h2>Jours fermés / horaires exceptionnels</h2>
+      <p style="color:var(--terre); font-size:0.85rem; margin-bottom:14px;">Pour un jour précis, ou une période complète (ex : vacances, maladie), qui déroge aux horaires habituels ci-dessus — sans toucher à la grille hebdomadaire normale. Utile pour bloquer une période sans que les créneaux ne redeviennent "libres".</p>
+      <div class="form-grid">
+        <div class="field"><label>Du</label><input type="date" id="exc-date"></div>
+        <div class="field"><label>Au <span class="hint">— optionnel, pour bloquer toute une période</span></label><input type="date" id="exc-dateFin"></div>
+      </div>
+      <div class="field"><label>Statut</label>
+        <select id="exc-statut">
+          <option value="ferme">Fermé sur cette période</option>
+          <option value="horaire">Horaire spécial</option>
+        </select>
+      </div>
+      <div class="form-grid" id="exc-horaireZone" style="display:none;">
+        <div class="field"><label>Ouverture</label><input type="time" id="exc-heureDebut"></div>
+        <div class="field"><label>Fermeture</label><input type="time" id="exc-heureFin"></div>
+      </div>
+      <button class="btn-sm primary" id="btnAjouterException">Enregistrer cette exception</button>
+      <div class="data-list" id="listeExceptions" style="margin-top:14px;"></div>
+    </div>
+  </div>
+
+  <!-- ==================== LIVRE DE CAISSE ==================== -->
+  <div id="panel-livrecaisse" class="tab-panel hidden">
+    <div class="app-panel">
+      <div class="banner-alert info">
+        Mouvements en <strong>espèces uniquement</strong> (hors banque) : ce qui est payé ou encaissé en liquide. Renseigne un solde de départ, puis chaque mouvement fait évoluer le solde ligne par ligne.
+      </div>
+      <div class="section-heading" style="margin-top:14px;">
+        <h2>💰 Livre de caisse</h2>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <select id="lc-annee"></select>
+          <button class="btn-sm primary" id="btnAjouterMouvementCaisse">+ Ajouter un mouvement</button>
+          <button class="btn-sm" id="btnExporterCaisse">Exporter en Excel</button>
+        </div>
+      </div>
+      <div class="field" style="max-width:260px; margin-top:10px;">
+        <label>Solde de départ au 1er janvier (€)</label>
+        <input type="number" step="0.01" id="lc-soldeDepart">
+        <button class="btn-sm" id="btnSauverSoldeDepart" style="margin-top:6px;">Enregistrer le solde de départ</button>
+      </div>
+      <div style="overflow-x:auto; margin-top:14px;">
+        <table class="compta-table" id="tableauCaisse">
+          <thead>
+            <tr><th>Date</th><th>Libellé</th><th>Encaissé</th><th>Décaissé</th><th>Solde</th><th></th></tr>
+          </thead>
+          <tbody id="corpsTableauCaisse"><tr><td colspan="6" class="empty-state">Chargement...</td></tr></tbody>
+        </table>
+      </div>
+      <div class="data-sub" id="totauxCaisse" style="margin-top:10px; font-weight:600;"></div>
+    </div>
+  </div>
+
+  <!-- ==================== COMPTABILITÉ (achats / ventes) ==================== -->
+  <div id="panel-comptabilite" class="tab-panel hidden">
+    <div class="app-panel">
+      <div class="banner-alert info">
+        Encodage des <strong>achats</strong> et des <strong>ventes</strong> — les ventes reprennent normalement, une fois par mois, le total du Livre des recettes de ce mois-là (bouton dédié pour aller plus vite, valeur modifiable ensuite). Ça donne un compte de résultat simplifié achats / ventes.
+      </div>
+      <div class="section-heading" style="margin-top:14px;">
+        <h2>📒 Comptabilité — achats &amp; ventes</h2>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <select id="cpt-annee"></select>
+          <button class="btn-sm primary" id="btnAjouterEcriture">+ Ajouter une écriture</button>
+          <button class="btn-sm" id="btnExporterCompta">Exporter en Excel</button>
+        </div>
+      </div>
+      <div style="overflow-x:auto; margin-top:10px;">
+        <table class="compta-table" id="tableauCompta">
+          <thead>
+            <tr><th>Date</th><th>Libellé</th><th>Compte</th><th>Achat</th><th>Vente</th><th>Déductible</th><th></th></tr>
+          </thead>
+          <tbody id="corpsTableauCompta"><tr><td colspan="7" class="empty-state">Chargement...</td></tr></tbody>
+        </table>
+      </div>
+      <div class="data-sub" id="totauxCompta" style="margin-top:10px; font-weight:600;"></div>
+    </div>
+    <div class="app-panel">
+      <div class="section-heading">
+        <h2>Plan comptable</h2>
+        <button class="collapse-toggle" data-target="wrapPlanComptable" aria-expanded="false">▸</button>
+      </div>
+      <div id="wrapPlanComptable" class="hidden">
+        <p style="color:var(--terre); font-size:0.85rem; margin-bottom:14px;">Les comptes disponibles au moment d'encoder une écriture (numéro + intitulé). Ajoutes-en un nouveau ici, il apparaîtra ensuite dans la liste déroulante d'encodage.</p>
+        <div class="form-grid">
+          <div class="field"><label>Numéro de compte</label><input id="pc-numero" placeholder="ex: 604000"></div>
+          <div class="field"><label>Intitulé</label><input id="pc-nom" placeholder="ex: Achats fournitures"></div>
+          <div class="field"><label>% déductible <span class="hint">— ex: 50 pour "Cadeaux (50%)"</span></label><input type="number" id="pc-deductible" min="0" max="100" value="100"></div>
+        </div>
+        <button class="btn-sm primary" id="btnAjouterCompte">+ Ajouter ce compte</button>
+        <div class="data-list" id="listePlanComptable" style="margin-top:14px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== LIVRE DES RECETTES (journal quotidien) ==================== -->
+  <div id="panel-livrerecettes" class="tab-panel hidden">
+    <div class="app-panel">
+      <h2>📗 Livre des recettes</h2>
+      <div class="banner-alert info" style="margin-top:10px;">
+        Une ligne <strong>par jour de l'année</strong>, même à 0 € — pour qu'il n'y ait aucun "trou" dans l'enregistrement chronologique. Le total de l'année constitue le <strong>chiffre d'affaires</strong>. Si une partie de la recette d'un jour a été facturée, coche-le et indique la référence dans le journal de vente.<br><br>
+        <em>Je ne suis ni comptable ni juriste — vérifie ce format avec ton comptable avant de t'y fier pour tes obligations légales.</em>
+      </div>
+      <div class="section-heading" style="margin-top:16px;">
+        <select id="lr-annee"></select>
+        <button class="btn-sm" id="btnExporterRecettes">Exporter en Excel</button>
+      </div>
+      <p style="color:var(--terre); font-size:0.85rem; margin: 8px 0;">Clique sur une ligne pour encoder ou modifier la recette de ce jour.</p>
+      <div style="overflow-x:auto; max-height:600px; overflow-y:auto; border:1px solid #E9DEC8; border-radius:var(--radius);">
+        <table class="compta-table" id="tableauRecettes">
+          <thead>
+            <tr><th>Date</th><th>Recette du jour</th><th>Facturé ?</th><th>Réf. journal de vente</th><th>Cumul</th><th></th></tr>
+          </thead>
+          <tbody id="corpsTableauRecettes"><tr><td colspan="6" class="empty-state">Chargement...</td></tr></tbody>
+        </table>
+      </div>
+      <div class="data-sub" id="totauxRecettes" style="margin-top:10px; font-weight:600;"></div>
+    </div>
+    <div class="app-panel">
+      <div class="section-heading">
+        <h2>Catégories de recettes</h2>
+        <button class="collapse-toggle" data-target="wrapCategoriesRecettes" aria-expanded="false">▸</button>
+      </div>
+      <div id="wrapCategoriesRecettes" class="hidden">
+        <p style="color:var(--terre); font-size:0.85rem; margin-bottom:14px;">Les catégories disponibles pour ventiler la recette d'un jour (abonnement, cours sans abonnement, cotisation, sponsor...). Ajoutes-en autant que tu veux.</p>
+        <div class="form-grid">
+          <div class="field"><label>Nom de la catégorie</label><input id="cr-nom" placeholder="ex: Sponsor"></div>
+        </div>
+        <button class="btn-sm primary" id="btnAjouterCategorieRecette">+ Ajouter cette catégorie</button>
+        <button class="btn-sm" id="btnInitCategoriesRecettes" style="margin-left:8px;">Initialiser les catégories de base</button>
+        <div class="data-list" id="listeCategoriesRecettes" style="margin-top:14px;"></div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ==================== PARTENAIRES ==================== -->
+  <div id="panel-partenaires" class="tab-panel hidden">
+    <div class="app-panel">
+      <div class="section-heading">
+        <h2>Partenaires</h2>
+        <button class="btn-sm primary" id="btnAjouterPartenaire">+ Ajouter un partenaire</button>
+      </div>
+      <p style="color:var(--terre); font-size:0.85rem; margin-bottom:14px;">Affichés sur la page publique "Partenaires", visible de tous les visiteurs, dans l'ordre indiqué.</p>
+      <div class="data-list" id="listePartenaires"><div class="empty-state">...</div></div>
+    </div>
+  </div>
+
+  <!-- ==================== PLANNING CHEVAUX ==================== -->
+  <div id="panel-planningchevaux" class="tab-panel hidden">
+    <div class="app-panel">
+      <div class="section-heading"><h2>🐴 Planning des chevaux</h2></div>
+      <p style="color:var(--terre); font-size:0.85rem; margin-bottom:12px;">Valide le cheval de chaque cours. Règle : un cheval fait 1 cours d'une heure puis se repose 1 heure (pas deux cours à la suite). Les chevaux décédés ou archivés ne sont jamais proposés. Le membre est prévenu par message si son cheval souhaité n'est pas disponible.</p>
+      <div class="week-nav" style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
+        <button class="btn-sm" id="pcSemainePrec">←</button>
+        <strong id="pcSemaineLabel"></strong>
+        <button class="btn-sm" id="pcSemaineSuiv">→</button>
+        <button class="btn-sm primary" id="pcValiderSansConflit" style="margin-left:auto;">Valider les souhaits sans conflit</button>
+      </div>
+      <div class="data-list" id="listePlanningChevaux"><div class="empty-state">...</div></div>
+    </div>
+  </div>
+
+  <!-- ==================== CONTRAT ==================== -->
+  <div id="panel-contrat" class="tab-panel hidden">
+    <div id="zoneContrat"><div class="empty-state">Chargement…</div></div>
+  </div>
+
+  <!-- ==================== MAINTENANCE (super-admin uniquement) ==================== -->
+  <div id="panel-maintenance" class="tab-panel hidden">
+    <div class="app-panel">
+      <h2>🛠 Maintenance</h2>
+      <p style="color:var(--terre); font-size:0.85rem; margin-bottom:14px;">Outils réservés au Super Admin. Chaque bouton ne sert qu'une fois (il détecte si l'élément existe déjà).</p>
+      <div class="data-list">
+        <div class="data-row">
+          <div class="data-main">
+            <div class="data-title">Compte de démonstration "Hexelya"</div>
+            <div class="data-sub">Crée le compte membre de démo (identifiant Hexelya) pour présenter le site, sans déconnecter ta session. Invisible et intouchable depuis l'Admin simple.</div>
+          </div>
+          <div class="data-actions"><button class="btn-sm primary" id="btnCreerCompteDemo">Créer le compte démo Hexelya</button></div>
+        </div>
+        <div class="data-row">
+          <div class="data-main">
+            <div class="data-title">Partenaire par défaut "Hexelya"</div>
+            <div class="data-sub">Crée la fiche partenaire Hexelya (texte et logo par défaut) sur la page publique "Partenaires". Modifiable uniquement ici, depuis le Super Admin.</div>
+          </div>
+          <div class="data-actions"><button class="btn-sm primary" id="btnCreerPartenaireHexelya">Créer le partenaire Hexelya</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MOTS DE PASSE (super-admin uniquement) ==================== -->
+  <div id="panel-motsdepasse" class="tab-panel hidden">
+    <div class="app-panel">
+      <h2>🔑 Mots de passe des comptes</h2>
+      <p style="color:var(--terre); font-size:0.85rem; margin-bottom:14px;">Visible uniquement par le super-administrateur. Affiche le mot de passe actuel de chaque compte (admin et membres) et permet de le réinitialiser.</p>
+      <div class="data-list" id="listeMotsDePasse"><div class="empty-state">...</div></div>
+    </div>
+    <div class="app-panel">
+      <h2>Historique des sauvegardes</h2>
+      <p style="color:var(--terre); font-size:0.85rem; margin-bottom:14px;">Un instantané des mots de passe est enregistré automatiquement à chaque connexion réussie du super-admin.</p>
+      <div class="data-list" id="listeSauvegardesMdp"><div class="empty-state">...</div></div>
+    </div>
+  </div>
+
+</main>
+
+<div style="text-align:center; padding:14px 0 4px; font-size:0.72rem; color:var(--terre); opacity:0.6;">© 2026 Hélène Laruelle — Tous droits réservés · Site développé par Hélène Laruelle · Contenu sous la responsabilité de Lara Rossoux</div>
+
+<div id="modalZone"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script type="module" src="assets/app-admin.js"></script>
+<script src="assets/modal-close.js" defer></script>
+<script src="assets/protection.js" defer></script>
 </body>
 </html>
